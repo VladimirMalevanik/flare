@@ -1,0 +1,36 @@
+name: checks
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_DB: flare
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_admin
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d flare"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      APP_PASSWORD: ci_app
+      PGPASSWORD: ci_admin
+      DATABASE_URL: postgresql://flare_app:ci_app@127.0.0.1:5432/flare
+      MIGRATION_DATABASE_URL: postgresql+psycopg://postgres:ci_admin@127.0.0.1:5432/flare
+      TEST_DATABASE_URL: postgresql://postgres:ci_admin@127.0.0.1:5432/flare
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e '.[dev]'
+      - run: psql -h 127.0.0.1 -U postgres -d flare -v ON_ERROR_STOP=1 -f db/init-role.sql
+      - run: alembic upgrade head
+      - run: alembic upgrade head
+      - run: pytest -q

@@ -1,0 +1,22 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: flare
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Copy .env.example to .env}
+      APP_PASSWORD: ${APP_PASSWORD:?Copy .env.example to .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - flare_data:/var/lib/postgresql/data
+      - ./db/init-role.sql:/docker-entrypoint-initdb.d/01-role.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d flare"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  flare_data:
+
