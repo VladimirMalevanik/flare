@@ -10,13 +10,40 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - flare_data:/var/lib/postgresql/data
-      - ./db/init-role.sql:/docker-entrypoint-initdb.d/01-role.sql:ro
+      - ./backend/db/init-role.sql:/docker-entrypoint-initdb.d/01-role.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d flare"]
       interval: 3s
       timeout: 3s
       retries: 20
 
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://flare_app:${APP_PASSWORD:?Copy .env.example to .env}@db:5432/flare
+      MIGRATION_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:?Copy .env.example to .env}@db:5432/flare
+      CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  frontend:
+    build: ./frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_DATA_PROVIDER: mock
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   flare_data:
-

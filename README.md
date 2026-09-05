@@ -1,68 +1,84 @@
 # Flare
 
-База знаний для стартапов: команда собирает материалы, а ИИ помогает находить выводы и показывает источники.
+Flare — база знаний для стартапов: команда собирает заметки, ссылки, файлы и
+аудио, а ИИ находит связи и формирует проверяемые инсайты со ссылками на
+конкретные источники.
 
-Это стартовый репозиторий БД и Python-бэкенда. Здесь есть SQL-схема, миграция Alembic, PostgreSQL + pgvector для локальной разработки, каркас FastAPI и проверки изоляции команд. Загрузка файлов, авторизация, обработчик документов и генерация инсайтов — следующие этапы; сейчас API предоставляет только `/health` и `/ready`.
+Это единый монорепозиторий продукта:
 
-## Как устроены данные
-
-Одна команда — один `workspace`. Документ имеет версии; каждая версия разбивается на фрагменты (`chunks`). ИИ получает найденные фрагменты и сохраняет инсайт со ссылками на них. Старый инсайт продолжает ссылаться на ту версию, которую видел ИИ.
-
-```mermaid
-erDiagram
-    workspaces ||--o{ workspace_members : members
-    workspaces ||--o{ documents : owns
-    documents ||--o{ document_versions : versions
-    document_versions ||--o{ chunks : fragments
-    workspaces ||--o{ insights : owns
-    insights ||--o{ insight_sources : cites
-    chunks ||--o{ insight_sources : evidence
+```text
+frontend/     Next.js-интерфейс
+backend/      FastAPI, PostgreSQL, pgvector, миграции и тесты
+compose.yaml  локальный запуск всего стека
 ```
 
-| Где | Что храним |
-| --- | --- |
-| PostgreSQL | Команды, доступ, карточки документов, версии, текст фрагментов, инсайты и ссылки |
-| pgvector в той же БД | Векторы фрагментов для поиска по смыслу |
-| Приватное файловое хранилище, подключим позже | Оригинальные PDF, изображения, аудио и другие файлы; в БД только ключ объекта |
+## Что объединено
 
-Подробности и границы реализации — в [проекте БД](docs/database.md). Сама схема — [db/schema.sql](db/schema.sql).
+- Интерфейс импортирован из `fedocc/flare-frontend` на коммите
+  `dd2e65b75ac8ab916db03e8986ce490b0a4d3384`.
+- Структура бэкенда адаптирована из пустого архитектурного каркаса
+  `nikepf/startup_insight` на коммите
+  `45057fbd9b5ef427a79659c63a0b06aa57a5c41a`.
+- Рабочая SQL-схема, RLS, миграции, тесты и FastAPI-основа перенесены из
+  первоначального Flare backend.
 
-## Локальный запуск
+Подробности происхождения файлов перечислены в [THIRD_PARTY.md](THIRD_PARTY.md).
 
-Нужны Python 3.11+ и Docker Compose. Команды выполняются из корня репозитория.
+## Архитектура
+
+```mermaid
+flowchart LR
+    UI[Next.js frontend] --> API[FastAPI / api]
+    API --> S[services]
+    W[workers] --> S
+    S --> DB[(PostgreSQL + pgvector)]
+    S --> AI[ai_engine interfaces]
+    S --> O[(Private object storage)]
+```
+
+Backend разделён на `api`, `services`, `models`, `ai_engine` и `workers`.
+PostgreSQL хранит команды, документы, версии, текстовые chunks, embeddings,
+инсайты и citations. Оригинальные файлы будут храниться отдельно в приватном
+object storage.
+
+Готовые версии документов неизменяемы: после обновления старый инсайт продолжает
+ссылаться на тот снимок текста, по которому он был создан. Все пользовательские
+таблицы изолированы по `workspace_id` с помощью составных внешних ключей и RLS.
+
+## Запуск всего проекта
+
+Нужен Docker Compose:
 
 ```sh
 cp .env.example .env
-docker compose up -d --wait
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e '.[dev]'
-alembic upgrade head
-uvicorn app.main:app --reload
+docker compose up --build
 ```
 
-Открой http://127.0.0.1:8000/docs. `/health` проверяет API, `/ready` — подключение к БД с ограниченной ролью и наличие начальной схемы. Локальная БД доступна только на `127.0.0.1`.
+После запуска:
 
-`DATABASE_URL` использует ограниченную роль `flare_app`, а `MIGRATION_DATABASE_URL` — администратора для изменения схемы. Пароли из `.env.example` предназначены только для локальной разработки; `.env` исключён из Git. Скрипт `db/init-role.sql` выполняется автоматически при первом создании Docker-тома. Изменение пароля в `.env` не меняет пароль уже созданной роли.
+- frontend: http://localhost:3000
+- API docs: http://localhost:8000/docs
+- backend health: http://localhost:8000/health
+- database readiness: http://localhost:8000/ready
+
+В текущем этапе frontend использует mock provider и работает как полное демо
+интерфейса. Точка подключения настоящего API уже выделена в
+`frontend/src/lib/data/api-provider.ts`. Реальные CRUD-маршруты, авторизация,
+загрузка бинарных файлов, workers и AI-провайдеры — следующий этап интеграции.
 
 ## Проверки
 
-После запуска БД и применения миграции:
-
 ```sh
-pytest -q
+python -m pip install -e 'backend[dev]'
+pytest -q backend/tests
+npm --prefix frontend ci
+npm --prefix frontend run lint
+npm --prefix frontend run build
 ```
 
-Тесты БД используют `TEST_DATABASE_URL`, отдельные транзакции с откатом и проверяют операции от `flare_app`. Запускай их на локальной или выделенной тестовой БД. Без `TEST_DATABASE_URL` интеграционные тесты пропускаются; HTTP-проверки можно запустить отдельно: `pytest -q tests/test_health.py`.
+GitHub Actions выполняет обе группы проверок. Backend job поднимает настоящий
+PostgreSQL 17 с pgvector и дважды применяет миграции, проверяя повторный запуск.
 
-GitHub Actions поднимает PostgreSQL 17 с pgvector, создаёт роль, применяет миграцию и запускает тесты. Повторный `alembic upgrade head` также проверяется. Docker-тег фиксирует основную версию PostgreSQL; перед production зафиксируйте digest образа и версии зависимостей после проверки в вашей среде.
-
-## Что делать дальше
-
-1. Выбрать авторизацию и реализовать проверку членства в команде на сервере.
-2. Добавить API создания документов и приватное файловое хранилище.
-3. Сделать worker: извлечение текста → фрагменты → embeddings → публикация готовой версии.
-4. Добавить поиск по текущим документам команды, затем генерацию инсайтов с проверяемыми ссылками.
-
-Сначала доведите один сценарий: загрузить заметку → найти фрагмент → получить инсайт с источником. Выбор облака, embedding-модели и LLM остаётся открытым.
-
+Документация: [проект БД](backend/docs/database.md),
+[слои бэкенда](backend/docs/architecture.md),
+[контракт frontend](frontend/docs/API_CONTRACT.md).
