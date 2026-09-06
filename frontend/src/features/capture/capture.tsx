@@ -13,7 +13,7 @@ import { readLocal, writeLocal } from "@/lib/storage/preferences";
 import { useVoiceCapture } from "./use-voice-capture";
 
 const ORB_POSITION_KEY = "flare-orb-position-v1";
-const ORB_EDGE_MARGIN = 30;
+const ORB_EDGE_PADDING = 12;
 const PANEL_EDGE_MARGIN = 16;
 type OrbPosition = { x: number; y: number };
 type PointerStart = {
@@ -40,15 +40,16 @@ function elapsed(seconds: number) {
     .padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
 }
 
-function clampOrbPosition(position: OrbPosition): OrbPosition {
+function clampOrbPosition(position: OrbPosition, orbSize: number): OrbPosition {
+  const edgeMargin = orbSize / 2 + ORB_EDGE_PADDING;
   return {
     x: Math.min(
-      Math.max(ORB_EDGE_MARGIN, position.x),
-      window.innerWidth - ORB_EDGE_MARGIN,
+      Math.max(edgeMargin, position.x),
+      window.innerWidth - edgeMargin,
     ),
     y: Math.min(
-      Math.max(ORB_EDGE_MARGIN, position.y),
-      window.innerHeight - ORB_EDGE_MARGIN,
+      Math.max(edgeMargin, position.y),
+      window.innerHeight - edgeMargin,
     ),
   };
 }
@@ -77,8 +78,17 @@ function panelPositionFor(
 }
 
 export function Capture() {
-  const { captureOpen, openCapture, closeCapture, draft, setDraft, refresh } =
-    useWorkspace();
+  const {
+    captureOpen,
+    openCapture,
+    closeCapture,
+    draft,
+    setDraft,
+    refresh,
+    captureOrbSize,
+  } = useWorkspace();
+  const orbSize =
+    captureOrbSize === "small" ? 36 : captureOrbSize === "large" ? 52 : 44;
   const [hovered, setHovered] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [hasTranscript, setHasTranscript] = useState(false);
@@ -111,11 +121,12 @@ export function Capture() {
         ? { x: savedPosition.x, y: savedPosition.y }
         : null;
     const restoreFrame = requestAnimationFrame(() => {
-      if (restoredPosition) setOrbPosition(clampOrbPosition(restoredPosition));
+      if (restoredPosition)
+        setOrbPosition(clampOrbPosition(restoredPosition, orbSize));
     });
     const keepInsideViewport = () => {
       setOrbPosition((current) =>
-        current ? clampOrbPosition(current) : current,
+        current ? clampOrbPosition(current, orbSize) : current,
       );
     };
     window.addEventListener("resize", keepInsideViewport);
@@ -123,7 +134,7 @@ export function Capture() {
       cancelAnimationFrame(restoreFrame);
       window.removeEventListener("resize", keepInsideViewport);
     };
-  }, []);
+  }, [orbSize]);
 
   const close = useCallback(() => {
     if (busy) return;
@@ -193,7 +204,7 @@ export function Capture() {
       clampOrbPosition({
         x: start.orbX + event.clientX - start.pointerX,
         y: start.orbY + event.clientY - start.pointerY,
-      }),
+      }, orbSize),
     );
   };
   const finishOrbDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -206,7 +217,7 @@ export function Capture() {
       const next = clampOrbPosition({
         x: start.orbX + event.clientX - start.pointerX,
         y: start.orbY + event.clientY - start.pointerY,
-      });
+      }, orbSize);
       setOrbPosition(next);
       setOrbDragging(false);
       try {
@@ -283,7 +294,7 @@ export function Capture() {
     <>
       <div
         ref={island}
-        className={`flare-capture flare-capture--${stage} ${dragging ? "is-dragging" : ""} ${orbDragging ? "is-orb-dragging" : ""}`}
+        className={`flare-capture orb-size-${captureOrbSize} flare-capture--${stage} ${dragging ? "is-dragging" : ""} ${orbDragging ? "is-orb-dragging" : ""}`}
         data-capture-state={stage}
         style={
           displayPosition

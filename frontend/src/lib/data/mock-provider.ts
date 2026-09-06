@@ -10,6 +10,9 @@ import type { FlareDataProvider } from "./provider";
 import type { CreateItemInput, Insight, Item, ListItemOptions } from "./types";
 const STORAGE_KEY = "flare-user-items-v1";
 const DELETED_ITEMS_KEY = "flare-deleted-items-v1";
+const LEGACY_DEMO_SOURCE_IDS = new Set([
+  "telegram", "github", "linear", "notion", "drive", "gmail", "reviews", "slack",
+]);
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const getUserItems = (): Item[] => {
   if (typeof window === "undefined") return [];
@@ -66,8 +69,13 @@ export class MockDataProvider implements FlareDataProvider {
     const savedById = new Map(saved.map((source) => [source.id, source]));
     const seededIds = new Set(seedSources.map((source) => source.id));
     return clone([
-      ...seedSources.map((source) => savedById.get(source.id) ?? source),
-      ...saved.filter((source) => !seededIds.has(source.id)),
+      ...seedSources.map((source) =>
+        source.status === "ready" ? (savedById.get(source.id) ?? source) : source,
+      ),
+      ...saved.filter(
+        (source) =>
+          !seededIds.has(source.id) && !LEGACY_DEMO_SOURCE_IDS.has(source.id),
+      ),
     ]);
   }
   async saveSource(source: Source): Promise<Source> {

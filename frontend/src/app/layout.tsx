@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
 export const metadata: Metadata = {
-  title: "Flare — AI Second Brain",
+  title: "Flare — Startup Context",
   description:
-    "A calm place to capture, retrieve, and surface grounded insights.",
+    "A calm place to capture startup context and surface grounded Flares.",
 };
 export default function RootLayout({
   children,

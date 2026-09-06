@@ -552,7 +552,8 @@ kbd {
   background: color-mix(in srgb, var(--amber) 8%, transparent);
 }
 .kind-2,
-.status-connected {
+.status-connected,
+.status-ready {
   color: var(--green);
   background: color-mix(in srgb, var(--green) 8%, transparent);
   border-color: color-mix(in srgb, var(--green) 25%, transparent);
@@ -565,6 +566,10 @@ kbd {
 .status-disconnected {
   color: var(--amber);
   background: color-mix(in srgb, var(--amber) 8%, transparent);
+}
+.status-coming-soon {
+  color: var(--secondary);
+  background: var(--hover);
 }
 .card-footer {
   border-top: 1px solid var(--divider);
@@ -894,6 +899,17 @@ blockquote {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 24px;
 }
+.source-group-title {
+  margin: 34px 0 14px;
+  color: var(--secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.source-group-title:first-of-type {
+  margin-top: 28px;
+}
 .source-card {
   padding: 24px;
   display: flex;
@@ -1090,6 +1106,11 @@ blockquote {
   min-width: 0;
   width: 100%;
   font-size: 12px;
+}
+.orb-size-options {
+  display: grid;
+  justify-items: end;
+  gap: 9px;
 }
 .sheet form > label {
   margin-top: 16px;
@@ -1563,8 +1584,8 @@ blockquote {
 .flare-orb {
   display: inline-block;
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  width: var(--flare-orb-size, 44px);
+  height: var(--flare-orb-size, 44px);
   border-radius: 50%;
   background: radial-gradient(
     circle at 32% 25%,
@@ -1586,9 +1607,19 @@ blockquote {
   display: grid;
   place-items: center;
   overflow: hidden;
-  width: 36px;
-  height: 36px;
-  max-height: 36px;
+  --flare-orb-size: 44px;
+  --flare-hover-inline-padding: 8px;
+  --flare-hover-gap: 18px;
+  --flare-hover-label-width: 76px;
+  --flare-hover-height: calc(var(--flare-orb-size) + 14px);
+  --flare-hover-width: calc(
+    var(--flare-orb-size) + var(--flare-hover-label-width) +
+      var(--flare-hover-gap) + var(--flare-hover-inline-padding) +
+      var(--flare-hover-inline-padding)
+  );
+  width: var(--flare-orb-size);
+  height: var(--flare-orb-size);
+  max-height: var(--flare-orb-size);
   transform: translateX(-50%);
   border: 1px solid transparent;
   border-radius: 999px;
@@ -1606,13 +1637,19 @@ blockquote {
     box-shadow 180ms ease-out;
 }
 .flare-capture--hover {
-  width: 140px;
-  height: 40px;
-  max-height: 40px;
+  width: var(--flare-hover-width);
+  height: var(--flare-hover-height);
+  max-height: var(--flare-hover-height);
   border-color: var(--line);
   background: color-mix(in srgb, var(--float) 92%, var(--surface));
   box-shadow: 0 10px 28px #00000012;
   backdrop-filter: blur(16px);
+}
+.flare-capture.orb-size-small {
+  --flare-orb-size: 36px;
+}
+.flare-capture.orb-size-large {
+  --flare-orb-size: 52px;
 }
 .flare-capture--capture {
   width: min(500px, calc(100vw - 32px));
@@ -1645,8 +1682,9 @@ blockquote {
   align-items: center;
   width: 100%;
   height: 100%;
-  gap: 7px;
-  padding: 0 3px;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
   overflow: hidden;
   white-space: nowrap;
   touch-action: none;
@@ -1658,7 +1696,7 @@ blockquote {
   overflow: hidden;
   color: var(--ink);
   font-size: 13px;
-  line-height: 1;
+  line-height: 1.15;
   font-weight: 600;
   opacity: 0;
   transform: translateX(-5px);
@@ -1668,7 +1706,9 @@ blockquote {
     transform 210ms cubic-bezier(0.2, 0, 0, 1);
 }
 .flare-capture--hover .flare-capture-trigger {
-  padding: 0 3px;
+  justify-content: flex-start;
+  gap: var(--flare-hover-gap);
+  padding: 0 var(--flare-hover-inline-padding);
 }
 .flare-capture.is-orb-dragging,
 .flare-capture.is-orb-dragging .flare-capture-trigger {
@@ -1676,9 +1716,9 @@ blockquote {
   transition: none;
 }
 .flare-capture--hover .flare-capture-label {
-  max-width: 100px;
+  max-width: var(--flare-hover-label-width);
   opacity: 1;
-  transform: none;
+  transform: translateY(-0.5px);
 }
 .flare-capture-panel {
   width: 100%;

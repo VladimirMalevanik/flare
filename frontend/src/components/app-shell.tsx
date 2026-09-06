@@ -8,7 +8,7 @@ import { Capture } from "@/features/capture/capture";
 import { dataProvider } from "@/lib/data";
 import { Dialog } from "./dialog";
 const navigation = [
-  { href: "/insights", label: "Insights", icon: "insights" },
+  { href: "/insights", label: "Flares", icon: "insights" },
   { href: "/vault", label: "Vault", icon: "vault" },
   { href: "/sources", label: "Sources", icon: "sources" },
   { href: "/settings", label: "Settings", icon: "settings" },
@@ -57,7 +57,7 @@ function Shell({ children }: { children: ReactNode }) {
           </span>
           <span>
             <strong>Flare</strong>
-            <small>AI Research Engine</small>
+            <small>Startup Context</small>
           </span>
         </Link>
         <button

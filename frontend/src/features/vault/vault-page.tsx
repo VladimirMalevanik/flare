@@ -10,11 +10,8 @@ const category = (item: Item) =>
   item.category ?? (item.type === "audio" ? "voice" : "note");
 const filters = [
   { id: "all", label: "All" },
-  { id: "discussion", label: "Discussions" },
-  { id: "pull-request", label: "Pull Requests" },
-  { id: "note", label: "Notes & Specs" },
-  { id: "voice", label: "Voice Memos" },
-  { id: "url", label: "URLs" },
+  { id: "note", label: "Notes" },
+  { id: "voice", label: "Voice" },
   { id: "file", label: "Files" },
 ];
 export function VaultPage() {
@@ -95,20 +92,17 @@ export function VaultPage() {
       <header className="page-heading">
         <p className="eyebrow">
           <span className="dot green" />
-          TEAM KNOWLEDGE ARCHIVE · {items.length} MEMORIES INDEXED
+          PROJECT MEMORY · {items.length} ITEMS REMEMBERED
         </p>
         <h1>Vault</h1>
-        <p>
-          Searchable memory across team conversations, pull requests, notes, and
-          transcripts.
-        </p>
+        <p>Everything Flare remembers about your project.</p>
       </header>
       <div className="vault-toolbar">
         <label className="search-field">
           <Icon name="search" />
           <input
             aria-label="Search vault"
-            placeholder="Filter by entity, keyword, or context…"
+            placeholder="Search notes, voice, files, or context…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -154,7 +148,7 @@ export function VaultPage() {
       </div>
       {loading ? (
         <p className="state" role="status">
-          Loading your memories…
+          Loading your context…
         </p>
       ) : error ? (
         <p role="alert" className="state error-text">
@@ -162,7 +156,7 @@ export function VaultPage() {
         </p>
       ) : !visible.length ? (
         <div className="state">
-          <h2>No matching memories</h2>
+          <h2>No matching context</h2>
           <p>Try another keyword or filter, or capture something new.</p>
         </div>
       ) : (

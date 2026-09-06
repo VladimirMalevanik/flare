@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { dataProvider, type Source } from "@/lib/data";
 import { Icon } from "@/components/icons";
 import { Dialog } from "@/components/dialog";
@@ -47,22 +47,20 @@ export function SourcesPage() {
       setBusy(false);
     }
   };
+  const available = sources.filter((source) => source.status === "ready");
+  const comingSoon = sources.filter(
+    (source) => source.status === "coming-soon",
+  );
+  const groupedSources = [...available, ...comingSoon];
   return (
     <section className="page sources-page">
       <header className="page-heading heading-row">
         <div>
           <h1>Sources</h1>
-          <p>Services Flare is quietly listening to for project context.</p>
+          <p>Ways to add project context to Flare.</p>
         </div>
         <div className="heading-actions">
-          <span className="badge">
-            <span className="dot green" />
-            Demo workspace
-          </span>
-          <button className="button primary" onClick={() => setAdding(true)}>
-            <Icon name="plus" />
-            Add source
-          </button>
+          <span className="badge"><span className="dot green" />MVP</span>
         </div>
       </header>
       {error && (
@@ -76,8 +74,11 @@ export function SourcesPage() {
         </p>
       ) : (
         <div className="source-grid">
-          {sources.map((source) => (
-            <article
+          {groupedSources.map((source, index) => (
+            <Fragment key={source.id}>
+              {index === 0 && <h2 className="source-group-title">Available now</h2>}
+              {index === available.length && <h2 className="source-group-title">Coming soon</h2>}
+              <article
               className={`card source-card ${source.status === "disconnected" ? "needs-attention" : ""} ${source.providers?.length ? "has-providers" : ""}`}
               key={source.id}
             >
@@ -89,18 +90,20 @@ export function SourcesPage() {
                 </div>
                 <span className={`badge status-${source.status}`}>
                   <span className="dot" />
-                  {source.status === "connected"
-                    ? "Connected"
-                    : source.status === "syncing"
-                      ? "Syncing…"
-                      : "Disconnected"}
+                  {source.status === "ready"
+                    ? "Ready"
+                    : source.status === "coming-soon"
+                      ? "Coming soon"
+                      : source.status === "connected"
+                        ? "Connected"
+                        : source.status === "syncing"
+                          ? "Syncing…"
+                          : "Disconnected"}
                 </span>
               </header>
               <div className="source-scope">
                 <h3 className="eyebrow muted">
-                  {source.status === "disconnected"
-                    ? "STATUS"
-                    : "MONITORED SCOPE"}
+                  {source.status === "coming-soon" ? "MVP STATUS" : "AVAILABLE CONTEXT"}
                 </h3>
                 {source.status === "disconnected" ? (
                   <p className="warning-text">
@@ -124,12 +127,14 @@ export function SourcesPage() {
                       </div>
                     ))}
                   </div>
-                ) : (
+                ) : source.channels.length ? (
                   <div className="tags">
                     {source.channels.map((channel) => (
                       <span key={channel}>{channel}</span>
                     ))}
                   </div>
+                ) : (
+                  <p className="muted">Not available in this MVP.</p>
                 )}
               </div>
               <p className="source-description">{source.description}</p>
@@ -137,13 +142,13 @@ export function SourcesPage() {
               <footer>
                 <button
                   className={`button ${source.status === "disconnected" ? "primary" : ""}`}
-                  disabled={busy}
+                  disabled={busy || source.status === "coming-soon"}
                   onClick={() =>
                     source.status === "disconnected"
                       ? void save({
                           ...source,
-                          status: "connected",
-                          updated: "Reconnected just now (demo)",
+                          status: "ready",
+                          updated: "Ready to use",
                           description:
                             "Workspace discussions and team context.",
                         })
@@ -151,10 +156,17 @@ export function SourcesPage() {
                   }
                 >
                   {source.status === "disconnected" && <Icon name="reset" />}
-                  {source.status === "disconnected" ? "Reconnect" : "Configure"}
+                  {source.status === "coming-soon"
+                    ? "Coming soon"
+                    : source.id === "obsidian"
+                      ? "Import"
+                      : source.status === "disconnected"
+                        ? "Reconnect"
+                        : "Configure"}
                 </button>
               </footer>
-            </article>
+              </article>
+            </Fragment>
           ))}
         </div>
       )}
@@ -193,7 +205,7 @@ export function SourcesPage() {
                       .filter(Boolean),
                 description:
                   editing?.description ?? "New workspace context source.",
-                status: "connected",
+                status: editing?.status ?? "ready",
                 updated: "Configured just now (demo)",
                 providers,
               });

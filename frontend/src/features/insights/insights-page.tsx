@@ -6,45 +6,47 @@ import {
   dataProvider,
   dataProviderMode,
   type Insight,
-  type InsightKind,
 } from "@/lib/data";
 import { Icon } from "@/components/icons";
 import { useWorkspace } from "@/components/workspace-context";
-const kinds: InsightKind[] = [
-  "Contradiction",
-  "Repeated Problem",
-  "Hidden Connection",
-  "Unresolved Question",
-];
-const plural: Record<InsightKind, string> = {
-  Contradiction: "Contradictions",
-  "Repeated Problem": "Repeated Problems",
-  "Hidden Connection": "Hidden Connections",
-  "Unresolved Question": "Unresolved Questions",
+const flareTypes = ["Discovery", "Reminder", "Warning"] as const;
+type FlareType = (typeof flareTypes)[number];
+const plural: Record<FlareType, string> = {
+  Discovery: "Discoveries",
+  Reminder: "Reminders",
+  Warning: "Warnings",
 };
+const flareTypeFor = (insight: Insight): FlareType =>
+  insight.flareType ??
+  (insight.kind === "Contradiction"
+    ? "Warning"
+    : insight.kind === "Hidden Connection"
+      ? "Discovery"
+      : "Reminder");
 export function InsightsPage() {
   const params = useSearchParams();
   const [insights, setInsights] = useState<Insight[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [filter, setFilter] = useState<InsightKind | "All">("All");
+  const [itemCount, setItemCount] = useState(0);
+  const [filter, setFilter] = useState<FlareType | "All">("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const { openCapture } = useWorkspace();
+  const { openCapture, revision } = useWorkspace();
   useEffect(() => {
     let live = true;
-    void dataProvider
-      .listInsights()
-      .then((list) => {
+    void Promise.all([dataProvider.listInsights(), dataProvider.listItems()])
+      .then(([list, items]) => {
         if (live) {
           setError("");
           setInsights(list);
+          setItemCount(items.length);
           setSelected(params.get("insight"));
         }
       })
       .catch(() => {
         if (live)
-          setError("Insights could not be loaded. Refresh to try again.");
+          setError("Flares could not be loaded. Refresh to try again.");
       })
       .finally(() => {
         if (live) setLoading(false);
@@ -52,8 +54,10 @@ export function InsightsPage() {
     return () => {
       live = false;
     };
-  }, [params]);
-  const visible = insights.filter((i) => filter === "All" || i.kind === filter);
+  }, [params, revision]);
+  const visible = insights.filter(
+    (insight) => filter === "All" || flareTypeFor(insight) === filter,
+  );
   const active = panelOpen ? visible.find((i) => i.id === selected) : undefined;
   useEffect(() => {
     if (!panelOpen) return;
@@ -92,13 +96,10 @@ export function InsightsPage() {
         <header className="page-heading">
           <p className="eyebrow">
             <span className="dot" />
-            RECENT DISCOVERIES · {insights.length} INSIGHTS DETECTED
+            RECENT FLARES · {insights.length} SURFACED
           </p>
-          <h1>Insights</h1>
-          <p>
-            Important patterns, contradictions, and recurring questions quietly
-            surfaced across team channels, PRs, and documents.
-          </p>
+          <h1>Flares</h1>
+          <p>Things you might have missed, forgotten, or contradicted.</p>
         </header>
         <div className="filters">
           <button
@@ -110,33 +111,63 @@ export function InsightsPage() {
           >
             All <span>{insights.length}</span>
           </button>
-          {kinds.map((kind) => (
+          {flareTypes.map((kind) => (
             <button
               key={kind}
               className={`filter ${filter === kind ? "selected" : ""}`}
               onClick={() => {
                 setFilter(kind);
-                setSelected(insights.find((i) => i.kind === kind)?.id ?? null);
+                setSelected(
+                  insights.find((insight) => flareTypeFor(insight) === kind)
+                    ?.id ?? null,
+                );
                 setPanelOpen(false);
               }}
             >
               {plural[kind]}{" "}
-              <span>{insights.filter((i) => i.kind === kind).length}</span>
+              <span>
+                {insights.filter((insight) => flareTypeFor(insight) === kind)
+                  .length}
+              </span>
             </button>
           ))}
         </div>
         {loading ? (
           <p className="state" role="status">
-            Loading discoveries…
+            Loading Flares…
           </p>
         ) : error ? (
           <p className="state error-text" role="alert">
             {error}
           </p>
+        ) : !insights.length ? (
+          <div className="state">
+            <h2>{itemCount ? `${itemCount} item${itemCount === 1 ? "" : "s"} remembered` : "No Flares yet"}</h2>
+            <p>
+              {itemCount
+                ? "Keep adding context. Flares appear when there is enough evidence."
+                : "Flare needs context before it can notice anything."}
+            </p>
+            {!itemCount && (
+              <>
+                <div className="form-actions">
+                  <button className="button primary" onClick={() => openCapture()}>
+                    Add context
+                  </button>
+                  <Link className="button" href="/sources">
+                    Import from Obsidian
+                  </Link>
+                </div>
+                <p className="muted meta">
+                  Add notes, files, or voice memos. Flare will surface connections as your context grows.
+                </p>
+              </>
+            )}
+          </div>
         ) : !visible.length ? (
           <div className="state">
-            <h2>No discoveries in this category</h2>
-            <p>Choose another filter to explore the available evidence.</p>
+            <h2>No Flares in this category</h2>
+            <p>Choose another filter to review the available Flares.</p>
           </div>
         ) : (
           <div className="insight-stack">
@@ -168,10 +199,10 @@ export function InsightsPage() {
               >
                 <div className="card-meta">
                   <span
-                    className={`badge kind-${kinds.indexOf(insight.kind ?? "Hidden Connection")}`}
+                    className={`badge kind-${flareTypes.indexOf(flareTypeFor(insight))}`}
                   >
                     <span className="dot" />
-                    {insight.kind}
+                    {flareTypeFor(insight)}
                   </span>
                   <span className="muted">
                     {new Date(insight.createdAt).toLocaleDateString("en-US", {
@@ -209,12 +240,12 @@ export function InsightsPage() {
         <aside
           className="evidence-panel"
           id="insight-evidence"
-          aria-label="Insight evidence"
+          aria-label="Flare evidence"
         >
           <header>
             <h2>
               <Icon name="note" />
-              Insight Evidence
+              Flare Evidence
             </h2>
             <button
               className="icon-button"
@@ -225,7 +256,7 @@ export function InsightsPage() {
             </button>
           </header>
           <div className="evidence-body">
-            <p className="eyebrow accent">{active.kind}</p>
+            <p className="eyebrow accent">{flareTypeFor(active)}</p>
             <h2>{active.detailTitle ?? active.title}</h2>
             <div className="card attention">
               <h3>Why this requires attention</h3>
