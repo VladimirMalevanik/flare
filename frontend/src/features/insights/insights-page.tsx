@@ -2,7 +2,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { dataProvider, type Insight, type InsightKind } from "@/lib/data";
+import {
+  dataProvider,
+  dataProviderMode,
+  type Insight,
+  type InsightKind,
+} from "@/lib/data";
 import { Icon } from "@/components/icons";
 import { useWorkspace } from "@/components/workspace-context";
 const kinds: InsightKind[] = [
@@ -32,6 +37,7 @@ export function InsightsPage() {
       .listInsights()
       .then((list) => {
         if (live) {
+          setError("");
           setInsights(list);
           setSelected(params.get("insight"));
         }
@@ -226,16 +232,33 @@ export function InsightsPage() {
               <p>{active.explanation}</p>
             </div>
             <h3 className="eyebrow muted">VERIFIABLE QUOTES</h3>
+            {dataProviderMode === "api" && (
+              <p className="muted">
+                Demo insight: these evidence sources are not stored in the
+                workspace database yet.
+              </p>
+            )}
             {active.evidence.map((e, i) => (
               <article className="quote-card" key={`${e.itemId}-${i}`}>
                 <div className="quote-meta">
-                  <Link href={`/vault?item=${e.itemId}`}>{e.sourceTitle}</Link>
+                  {dataProviderMode === "mock" ? (
+                    <Link href={`/vault?item=${e.itemId}`}>{e.sourceTitle}</Link>
+                  ) : (
+                    <span>{e.sourceTitle}</span>
+                  )}
                   <span className="muted">{e.sourceType}</span>
                 </div>
                 <blockquote>“{e.excerpt}”</blockquote>
-                <Link className="text-button" href={`/vault?item=${e.itemId}`}>
-                  Open source <Icon name="arrow" />
-                </Link>
+                {dataProviderMode === "mock" ? (
+                  <Link
+                    className="text-button"
+                    href={`/vault?item=${e.itemId}`}
+                  >
+                    Open source <Icon name="arrow" />
+                  </Link>
+                ) : (
+                  <span className="muted">Demo source</span>
+                )}
               </article>
             ))}
           </div>

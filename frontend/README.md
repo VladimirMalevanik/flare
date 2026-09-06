@@ -1,11 +1,24 @@
 # Flare frontend MVP
 
-A standalone frontend for Flare, an AI second brain. It recreates the supplied Stitch direction with an intentionally small Next.js App Router codebase and a mock data provider.
+The Next.js client for Flare, an AI second brain. It supports a real FastAPI/PostgreSQL note flow and retains a mock mode for standalone UI work.
 
 ## Run locally
 
 ```bash
 npm install
+npm run dev
+```
+
+To connect the local backend, create `.env.local`:
+
+```dotenv
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_DATA_PROVIDER=api
+```
+
+Then run:
+
+```bash
 npm run dev
 ```
 
@@ -21,18 +34,20 @@ npm start
 
 ## What to try
 
-- Click the floating capture bar or press Cmd/Ctrl+K on any page. One input accepts text, URLs, file metadata, and voice. Notes and URLs are detected automatically and appear immediately in Vault.
-- Select a local file. Only name/type/size metadata is retained.
-- Record audio where MediaRecorder is available. Otherwise the button creates a useful processing mock rather than doing nothing.
+- In API mode, click the floating capture bar or press Cmd/Ctrl+K on any page to save a note in PostgreSQL.
+- In mock mode, the same input also demonstrates URL detection, local file metadata, and voice capture. File binaries and recorded audio are not retained.
 - Search and filter Vault, then choose items to inspect their facts, source content and related items.
 - Select an insight and open its evidence source.
-- Refresh after creating an item: local mock items persist in browser localStorage. Existing user items retain the same storage key.
+- In API mode, create a note and refresh: it persists in PostgreSQL and can be deleted from its Vault detail.
+- In mock mode, captured items persist in browser localStorage.
 - Switch light/dark from the sidebar or choose System in Settings. Preferences survive navigation and refresh.
 - Configure, add, or reconnect a demo source. Changes are local; no external accounts are contacted.
 
-## Current mock boundary
+## Current integration boundary
 
-No backend, authentication, database, or AI calls are included. Current seeds live in `src/mocks/cupertino.ts` and `src/mocks/sources.ts`; user-created mock item metadata is stored under `flare-user-items-v1`. The UI accesses items, insights, and sources through `FlareDataProvider`. Voice capture produces a demo transcript/processing item; audio and file binaries are not persisted or uploaded. Notification delivery and retention policies are preferences only.
+With `NEXT_PUBLIC_DATA_PROVIDER=api`, note creation, listing, detail lookup, and deletion use FastAPI. The development backend supplies a fixed local workspace identity; production authentication is still pending. URL, file, and audio ingestion are not implemented by the API yet. Insights and Sources remain demo data from `src/mocks`, and notification delivery and retention policies are preferences only.
+
+With `NEXT_PUBLIC_DATA_PROVIDER=mock`, the original browser-only demo remains available. User-created mock item metadata is stored under `flare-user-items-v1`; audio and file binaries are never persisted.
 
 The UI follows the Cupertino Minimal simplified Stitch references with one token system for both themes. Inter is served locally under its OFL license. See [the design notes](docs/DESIGN_UPDATE.md) for reference decisions and intentional differences.
 

@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { dataProvider, type Item } from "@/lib/data";
+import { dataErrorMessage, dataProvider, type Item } from "@/lib/data";
 import { useWorkspace } from "@/components/workspace-context";
 import { Icon, itemIcon } from "@/components/icons";
 import { Dialog } from "@/components/dialog";
@@ -19,7 +19,7 @@ const filters = [
 ];
 export function VaultPage() {
   const params = useSearchParams();
-  const { revision } = useWorkspace();
+  const { revision, refresh } = useWorkspace();
   const [items, setItems] = useState<Item[]>([]);
   const [selected, setSelected] = useState<Item | null>(null);
   const [query, setQuery] = useState("");
@@ -28,19 +28,29 @@ export function VaultPage() {
   const [sort, setSort] = useState("latest");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [deleting, setDeleting] = useState(false);
   useEffect(() => {
     let live = true;
-    void dataProvider
-      .listItems()
-      .then((list) => {
+    const itemId = params.get("item");
+    void Promise.all([
+      dataProvider.listItems(),
+      itemId ? dataProvider.getItem(itemId) : Promise.resolve(null),
+    ])
+      .then(([list, linkedItem]) => {
         if (live) {
+          setError("");
           setItems(list);
-          const id = params.get("item");
-          setSelected(list.find((i) => i.id === id) ?? null);
+          setSelected(linkedItem);
         }
       })
-      .catch(() => {
-        if (live) setError("Vault could not be loaded. Refresh to try again.");
+      .catch((caught) => {
+        if (live)
+          setError(
+            dataErrorMessage(
+              caught,
+              "Vault could not be loaded. Refresh to try again.",
+            ),
+          );
       })
       .finally(() => {
         if (live) setLoading(false);
@@ -51,6 +61,22 @@ export function VaultPage() {
   }, [revision, params]);
   const matches = (i: Item, id: string) =>
     id === "all" || category(i) === id || i.type === id;
+  const deleteSelected = async () => {
+    if (!selected || deleting) return;
+    if (!window.confirm(`Delete “${selected.title}”?`)) return;
+    setDeleting(true);
+    setError("");
+    try {
+      await dataProvider.deleteItem(selected.id);
+      setItems((current) => current.filter((item) => item.id !== selected.id));
+      setSelected(null);
+      refresh();
+    } catch (caught) {
+      setError(dataErrorMessage(caught, "The item could not be deleted."));
+    } finally {
+      setDeleting(false);
+    }
+  };
   const visible = items
     .filter(
       (i) =>
@@ -291,6 +317,16 @@ export function VaultPage() {
               <p className="muted">No related items yet.</p>
             )}
           </section>
+          <footer className="form-actions">
+            <button
+              type="button"
+              className="button"
+              disabled={deleting}
+              onClick={() => void deleteSelected()}
+            >
+              {deleting ? "Deleting…" : "Delete item"}
+            </button>
+          </footer>
         </Dialog>
       )}
     </section>

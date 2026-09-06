@@ -1,13 +1,12 @@
 # Backend integration guide
 
-1. Do not rewrite the existing UI or change product layout unless an integration requirement demands it.
-2. Implement `ApiDataProvider` in `src/lib/data/api-provider.ts` against the actual backend.
-3. Map backend DTOs to the frontend domain types in `src/lib/data/types.ts`; do not leak backend DTO shapes into components.
-4. Change only `src/lib/data/index.ts` to select `ApiDataProvider` when the adapter is ready.
-5. Preserve `MockDataProvider` until integration tests are passing.
-6. Verify shared capture from every page, Vault grid/list/search/filter/detail, Insights selection and evidence-to-source navigation, Sources configuration, and Settings theme/preferences.
-7. Treat processing states explicitly: file/audio ingestion may complete after item creation.
+1. Set `NEXT_PUBLIC_DATA_PROVIDER=api` and point `NEXT_PUBLIC_API_URL` at the FastAPI origin. Use `mock` to run the standalone demo.
+2. `ApiDataProvider` maps backend DTOs to the frontend domain types; backend shapes do not leak into components.
+3. Notes use the real `GET`, `POST`, and `DELETE /items` routes. A successful capture reloads the recent list from PostgreSQL.
+4. Sources and Insights use `MockDataProvider` as a temporary fallback while those API routes are not implemented.
+5. URL, file, and audio capture report a clear unsupported-operation error in API mode. Do not silently save those records locally.
+6. Keep processing states explicit when file/audio ingestion is added; creation may finish asynchronously.
 
-The contract is defined in [API_CONTRACT.md](API_CONTRACT.md). The mock provider provides the expected behaviors for every operation.
+The contract is defined in [API_CONTRACT.md](API_CONTRACT.md). The mock provider remains available for every operation.
 
 Cupertino update: `/` and `/dashboard` redirect to `/insights`. `WorkspaceProvider` owns shared capture, theme, density, and a revision counter that refreshes item consumers after capture. Sources now use `listSources` and `saveSource`; both remain mocked. Preference toggles never call external services.

@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { useWorkspace } from "@/components/workspace-context";
-import { dataProvider, type CreateItemInput } from "@/lib/data";
+import {
+  dataErrorMessage,
+  dataProvider,
+  type CreateItemInput,
+} from "@/lib/data";
 import { readLocal, writeLocal } from "@/lib/storage/preferences";
 import { useVoiceCapture } from "./use-voice-capture";
 
@@ -256,10 +260,8 @@ export function Capture() {
       setFile(null);
       setHasTranscript(false);
       closeCapture();
-    } catch {
-      setError(
-        "Could not save to this browser. Free some storage and try again.",
-      );
+    } catch (caught) {
+      setError(dataErrorMessage(caught, "Capture failed. Try again."));
     } finally {
       setBusy(false);
     }

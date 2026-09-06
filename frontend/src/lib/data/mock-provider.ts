@@ -9,6 +9,7 @@ import type { Source } from "./types";
 import type { FlareDataProvider } from "./provider";
 import type { CreateItemInput, Insight, Item, ListItemOptions } from "./types";
 const STORAGE_KEY = "flare-user-items-v1";
+const DELETED_ITEMS_KEY = "flare-deleted-items-v1";
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const getUserItems = (): Item[] => {
   if (typeof window === "undefined") return [];
@@ -38,6 +39,19 @@ const setUserItems = (items: Item[]) => {
   if (typeof window !== "undefined")
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
 };
+const getDeletedItemIds = (): string[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed: unknown = JSON.parse(
+      window.localStorage.getItem(DELETED_ITEMS_KEY) ?? "[]",
+    );
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is string => typeof id === "string")
+      : [];
+  } catch {
+    return [];
+  }
+};
 const titleFor = (input: CreateItemInput) =>
   input.title?.trim() ||
   (input.type === "url"
@@ -66,7 +80,9 @@ export class MockDataProvider implements FlareDataProvider {
   }
   async listItems(options: ListItemOptions = {}): Promise<Item[]> {
     const query = options.query?.toLowerCase().trim() ?? "";
+    const deleted = new Set(getDeletedItemIds());
     return [...getUserItems(), ...clone(seedItems)]
+      .filter((item) => !deleted.has(item.id))
       .filter(
         (item) =>
           (options.type ?? "all") === "all" || item.type === options.type,
@@ -104,6 +120,13 @@ export class MockDataProvider implements FlareDataProvider {
     setUserItems([item, ...getUserItems()]);
     return item;
   }
+  async deleteItem(id: string): Promise<void> {
+    setUserItems(getUserItems().filter((item) => item.id !== id));
+    const deleted = new Set(getDeletedItemIds());
+    deleted.add(id);
+    if (typeof window !== "undefined")
+      window.localStorage.setItem(DELETED_ITEMS_KEY, JSON.stringify([...deleted]));
+  }
   async listInsights(): Promise<Insight[]> {
     return clone(seedInsights);
   }
@@ -111,7 +134,9 @@ export class MockDataProvider implements FlareDataProvider {
     return clone(seedInsights).find((insight) => insight.id === id) ?? null;
   }
   async resetDemoData() {
-    if (typeof window !== "undefined")
+    if (typeof window !== "undefined") {
       window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem(DELETED_ITEMS_KEY);
+    }
   }
 }

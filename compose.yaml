@@ -22,7 +22,11 @@ services:
     environment:
       DATABASE_URL: postgresql://flare_app:${APP_PASSWORD:?Copy .env.example to .env}@db:5432/flare
       MIGRATION_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:?Copy .env.example to .env}@db:5432/flare
-      CORS_ORIGINS: http://localhost:3000
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      FLARE_DEV_MODE: ${FLARE_DEV_MODE:-true}
+      FLARE_DEV_WORKSPACE_ID: ${FLARE_DEV_WORKSPACE_ID:-00000000-0000-4000-8000-000000000001}
+      FLARE_DEV_USER_ID: ${FLARE_DEV_USER_ID:-local-dev-user}
+      FLARE_DEV_WORKSPACE_NAME: ${FLARE_DEV_WORKSPACE_NAME:-Flare Local}
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
@@ -35,10 +39,14 @@ services:
       retries: 20
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_DATA_PROVIDER: ${NEXT_PUBLIC_DATA_PROVIDER:-api}
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
-      NEXT_PUBLIC_DATA_PROVIDER: mock
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      NEXT_PUBLIC_DATA_PROVIDER: ${NEXT_PUBLIC_DATA_PROVIDER:-api}
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:

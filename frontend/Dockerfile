@@ -4,6 +4,10 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 FROM dependencies AS build
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ARG NEXT_PUBLIC_DATA_PROVIDER=mock
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
+    NEXT_PUBLIC_DATA_PROVIDER=${NEXT_PUBLIC_DATA_PROVIDER}
 COPY . .
 RUN npm run build
 

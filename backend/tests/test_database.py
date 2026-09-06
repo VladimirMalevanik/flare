@@ -13,6 +13,8 @@ from dotenv import load_dotenv
 from psycopg import sql
 from psycopg.errors import CheckViolation, ForeignKeyViolation, InsufficientPrivilege, UniqueViolation
 
+from app.models.database import _connection_is_ready, database_is_ready
+
 
 load_dotenv()
 pytestmark = pytest.mark.integration
@@ -34,6 +36,13 @@ def select_workspace(conn, workspace_id):
         "SELECT set_config('app.workspace_id', %s, true)",
         (str(workspace_id) if workspace_id else "",),
     )
+
+
+def admin_connection():
+    url = os.environ.get("TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("Set TEST_DATABASE_URL to run PostgreSQL integration tests")
+    return psycopg.connect(url, autocommit=False)
 
 
 @pytest.fixture
@@ -116,6 +125,42 @@ def test_runtime_role_cannot_bypass_rls(db):
         "SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"
     ).fetchone()
     assert row == ("flare_app", False, False)
+
+
+def test_readiness_accepts_the_current_migrated_runtime_database():
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        pytest.skip("Set DATABASE_URL to run runtime readiness tests")
+    assert database_is_ready(url) is True
+
+
+def test_readiness_rejects_an_old_alembic_revision():
+    with admin_connection() as connection:
+        try:
+            connection.execute(
+                "UPDATE public.alembic_version SET version_num = '0001'"
+            )
+            connection.execute("SET LOCAL ROLE flare_app")
+            assert _connection_is_ready(connection) is False
+        finally:
+            connection.rollback()
+
+
+def test_readiness_rejects_customer_rows_visible_without_context():
+    with admin_connection() as connection:
+        try:
+            connection.execute(
+                "INSERT INTO public.workspaces (id, name) VALUES (%s, 'RLS leak sentinel')",
+                (uuid4(),),
+            )
+            connection.execute(
+                """CREATE POLICY readiness_test_leak ON public.workspaces
+                   FOR SELECT USING (true)"""
+            )
+            connection.execute("SET LOCAL ROLE flare_app")
+            assert _connection_is_ready(connection) is False
+        finally:
+            connection.rollback()
 
 
 @pytest.mark.parametrize("table", TABLES)

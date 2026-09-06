@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115,<1",
   "uvicorn>=0.30,<1",
-  "psycopg[binary]>=3.2,<4",
+  "psycopg[binary,pool]>=3.2,<4",
   "SQLAlchemy>=2.0,<3",
   "alembic>=1.14,<2",
   "python-dotenv>=1.0,<2",
@@ -25,4 +25,3 @@ include = ["app*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["integration: requires PostgreSQL with the migrated schema"]
-

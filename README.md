@@ -61,10 +61,26 @@ docker compose up --build
 - backend health: http://localhost:8000/health
 - database readiness: http://localhost:8000/ready
 
-В текущем этапе frontend использует mock provider и работает как полное демо
-интерфейса. Точка подключения настоящего API уже выделена в
-`frontend/src/lib/data/api-provider.ts`. Реальные CRUD-маршруты, авторизация,
-загрузка бинарных файлов, workers и AI-провайдеры — следующий этап интеграции.
+Docker Compose запускает первый сквозной сценарий с настоящей БД: заметка,
+созданная через Capture, отправляется в FastAPI, атомарно сохраняется в
+`documents`, `document_versions` и `chunks`, появляется в Vault и остаётся там
+после обновления страницы. API предоставляет `POST /items`, `GET /items`,
+`GET /items/{id}` и `DELETE /items/{id}`.
+
+Для локальной разработки Compose включает фиксированные тестовые workspace и
+пользователя; их значения можно переопределить через `.env`. Этот режим нужен
+только для запуска на своём компьютере: он не заменяет регистрацию и проверку
+JWT. Sources и Insights пока используют демонстрационные данные. Загрузка
+бинарных файлов, URL, аудио, workers и AI-провайдеры остаются следующим этапом
+интеграции.
+
+Проверить сохранение можно через интерфейс: создайте Note, откройте Vault и
+обновите страницу. Запись также видна напрямую в PostgreSQL:
+
+```sh
+docker compose exec db psql -U postgres -d flare -c \
+  "SELECT d.title, v.state, c.content FROM documents d JOIN document_versions v ON v.id = d.current_version_id JOIN chunks c ON c.document_version_id = v.id WHERE d.deleted_at IS NULL ORDER BY d.created_at DESC;"
+```
 
 ## Проверки
 

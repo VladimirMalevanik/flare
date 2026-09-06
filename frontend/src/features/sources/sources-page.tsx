@@ -17,7 +17,10 @@ export function SourcesPage() {
     void dataProvider
       .listSources()
       .then((list) => {
-        if (live) setSources(list);
+        if (live) {
+          setError("");
+          setSources(list);
+        }
       })
       .catch(() => {
         if (live) setError("Sources could not be loaded.");

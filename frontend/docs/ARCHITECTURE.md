@@ -17,4 +17,4 @@ The existing `flare-user-items-v1` storage key is retained. Captures trigger a s
 
 One token system in `globals.css` handles light and dark appearance. System mode follows the operating-system preference. A shared native dialog provides expanded capture and detail/configuration overlays. `/` and the legacy `/dashboard` route redirect to `/insights`.
 
-`ApiDataProvider` is an intentionally non-functional adapter stub. Keeping it beside `MockDataProvider` makes the future seam explicit without imposing a backend design today.
+`ApiDataProvider` owns the HTTP boundary and validates item DTOs before they reach the UI. `NEXT_PUBLIC_DATA_PROVIDER` selects it at build time. In API mode, item reads, note creation, and deletion use FastAPI while unimplemented Sources and Insights operations delegate to `MockDataProvider`.
