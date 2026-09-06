@@ -8,6 +8,7 @@ import {
 } from "react";
 import { readLocal, writeLocal } from "@/lib/storage/preferences";
 export type Theme = "system" | "light" | "dark";
+export type CaptureOrbSize = "small" | "medium" | "large";
 export interface Profile {
   name: string;
   email: string;
@@ -16,8 +17,8 @@ export interface Profile {
 }
 export const defaultProfile: Profile = {
   name: "Elena Rostova",
-  email: "elena.rostova@acme.ai",
-  role: "Staff Architect",
+  email: "elena@northstar.app",
+  role: "Founder",
   timezone: "Europe/Moscow",
 };
 interface WorkspaceState {
@@ -33,6 +34,8 @@ interface WorkspaceState {
   refresh: () => void;
   compact: boolean;
   setCompact: (value: boolean) => void;
+  captureOrbSize: CaptureOrbSize;
+  setCaptureOrbSize: (value: CaptureOrbSize) => void;
   profile: Profile;
   updateProfile: (changes: Partial<Profile>) => void;
   notice: string;
@@ -42,6 +45,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [theme, updateTheme] = useState<Theme>("light");
   const [dark, setDark] = useState(false);
   const [compact, updateCompact] = useState(false);
+  const [captureOrbSize, updateCaptureOrbSize] =
+    useState<CaptureOrbSize>("medium");
   const [captureOpen, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [revision, setRevision] = useState(0);
@@ -57,6 +62,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       updateTheme(selected);
       setDark(selected === "dark" || (selected === "system" && media.matches));
       updateCompact(readLocal<boolean>("flare-compact", false) === true);
+      const storedOrbSize = readLocal<CaptureOrbSize>(
+        "flare-capture-orb-size-v1",
+        "medium",
+      );
+      updateCaptureOrbSize(
+        ["small", "medium", "large"].includes(storedOrbSize)
+          ? storedOrbSize
+          : "medium",
+      );
       const legacy = readLocal<Partial<Profile>>("flare-settings-v1", {});
       const storedProfile = readLocal<Partial<Profile>>(
         "flare-profile-v1",
@@ -101,6 +115,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       );
     }
   };
+  const setCaptureOrbSize = (value: CaptureOrbSize) => {
+    updateCaptureOrbSize(value);
+    try {
+      writeLocal("flare-capture-orb-size-v1", value);
+    } catch {
+      setNotice("Orb size changed for this visit. Browser storage is unavailable.");
+    }
+  };
   const updateProfile = (changes: Partial<Profile>) => {
     const next = { ...profile, ...changes };
     setProfile(next);
@@ -120,6 +142,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setTheme,
         compact,
         setCompact,
+        captureOrbSize,
+        setCaptureOrbSize,
         profile,
         updateProfile,
         captureOpen,

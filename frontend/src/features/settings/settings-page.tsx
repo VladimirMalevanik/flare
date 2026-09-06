@@ -2,7 +2,11 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Icon } from "@/components/icons";
 import { Dialog } from "@/components/dialog";
-import { useWorkspace, type Theme } from "@/components/workspace-context";
+import {
+  useWorkspace,
+  type CaptureOrbSize,
+  type Theme,
+} from "@/components/workspace-context";
 import { readLocal, writeLocal } from "@/lib/storage/preferences";
 const defaults = {
   alerts: true,
@@ -13,8 +17,16 @@ const defaults = {
   emailDelivery: true,
 };
 export function SettingsPage() {
-  const { theme, setTheme, compact, setCompact, profile, updateProfile } =
-    useWorkspace();
+  const {
+    theme,
+    setTheme,
+    compact,
+    setCompact,
+    captureOrbSize,
+    setCaptureOrbSize,
+    profile,
+    updateProfile,
+  } = useWorkspace();
   const [settings, setSettings] = useState(defaults);
   const [billingOpen, setBillingOpen] = useState(false);
   const [message, setMessage] = useState(
@@ -55,9 +67,7 @@ export function SettingsPage() {
       <header className="page-heading heading-row">
         <div>
           <h1>Settings</h1>
-          <p>
-            Manage your profile, workspace preferences, and privacy controls.
-          </p>
+          <p>Manage your profile, workspace preferences, and privacy controls.</p>
         </div>
         <span role="status" className="saved-status">
           <Icon name="check" />
@@ -217,6 +227,29 @@ export function SettingsPage() {
             onChange={(e) => setCompact(e.target.checked)}
           />
         </SettingRow>
+        <SettingRow
+          title="Capture orb size"
+          description="Choose the size of the floating capture orb."
+        >
+          <div className="orb-size-options" role="group" aria-label="Capture orb size">
+            {(
+              [
+                ["small", "Small"],
+                ["medium", "Medium"],
+                ["large", "Large"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                className={`filter ${captureOrbSize === value ? "selected" : ""}`}
+                aria-pressed={captureOrbSize === value}
+                onClick={() => setCaptureOrbSize(value as CaptureOrbSize)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </SettingRow>
       </SettingsSection>
       <SettingsSection
         title="Notifications & Digest"
@@ -224,8 +257,8 @@ export function SettingsPage() {
         icon="insights"
       >
         <SettingRow
-          title="Instant alerts for critical contradictions"
-          description="A nudge when new context conflicts with an earlier decision."
+          title="Alerts for important Flares"
+          description="A nudge when enough evidence points to something worth reviewing."
         >
           <input
             type="checkbox"
@@ -236,8 +269,8 @@ export function SettingsPage() {
           />
         </SettingRow>
         <SettingRow
-          title="Daily morning context synthesis digest"
-          description="A daily summary at 08:30 in your selected timezone."
+          title="Daily Flare digest"
+          description="A short daily summary at 08:30 in your selected timezone."
         >
           <input
             className="switch"
@@ -252,14 +285,14 @@ export function SettingsPage() {
           description="Channels selected for your brief."
         >
           <div className="tags">
-            {(["telegram", "emailDelivery"] as const).map((key) => (
+            {(["emailDelivery"] as const).map((key) => (
               <button
                 key={key}
                 className={`filter ${settings[key] ? "selected" : ""}`}
                 aria-pressed={settings[key]}
                 onClick={() => update(key, !settings[key])}
               >
-                {key === "telegram" ? "Telegram" : "Email"}
+                Email
               </button>
             ))}
           </div>
@@ -303,7 +336,7 @@ export function SettingsPage() {
         icon="sources"
       >
         <SettingRow
-          title="Acme Core Platform"
+          title="Northstar"
           description="Personal demo workspace"
         >
           <span className="badge status-connected">
@@ -311,11 +344,11 @@ export function SettingsPage() {
             Active
           </span>
         </SettingRow>
-        <p className="meta muted">Monitored projects</p>
+        <p className="meta muted">Workspace tags</p>
         <div className="tags">
-          <span>flare-core</span>
-          <span>sync-engine</span>
-          <span>mobile-v4</span>
+          <span>Product</span>
+          <span>Customer Research</span>
+          <span>Launch</span>
         </div>
       </SettingsSection>
     </section>

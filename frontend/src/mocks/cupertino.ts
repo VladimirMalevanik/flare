@@ -21,82 +21,54 @@ const makeItem = (
 });
 export const contextItems: Item[] = [
   makeItem(
-    "pr-412",
-    "url",
-    "WebSocket Fallback REST Adapter",
-    "GitHub · PR #412",
-    "pull-request",
+    "pricing-decision", "note", "Pricing test", "Founder note · Elena Rostova", "note",
     [
-      "Bypasses synchronous pre-flight key verification for established client sessions.",
-      "Introduced /v2/sync HTTP fallback to prevent socket disconnects during handoffs.",
-      "Linear DEV-89 attached with 4 sub-tickets.",
+      "Monthly-first until we understand willingness to pay.",
+      "Revisit packaging after the beta has enough customer conversations.",
     ],
-    ["mobile-thread", "linear-3091"],
+    ["launch-pricing-note"],
   ),
   makeItem(
-    "sprint-sync",
-    "audio",
-    "Architecture Sprint Sync",
-    "Voice Memo · Elena Rostova",
-    "voice",
+    "customer-interview-maya", "note", "Customer interview: Maya", "Customer interview · Beta user", "discussion",
     [
-      "The team is reviewing the mobile sync contract before staging deploy.",
-      "Elena assigned DRI for staged production rollout.",
+      "Maya left onboarding before she could explain what the product would help her do.",
+      "She expected a clear first result before being asked to set up her workspace.",
     ],
-    ["pr-412", "linear-3091"],
+    ["beta-onboarding-feedback", "founder-first-value-note"],
   ),
   makeItem(
-    "mobile-thread",
-    "note",
-    "Idempotency Collision Handling",
-    "Telegram · #dev-mobile",
-    "discussion",
+    "beta-onboarding-feedback", "note", "Beta onboarding feedback", "Beta feedback · September cohort", "discussion",
     [
-      "Client 4.1 expects 409 Conflict if duplicate idempotency key arrives.",
-      "Local SQLite journal corrupts if server returns 200 on duplicate.",
+      "Two beta users paused during setup because the product value was not clear yet.",
+      "The welcome screen should show an example Flare before asking for more context.",
     ],
-    ["pr-412"],
-  ),
-  {
-    ...makeItem(
-      "residency",
-      "file",
-      "EU Data Residency & AWS Frankfurt VPC",
-      "Notion · Compliance",
-      "note",
-      [
-        "Frankfurt VPC required for enterprise tenant tier by Q4.",
-        "Requires formal DPA sign-off from General Counsel.",
-      ],
-      [],
-    ),
-    fileName: "EU Data Residency.pdf",
-    fileSize: 1400000,
-    fileType: "application/pdf",
-  },
-  makeItem(
-    "checkout",
-    "note",
-    "Safari 3DS Checkout Drop-off Finding",
-    "Meeting Note · Product & Eng",
-    "discussion",
-    [
-      "Multi-factor challenge timeouts cascading into unhandled promise rejections in iOS webviews.",
-      "4.2% drop-off identified in DACH checkout funnel during payment challenge handoff.",
-    ],
-    ["linear-3091"],
+    ["customer-interview-maya", "founder-first-value-note"],
   ),
   makeItem(
-    "linear-3091",
-    "note",
-    "ENG-3091: Optimistic Validation Latch",
-    "Linear Issue · In Progress",
-    "note",
+    "founder-first-value-note", "note", "First-value hypothesis", "Founder note · Elena Rostova", "note",
     [
-      "Wrap async dispatch queue in optimistic validation latch.",
-      "Prevents duplicate event bus ingestion under network jitter.",
+      "People should see one useful connection before they are asked to organize anything.",
+      "Keep onboarding focused on adding context, then show a grounded Flare when evidence is sufficient.",
     ],
-    ["pr-412", "sprint-sync"],
+    ["customer-interview-maya", "beta-onboarding-feedback"],
+  ),
+  makeItem(
+    "launch-pricing-note", "note", "Launch pricing note", "Launch note · Founder team", "note",
+    [
+      "The launch page currently describes an annual-only plan.",
+      "Publish the pricing test copy before inviting the next beta cohort.",
+    ],
+    ["pricing-decision"],
+  ),
+  makeItem(
+    "csv-export-voice-memo", "audio", "CSV export follow-up", "Voice memo · Elena Rostova", "voice",
+    ["Revisit CSV export after we reach 10 beta signups.", "Do not build it before people ask for a way to take their context with them."],
+    ["beta-signups-milestone"],
+  ),
+  makeItem(
+    "beta-signups-milestone", "note", "10 beta signups reached", "Founder note · Beta milestone", "note",
+    ["Ten people have now signed up for the beta.", "The CSV export follow-up has not been scheduled yet."],
+    ["csv-export-voice-memo"],
   ),
 ];
 const evidence = (id: string, excerpt: string) => {
@@ -110,63 +82,54 @@ const evidence = (id: string, excerpt: string) => {
 };
 export const contextInsights: Insight[] = [
   {
-    id: "sync-divergence",
-    kind: "Contradiction",
-    detailTitle: "Mobile & Web Sync Divergence",
-    title: "Conflicting API contract between Mobile client and Web sync engine",
+    id: "onboarding-first-value", kind: "Hidden Connection", flareType: "Discovery",
+    title: "Users keep getting stuck before seeing first value",
     summary:
-      "The iOS client expects immediate 409 Conflict rejection for duplicate idempotency tokens, but the newly merged PR #412 introduces asynchronous queueing that skips pre-flight checks.",
+      "Three separate beta users described leaving onboarding before understanding what the product actually does.",
     explanation:
-      "Risk of local client state corruption and silent transaction loss during peak traffic.",
+      "The interview, beta feedback, and founder hypothesis all point to the same moment: people need a concrete first result before setup feels worthwhile.",
     createdAt: "2026-09-05T08:25:00Z",
     evidence: [
       evidence(
-        "mobile-thread",
-        "Client 4.1 expects 409 Conflict if duplicate idempotency key arrives; otherwise we don’t branch to retry state.",
+        "customer-interview-maya", "Maya left onboarding before she could explain what the product would help her do.",
       ),
       evidence(
-        "pr-412",
-        "Bypassing synchronous pre-flight key verification in favor of optimistic pub-sub ingestion queue.",
+        "beta-onboarding-feedback", "Two beta users paused during setup because the product value was not clear yet.",
       ),
+      evidence("founder-first-value-note", "People should see one useful connection before they are asked to organize anything."),
     ],
   },
   {
-    id: "checkout-friction",
-    kind: "Repeated Problem",
-    title: "Recurring 3DS checkout timeout reports after Stripe migration",
+    id: "pricing-test-conflict", kind: "Contradiction", flareType: "Warning",
+    title: "The current pricing test conflicts with an earlier decision",
     summary:
-      "Customer support escalated checkout failures matching webview timeout errors previously noted in team discussions.",
+      "The team agreed to test monthly pricing first, but the latest launch note describes annual-only pricing.",
     explanation:
-      "Direct conversion loss impacting European enterprise renewals.",
+      "The current launch copy may test a different pricing hypothesis than the one the team agreed to validate.",
     createdAt: "2026-09-05T07:00:00Z",
     evidence: [
       evidence(
-        "checkout",
-        "Multi-factor challenge timeouts cascade into unhandled promise rejections in iOS webviews.",
+        "pricing-decision", "Monthly-first until we understand willingness to pay.",
       ),
       evidence(
-        "linear-3091",
-        "Wrap async dispatch queue in optimistic validation latch.",
+        "launch-pricing-note", "The launch page currently describes an annual-only plan.",
       ),
     ],
   },
   {
-    id: "rollout-connection",
-    kind: "Hidden Connection",
-    title: "Sprint decisions connect to the mobile sync rollout",
+    id: "csv-export-reminder", kind: "Unresolved Question", flareType: "Reminder",
+    title: "You planned to revisit CSV export after 10 beta signups",
     summary:
-      "The sprint voice memo and implementation notes describe the same validation work from different sides of the rollout.",
+      "That threshold has now been reached, but the follow-up is still unresolved.",
     explanation:
-      "Connecting the discussion to the implementation makes ownership and rollout expectations easier to verify.",
+      "This is an earlier promise with a clear trigger, not a recommendation to build a new feature immediately.",
     createdAt: "2026-09-05T06:00:00Z",
     evidence: [
       evidence(
-        "sprint-sync",
-        "Elena assigned DRI for staged production rollout.",
+        "csv-export-voice-memo", "Revisit CSV export after we reach 10 beta signups.",
       ),
       evidence(
-        "linear-3091",
-        "Prevents duplicate event bus ingestion under network jitter.",
+        "beta-signups-milestone", "Ten people have now signed up for the beta.",
       ),
     ],
   },

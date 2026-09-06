@@ -41,6 +41,8 @@ export interface Insight {
   evidence: Evidence[];
   createdAt: string;
   kind?: InsightKind;
+  /** User-facing label; internal detector names remain stable for API seams. */
+  flareType?: "Discovery" | "Reminder" | "Warning";
   detailTitle?: string;
 }
 export interface CreateItemInput {
@@ -59,7 +61,7 @@ export interface Source {
   scope: string;
   description: string;
   channels: string[];
-  status: "connected" | "syncing" | "disconnected";
+  status: "connected" | "syncing" | "disconnected" | "ready" | "coming-soon";
   updated: string;
   providers?: SourceProvider[];
 }
