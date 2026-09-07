@@ -95,6 +95,10 @@ npm --prefix frontend run build
 GitHub Actions выполняет обе группы проверок. Backend job поднимает настоящий
 PostgreSQL 17 с pgvector и дважды применяет миграции, проверяя повторный запуск.
 
-Документация: [проект БД](backend/docs/database.md),
+## Документация
+
+[План реализации MVP](docs/MVP_IMPLEMENTATION_PLAN.md),
+[исследование AI-моделей](docs/AI_MODELS.md),
+[проект БД](backend/docs/database.md),
 [слои бэкенда](backend/docs/architecture.md),
 [контракт frontend](frontend/docs/API_CONTRACT.md).
