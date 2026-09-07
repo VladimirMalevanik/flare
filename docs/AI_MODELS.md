@@ -1,8 +1,18 @@
 # AI models for the manual-input MVP
 
-Verified against official documentation on **2026-09-07**. This is an integration plan, not an implemented feature. Provider facts below are linked; application defaults and effort estimates are recommendations.
+Verified against official documentation on **2026-09-07**. Provider research plus integration guidance; implementation status is described below. Provider facts below are linked; application defaults and effort estimates are recommendations.
 
 **Agreed MVP scope:** [MVP implementation plan](MVP_IMPLEMENTATION_PLAN.md) takes precedence over the broader options researched here. Implement 20B only for text, explicit Analyze, a durable Postgres worker, and Whisper Turbo with temporary audio staging deleted after processing. 120B routing, V3 fallback, permanent audio storage and scheduling are deferred. Model comparisons and paid-rate estimates below remain technical reference, not MVP requirements.
+
+## Implemented boundary (Block 2)
+
+The backend now provides an isolated `TextAnalyzer` / `GroqTextAnalyzer` for
+caller-authorized `Evidence[]`, using only 20B/low and strict structured output.
+It performs no DB access, HTTP wiring, jobs or persistence. SDK retries are zero;
+source IDs and exact quotes are validated. See the implemented
+[text-analysis contract](../backend/docs/text-analysis.md) for settings, bounds,
+errors, metadata and the opt-in smoke command. Block 1 auth is already implemented.
+The broader flows below remain research/planning, not enabled behavior.
 
 ## Models and pricing
 
@@ -43,7 +53,7 @@ For a later audio version, consider one user-requested accuracy retry on V3 when
 
 ## API and request contract
 
-**Recommended client:** one backend `groq.AsyncGroq` instance per process/lifecycle behind the existing AI boundary. The [official SDK](https://github.com/groq/groq-python) supports async chat and audio. No Groq or OpenAI SDK is currently declared in `backend/pyproject.toml`, and no existing OpenAI-compatible client implementation was found. Adding either SDK is a future production dependency change requiring confirmation under the project instructions.
+**Recommended client:** one backend `groq.AsyncGroq` instance per process/lifecycle behind the existing AI boundary. The [official SDK](https://github.com/groq/groq-python) supports async chat and audio. Block 2 declares the official Groq SDK in `backend/pyproject.toml`; no OpenAI client is used. The native SDK base URL is `https://api.groq.com`, because its resources add `/openai/v1` themselves.
 
 **OpenAI SDK is a valid alternative:** configure its client with `api_key=GROQ_API_KEY` and `base_url=https://api.groq.com/openai/v1`; an OpenAI account key is not used. Compatibility is partial: avoid `logprobs`, `top_logprobs`, `logit_bias`, `messages[].name`, and `n != 1`. Audio SRT/VTT outputs are unsupported. [Compatibility guide](https://console.groq.com/docs/openai).
 
@@ -95,11 +105,11 @@ Record job/request IDs, task/route reason, configured and returned model, prompt
 
 ## Configuration
 
-Proposed additions to `backend/app/config.py`; these variables are **not wired yet**:
+Block 2 wires the text settings in `backend/app/config.py` lazily; STT and escalation below remain future configuration:
 
 ```dotenv
 GROQ_API_KEY=<injected server-side; never committed>
-GROQ_BASE_URL=https://api.groq.com/openai/v1
+GROQ_BASE_URL=https://api.groq.com
 LLM_DEFAULT_MODEL=openai/gpt-oss-20b
 STT_MODEL=whisper-large-v3-turbo
 LLM_DEFAULT_REASONING_EFFORT=low
@@ -115,12 +125,12 @@ Centralize timeouts, token budgets and retry caps in the same settings/profile d
 
 | Existing location | Observed state → recommended change later |
 | --- | --- |
-| `backend/app/config.py` | Environment-backed settings, no AI settings → add the configuration above. |
-| `backend/app/ai_engine/{llm,extractor,embedder}.py` | Protocols only; LLM exposes only `generate_insight` → extend narrowly for structured text tasks and transcription; one small Groq adapter, no agent framework. |
+| `backend/app/config.py` | Auth settings plus opt-in AI settings; see implemented boundary above. |
+| `backend/app/ai_engine/{llm,extractor,embedder}.py` | Existing protocols preserved; Block 2 adds TextAnalyzer, typed contracts and one Groq adapter. Transcription remains deferred. |
 | `backend/app/services/item_service.py`, `models/tables.py` | Notes save and publish synchronously, with no model call → preserve raw input immediately; enqueue analysis on explicit Analyze. |
 | `backend/app/services/{file_service,insight_service,storage}.py` | Ingestion/flare orchestration placeholders and storage protocol → add temporary audio staging, transcript and citation-backed flare persistence; permanent audio storage is deferred. |
 | `backend/app/workers/` | Placeholders, including `celery_app.py`; no functioning queue → propose one Postgres-backed job runner, not mandatory Redis/Celery. |
-| `backend/app/api/routes.py`, `api/schemas.py` | Notes-only POST; identity is development-only → implement real authentication, upload and job-status contracts. |
+| `backend/app/api/routes.py`, `api/schemas.py` | Authenticated Notes-only POST; Block 2 leaves it unchanged. Upload and job-status contracts remain future work. |
 | `frontend/src/lib/data/api-provider.ts` | Rejects non-note creation; flares/sources use mock fallback → connect audio upload, processing status and real flare endpoints through this provider. |
 
 Keep the existing dependency direction: **API/workers → services → persistence and AI adapters**. Fetch only authorized, active workspace evidence before calling Groq; bound it by tokens using selected/recent notes and existing keyword search. No embeddings are required: `chunks.embedding` is nullable. Leave the schema's future vector capacity intact.
