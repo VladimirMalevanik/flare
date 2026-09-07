@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useSession } from "./auth-session";
 import { readLocal, writeLocal } from "@/lib/storage/preferences";
 export type Theme = "system" | "light" | "dark";
 export type CaptureOrbSize = "small" | "medium" | "large";
@@ -42,6 +43,7 @@ interface WorkspaceState {
 }
 const Context = createContext<WorkspaceState | null>(null);
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
+  const session = useSession();
   const [theme, updateTheme] = useState<Theme>("light");
   const [dark, setDark] = useState(false);
   const [compact, updateCompact] = useState(false);
@@ -144,7 +146,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setCompact,
         captureOrbSize,
         setCaptureOrbSize,
-        profile,
+        profile: session ? { ...profile, name: session.user.name, email: session.user.email, role: session.workspace.role } : profile,
         updateProfile,
         captureOpen,
         openCapture: (text) => {

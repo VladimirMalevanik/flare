@@ -1831,3 +1831,18 @@ blockquote {
     animation: none !important;
   }
 }
+
+/* Authentication reuses the existing Flare form, surface and accent tokens. */
+.auth-page { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
+.auth-panel { width: min(100%, 420px); padding: 32px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); }
+.auth-panel .brand { margin-bottom: 32px; }
+.auth-panel .page-heading { margin-bottom: 24px; }
+.auth-form { display: grid; gap: 18px; }
+.auth-form label { display: grid; gap: 7px; font-weight: 500; }
+.auth-form input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--inset); }
+.auth-form .button { min-height: 44px; justify-content: center; }
+.auth-form p { margin: 0; }
+.auth-error { color: var(--red); }
+.auth-alternative { margin: 24px 0 0; color: var(--secondary); }
+.auth-alternative a { color: var(--accent-text); font-weight: 500; }
+@media (max-width: 480px) { .auth-page { padding: 16px; } .auth-panel { padding: 24px; } }

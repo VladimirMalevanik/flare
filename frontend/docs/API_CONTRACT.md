@@ -30,3 +30,17 @@ Logical operations expected by the interface:
 Cupertino additions are optional on existing item/insight records: `Item.category` (discussion, pull-request, note, voice), `sourceLabel`, `author`, and `fileType`; `Insight.kind` (Contradiction, Repeated Problem, Hidden Connection, Unresolved Question), `detailTitle`, and the display-only `flareType` (Discovery, Reminder, Warning). The UI calls these records “Flares”; the `Insight`, `InsightKind`, `listInsights()`, and `getInsight()` names remain internal contracts until a coordinated API migration. Old locally captured items continue to work without these fields. `Source` contains `id`, `name`, `scope`, `description`, `channels`, `status` (connected, syncing, disconnected, ready, coming-soon), and a human-readable `updated` label. The source adapter must replace demo connection behavior with the real authorization/sync flow during integration.
 
 The current REST adapter uses `GET /items`, `GET /items/:id`, `POST /items`, and `DELETE /items/:id`. The first API slice accepts notes; URL, file, and audio ingestion remain explicit follow-up work. Insights and Sources continue through the mock fallback until their endpoints exist. `POST /items` may later become asynchronous: return an `Item` with `status: "processing"`, then allow the client to refresh or subscribe. Authentication, upload URLs, pagination, and delivery mechanism remain backend concerns.
+
+## Authentication (Block 1)
+
+Browser requests use same-origin `/api`, rewritten to FastAPI; server session
+bootstrap uses `API_INTERNAL_URL`. Set that URL at both build and runtime.
+`POST /auth/register` accepts `{email, password, name}`; `POST /auth/login`
+accepts `{email, password}`. Both set an HttpOnly session cookie.
+`GET /auth/me` returns `{user: {id, email, name}, workspace: {id, name, role}}`;
+`POST /auth/logout` revokes the session. Prefix these paths with `/api` in browsers.
+State-changing requests require an allowed Origin and `credentials: "include"`.
+401 redirects to login; 403 represents denied membership/role or Origin.
+All item routes require a session. Identity comes from the backend, never
+localStorage or arbitrary headers. One initial workspace is supported; there
+is no switching UI. Settings displays server profile fields read-only.

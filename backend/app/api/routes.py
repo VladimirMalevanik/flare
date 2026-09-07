@@ -8,10 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 
 from app.api.schemas import CreateItemRequest, HealthResponse, ItemResponse
 from app.config import Settings
+from app.api.auth import current_user
+from app.services.auth_service import AuthenticatedUser
 from app.models.database import (
     Database,
     MembershipRequiredError,
-    WorkspaceIdentity,
     WritePermissionRequiredError,
     database_is_ready,
 )
@@ -32,19 +33,10 @@ def _database(request: Request) -> Database:
 
 
 def _item_service(
-    application_settings: Annotated[Settings, Depends(_settings)],
+    user: Annotated[AuthenticatedUser, Depends(current_user)],
     database: Annotated[Database, Depends(_database)],
 ) -> ItemService:
-    if not application_settings.dev_mode:
-        raise HTTPException(
-            status_code=503,
-            detail="Item API requires authentication; development identity is disabled",
-        )
-    try:
-        workspace_id, user_id, _ = application_settings.require_dev_identity()
-    except RuntimeError as error:
-        raise HTTPException(status_code=503, detail=str(error)) from None
-    return ItemService(database, WorkspaceIdentity(workspace_id, user_id))
+    return ItemService(database, user.identity)
 
 
 def _search_query(
