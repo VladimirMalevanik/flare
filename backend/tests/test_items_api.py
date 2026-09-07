@@ -54,11 +54,12 @@ class ApiEnvironment:
             database_url=self.runtime_url,
             cors_origins=["http://testserver"],
             dev_mode=True,
+            environment="test",
             dev_workspace_id=selected_workspace,
             dev_user_id=selected_user,
             dev_workspace_name=f"API Test {selected_workspace}",
         )
-        with TestClient(create_app(configured)) as client:
+        with TestClient(create_app(configured), headers={"Origin": "http://testserver"}) as client:
             yield client
 
     def execute_admin(self, statement: str, parameters: tuple[object, ...]) -> None:
@@ -276,8 +277,7 @@ def test_each_request_rechecks_membership_and_write_role(api_environment):
 
 def test_item_routes_fail_closed_without_explicit_dev_mode():
     runtime_url, _ = _required_urls()
-    configured = Settings(database_url=runtime_url, cors_origins=[], dev_mode=False)
-    with TestClient(create_app(configured)) as client:
+    configured = Settings(database_url=runtime_url, cors_origins=[], dev_mode=False, environment="test")
+    with TestClient(create_app(configured), headers={"Origin": "http://testserver"}) as client:
         response = client.get("/items")
-        assert response.status_code == 503
-        assert "development identity is disabled" in response.json()["detail"]
+        assert response.status_code == 401

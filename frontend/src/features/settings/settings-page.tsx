@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
+import { useSession } from "@/components/auth-session";
+import { authRequest } from "@/lib/auth/session";
 import { Icon } from "@/components/icons";
 import { Dialog } from "@/components/dialog";
 import {
@@ -17,6 +19,18 @@ const defaults = {
   emailDelivery: true,
 };
 export function SettingsPage() {
+  const session = useSession();
+  const [loggingOut, setLoggingOut] = useState(false);
+  async function logout() {
+    setLoggingOut(true);
+    try {
+      await authRequest("logout");
+      window.location.replace("/login");
+    } catch {
+      setMessage("Could not sign out. Please retry.");
+      setLoggingOut(false);
+    }
+  }
   const {
     theme,
     setTheme,
@@ -91,6 +105,7 @@ export function SettingsPage() {
             <label>
               Full Name
               <input
+                readOnly={Boolean(session)}
                 value={profile.name}
                 maxLength={100}
                 onChange={(e) => updateProfile({ name: e.target.value })}
@@ -100,6 +115,7 @@ export function SettingsPage() {
               Work Email
               <input
                 type="email"
+                readOnly={Boolean(session)}
                 value={profile.email}
                 onChange={(e) => updateProfile({ email: e.target.value })}
               />
@@ -107,6 +123,7 @@ export function SettingsPage() {
             <label>
               Role / Position
               <input
+                readOnly={Boolean(session)}
                 value={profile.role}
                 onChange={(e) => updateProfile({ role: e.target.value })}
               />
@@ -125,6 +142,7 @@ export function SettingsPage() {
             </label>
           </div>
         </div>
+        {session && <button className="button" onClick={logout} disabled={loggingOut}>{loggingOut ? "Signing out…" : "Sign out"}</button>}
       </SettingsSection>
       <SettingsSection
         title="Plan & Billing"
@@ -336,8 +354,8 @@ export function SettingsPage() {
         icon="sources"
       >
         <SettingRow
-          title="Northstar"
-          description="Personal demo workspace"
+          title={session?.workspace.name ?? "Northstar"}
+          description={session ? `Workspace role: ${session.workspace.role}` : "Personal demo workspace"}
         >
           <span className="badge status-connected">
             <span className="dot" />

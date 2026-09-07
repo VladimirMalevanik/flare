@@ -11,7 +11,7 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 
-CURRENT_SCHEMA_REVISION = "0003"
+CURRENT_SCHEMA_REVISION = "0004"
 TENANT_TABLES = (
     "workspaces",
     "workspace_members",
@@ -46,14 +46,14 @@ def database_is_ready(database_url: str) -> bool:
 def _connection_is_ready(connection: Connection) -> bool:
     """Validate the runtime role, schema head and fail-closed tenant access."""
     safe_role = connection.execute(
-        "SELECT NOT rolsuper AND NOT rolbypassrls "
+        "SELECT rolname = 'flare_app' AND NOT rolsuper AND NOT rolbypassrls "
         "FROM pg_roles WHERE rolname = current_user"
     ).fetchone()
     if safe_role != (True,):
         return False
 
     # Make the check independent from PGOPTIONS or a reused caller connection.
-    connection.execute("SELECT set_config('app.workspace_id', '', true)")
+    connection.execute("SELECT set_config('app.workspace_id', '', true), set_config('app.user_id', '', true)")
 
     revision = connection.execute(
         "SELECT version_num FROM public.alembic_version"
@@ -114,13 +114,13 @@ class Database:
             self._pool.open(wait=True, timeout=10)
             with self._pool.connection() as connection:
                 safe_role = connection.execute(
-                    """SELECT NOT rolsuper AND NOT rolbypassrls AS safe
+                    """SELECT rolname = 'flare_app' AND NOT rolsuper AND NOT rolbypassrls AS safe
                        FROM pg_roles WHERE rolname = current_user"""
                 ).fetchone()
                 if safe_role is None or safe_role["safe"] is not True:
                     raise RuntimeError(
                         "Application database connections must use a non-superuser, "
-                        "non-BYPASSRLS role"
+                        "non-BYPASSRLS flare_app role"
                     )
         except Exception:
             self._pool.close()
@@ -146,8 +146,8 @@ class Database:
         with self._pool.connection() as connection:
             with connection.transaction():
                 connection.execute(
-                    "SELECT set_config('app.workspace_id', %s, true)",
-                    (str(identity.workspace_id),),
+                    "SELECT set_config('app.workspace_id', %s, true), set_config('app.user_id', %s, true)",
+                    (str(identity.workspace_id), identity.user_id),
                 )
                 membership = connection.execute(
                     """SELECT role FROM public.workspace_members
@@ -169,19 +169,15 @@ class Database:
         with self._pool.connection() as connection:
             with connection.transaction():
                 connection.execute(
-                    "SELECT set_config('app.workspace_id', %s, true)",
-                    (str(identity.workspace_id),),
+                    "SELECT set_config('app.workspace_id', %s, true), set_config('app.user_id', %s, true)",
+                    (str(identity.workspace_id), identity.user_id),
                 )
-                connection.execute(
-                    """INSERT INTO public.workspaces (id, name)
-                       VALUES (%s, %s)
-                       ON CONFLICT (id) DO NOTHING""",
-                    (identity.workspace_id, workspace_name),
-                )
-                connection.execute(
-                    """INSERT INTO public.workspace_members
-                           (workspace_id, user_id, role)
-                       VALUES (%s, %s, 'owner')
-                       ON CONFLICT (workspace_id, user_id) DO NOTHING""",
+                existing = connection.execute(
+                    "SELECT role FROM public.workspace_members WHERE workspace_id = %s AND user_id = %s",
                     (identity.workspace_id, identity.user_id),
-                )
+                ).fetchone()
+                if existing is None:
+                    connection.execute(
+                        "SELECT public.provision_workspace(%s, %s)",
+                        (identity.workspace_id, workspace_name),
+                    )

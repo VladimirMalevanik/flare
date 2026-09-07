@@ -33,8 +33,8 @@ TABLES = (
 
 def select_workspace(conn, workspace_id):
     conn.execute(
-        "SELECT set_config('app.workspace_id', %s, true)",
-        (str(workspace_id) if workspace_id else "",),
+        "SELECT set_config('app.workspace_id', %s, true), set_config('app.user_id', %s, true)",
+        (str(workspace_id) if workspace_id else "", f"test-auth|{workspace_id}" if workspace_id else ""),
     )
 
 
@@ -88,11 +88,7 @@ def tenants(db):
     for name in ("Alpha", "Beta"):
         workspace_id, document_id, insight_id = uuid4(), uuid4(), uuid4()
         select_workspace(db, workspace_id)
-        db.execute("INSERT INTO public.workspaces (id, name) VALUES (%s, %s)", (workspace_id, name))
-        db.execute(
-            "INSERT INTO public.workspace_members (workspace_id, user_id, role) VALUES (%s, %s, 'owner')",
-            (workspace_id, f"test-auth|{workspace_id}"),
-        )
+        db.execute("SELECT public.provision_workspace(%s, %s)", (workspace_id, name))
         db.execute(
             "INSERT INTO public.documents (id, workspace_id, title, source_type) VALUES (%s, %s, %s, 'file')",
             (document_id, workspace_id, name),
@@ -146,7 +142,7 @@ def test_readiness_rejects_an_old_alembic_revision():
             connection.rollback()
 
 
-def test_readiness_rejects_customer_rows_visible_without_context():
+def test_restrictive_rls_survives_an_overbroad_permissive_policy():
     with admin_connection() as connection:
         try:
             connection.execute(
@@ -158,7 +154,7 @@ def test_readiness_rejects_customer_rows_visible_without_context():
                    FOR SELECT USING (true)"""
             )
             connection.execute("SET LOCAL ROLE flare_app")
-            assert _connection_is_ready(connection) is False
+            assert _connection_is_ready(connection) is True
         finally:
             connection.rollback()
 
@@ -374,3 +370,30 @@ def test_workspace_setting_does_not_escape_transaction(db, tenants):
     db.rollback()
     db.execute("SET LOCAL ROLE flare_app")
     assert db.execute("SELECT nullif(current_setting('app.workspace_id', true), '')").fetchone()[0] is None
+    assert db.execute("SELECT nullif(current_setting('app.user_id', true), '')").fetchone()[0] is None
+
+
+def test_rls_rejects_wrong_workspace_for_authenticated_user(db, tenants):
+    # Simulate a service bug: switch workspace without changing verified user.
+    db.execute("SELECT set_config('app.workspace_id', %s, true)", (str(tenants[1]['workspace']),))
+    assert db.execute("SELECT id FROM public.documents").fetchall() == []
+    assert db.execute("DELETE FROM public.documents RETURNING id").fetchall() == []
+    with pytest.raises(InsufficientPrivilege), db.transaction():
+        db.execute("INSERT INTO public.documents(workspace_id,title,source_type) VALUES (%s,'forbidden','note')", (tenants[1]['workspace'],))
+
+
+def test_runtime_cannot_self_assign_membership(db, tenants):
+    with pytest.raises(InsufficientPrivilege), db.transaction():
+        db.execute("UPDATE public.workspace_members SET role = 'owner'")
+    with pytest.raises(UniqueViolation), db.transaction():
+        db.execute("SELECT public.provision_workspace(%s, 'Hijack')", (tenants[1]['workspace'],))
+
+
+def test_rls_denies_viewer_writes_without_service_check(db, tenants):
+    db.execute("RESET ROLE")
+    db.execute("UPDATE public.workspace_members SET role='viewer' WHERE workspace_id=%s", (tenants[0]['workspace'],))
+    db.execute("SET LOCAL ROLE flare_app")
+    assert db.execute("SELECT id FROM public.documents").fetchall()
+    assert db.execute("DELETE FROM public.documents RETURNING id").fetchall() == []
+    with pytest.raises(InsufficientPrivilege), db.transaction():
+        db.execute("INSERT INTO public.documents(workspace_id,title,source_type) VALUES (%s,'forbidden','note')", (tenants[0]['workspace'],))

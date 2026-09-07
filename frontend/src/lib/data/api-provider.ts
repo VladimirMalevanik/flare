@@ -112,6 +112,8 @@ export class ApiDataProvider implements FlareDataProvider {
     try {
       response = await fetch(`${this.baseUrl}${path}`, {
         ...init,
+        credentials: "include",
+        cache: "no-store",
         headers: {
           Accept: "application/json",
           ...(init?.body ? { "Content-Type": "application/json" } : {}),
@@ -122,6 +124,9 @@ export class ApiDataProvider implements FlareDataProvider {
       throw new FlareApiError(
         "Cannot reach the Flare API. Check that the backend is running.",
       );
+    }
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.location.replace("/login");
     }
     if (!response.ok) {
       throw new FlareApiError(await errorMessage(response), response.status);

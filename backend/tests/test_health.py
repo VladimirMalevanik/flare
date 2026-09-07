@@ -41,6 +41,7 @@ def test_owned_database_closes_when_development_bootstrap_fails(monkeypatch):
         database_url="postgresql://unused",
         cors_origins=[],
         dev_mode=True,
+        environment="test",
         dev_workspace_id=uuid4(),
         dev_user_id="lifecycle-test-user",
         dev_workspace_name="Lifecycle Test",
