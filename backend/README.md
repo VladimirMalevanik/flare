@@ -100,3 +100,9 @@ editing не реализован. TLS/reverse-proxy deployment проверяе
 [docs/architecture.md](docs/architecture.md). Проверки:
 `pytest -q backend/tests` из корня с `DATABASE_URL` роли flare_app и
 `TEST_DATABASE_URL` администратора одноразовой мигрированной PostgreSQL с pgvector.
+
+## Изолированный AI-анализ (Block 2)
+
+Добавлен async-анализ уже авторизованных `Evidence[]` через Groq 20B.
+Он не подключён к API, сохранению Notes или БД. Контракт, ограничения, ошибки
+и ручной smoke: [docs/text-analysis.md](docs/text-analysis.md).

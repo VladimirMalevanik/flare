@@ -1,7 +1,8 @@
 """Environment-backed application configuration."""
 
 import os
-from dataclasses import dataclass
+import math
+from dataclasses import dataclass, field
 from uuid import UUID
 from urllib.parse import urlsplit
 
@@ -99,3 +100,55 @@ def load_settings() -> Settings:
 
 
 settings = load_settings()
+
+
+# AI settings are loaded only by the analysis caller, never during API startup.
+# Invalid/missing AI configuration must not prevent manual Note storage.
+@dataclass(frozen=True)
+class AISettings:
+    api_key: str | None = field(default=None, repr=False)
+    base_url: str = "https://api.groq.com"
+    model: str = "openai/gpt-oss-20b"
+    reasoning_effort: str = "low"
+    max_input_bytes: int = 4000
+    max_sources: int = 5
+    max_completion_tokens: int = 2000
+    connect_timeout_seconds: float = 5.0
+    request_timeout_seconds: float = 30.0
+    deadline_seconds: float = 40.0
+
+    def validate(self) -> None:
+        if self.model != "openai/gpt-oss-20b" or self.reasoning_effort != "low":
+            raise ValueError("Block 2 supports only the default 20B/low profile")
+        # Keep backend credentials on the official origin. Tests inject a transport.
+        if self.base_url.rstrip('/') != "https://api.groq.com":
+            raise ValueError("GROQ_BASE_URL must be the official SDK origin")
+        for value in (self.max_input_bytes, self.max_sources, self.max_completion_tokens):
+            if type(value) is not int or value <= 0:
+                raise ValueError("AI request limits must be positive integers")
+        if self.max_completion_tokens > 65536:
+            raise ValueError("AI completion limit exceeds the model limit")
+        for value in (self.connect_timeout_seconds, self.request_timeout_seconds, self.deadline_seconds):
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError("AI timeouts must be finite and positive")
+
+
+def load_ai_settings() -> AISettings:
+    """Read backend-only AI configuration on demand, with safe parse errors."""
+    try:
+        configured = AISettings(
+            api_key=os.getenv("GROQ_API_KEY"),
+            base_url=os.getenv("GROQ_BASE_URL", "https://api.groq.com"),
+            model=os.getenv("LLM_DEFAULT_MODEL", "openai/gpt-oss-20b"),
+            reasoning_effort=os.getenv("LLM_DEFAULT_REASONING_EFFORT", "low"),
+            max_input_bytes=int(os.getenv("LLM_MAX_INPUT_BYTES", "4000")),
+            max_sources=int(os.getenv("LLM_MAX_SOURCES", "5")),
+            max_completion_tokens=int(os.getenv("LLM_MAX_COMPLETION_TOKENS", "2000")),
+            connect_timeout_seconds=float(os.getenv("LLM_CONNECT_TIMEOUT_SECONDS", "5")),
+            request_timeout_seconds=float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "30")),
+            deadline_seconds=float(os.getenv("LLM_DEADLINE_SECONDS", "40")),
+        )
+        configured.validate()
+    except (ValueError, TypeError):
+        raise ValueError("Invalid AI configuration") from None
+    return configured
