@@ -20,6 +20,8 @@ jobs:
           --health-interval 3s --health-timeout 3s --health-retries 20
     env:
       APP_PASSWORD: ci_app
+      WORKER_PASSWORD: ci_worker
+      WORKER_DATABASE_URL: postgresql://flare_worker:ci_worker@127.0.0.1:5432/flare
       PGPASSWORD: ci_admin
       DATABASE_URL: postgresql://flare_app:ci_app@127.0.0.1:5432/flare
       MIGRATION_DATABASE_URL: postgresql+psycopg://postgres:ci_admin@127.0.0.1:5432/flare
@@ -33,6 +35,7 @@ jobs:
       - run: psql -h 127.0.0.1 -U postgres -d flare -v ON_ERROR_STOP=1 -f backend/db/init-role.sql
       - run: alembic -c backend/alembic.ini upgrade head
       - run: alembic -c backend/alembic.ini upgrade head
+      - run: psql -h 127.0.0.1 -U postgres -d flare -v ON_ERROR_STOP=1 -f backend/db/configure-worker.sql
       - run: pytest -q backend/tests
 
   frontend:

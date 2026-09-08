@@ -106,3 +106,9 @@ editing не реализован. TLS/reverse-proxy deployment проверяе
 Добавлен async-анализ уже авторизованных `Evidence[]` через Groq 20B.
 Он не подключён к API, сохранению Notes или БД. Контракт, ограничения, ошибки
 и ручной smoke: [docs/text-analysis.md](docs/text-analysis.md).
+
+## Durable jobs (Block 3)
+
+Добавлен внутренний enqueue и отдельный PostgreSQL worker для анализа immutable
+chunks. API сохранения Notes не запускает анализ. Схема 0005, роли, настройка,
+команда запуска и проверки: [docs/analysis-jobs.md](docs/analysis-jobs.md).
