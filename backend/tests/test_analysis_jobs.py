@@ -20,7 +20,7 @@ def test_worker_roles_and_function_capabilities(admin_url):
     with psycopg.connect(admin_url) as conn:
         roles = conn.execute("SELECT rolname,rolsuper,rolbypassrls,rolcanlogin,rolcreaterole FROM pg_roles WHERE rolname IN ('flare_worker','flare_job_executor') ORDER BY rolname").fetchall()
         assert roles == [('flare_job_executor', False, False, False, False), ('flare_worker', False, False, True, False)]
-        funcs = conn.execute("SELECT p.proname,p.prosecdef,p.proconfig,r.rolname FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE r.rolname='flare_job_executor'").fetchall()
+        funcs = conn.execute("SELECT p.proname,p.prosecdef,p.proconfig,r.rolname FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE r.rolname='flare_job_executor' AND p.proname IN ('analysis_job_check','enqueue_analysis_job','claim_analysis_job','load_analysis_evidence','finish_analysis_job')").fetchall()
         assert len(funcs) == 5
         assert all(row[1:] == (True, ['search_path=pg_catalog, public, pg_temp'], 'flare_job_executor') for row in funcs)
         assert conn.execute("SELECT count(*) FROM pg_auth_members WHERE roleid=(SELECT oid FROM pg_roles WHERE rolname='flare_job_executor')").fetchone() == (0,)
@@ -79,6 +79,8 @@ def jobs(admin_url):
     yield AnalysisJobs(db), WorkerJobs(worker_url), users, chunks
     db.close()
     with psycopg.connect(admin_url) as conn:
+        conn.execute('DELETE FROM public.insight_sources WHERE workspace_id=ANY(%s)', ([u.workspace_id for u in users],))
+        conn.execute('DELETE FROM public.insights WHERE workspace_id=ANY(%s)', ([u.workspace_id for u in users],))
         conn.execute('DELETE FROM public.analysis_jobs WHERE workspace_id=ANY(%s)', ([u.workspace_id for u in users],))
         conn.execute('DELETE FROM public.auth_users WHERE id=ANY(%s)', ([u.user_id for u in users],))
     cleanup = ApiEnvironment(runtime, admin_url)

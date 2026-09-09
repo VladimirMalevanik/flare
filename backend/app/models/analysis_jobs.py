@@ -66,6 +66,10 @@ class WorkerJobs:
 
     def finish(self, claim: Claim, *, result: dict | None = None, metadata: dict | None = None,
                error: str | None = None, retry_seconds: float | None = None) -> str:
-        return self._call('SELECT public.finish_analysis_job(%s,%s,%s,%s,%s,%s) AS value',
-                          (claim.job_id, claim.lease_token, Jsonb(result) if result is not None else None,
+        from app.ai_engine.flare_config import load_flare_settings
+        from app.config import load_ai_settings
+        revision = load_flare_settings().revision(load_ai_settings())
+        return self._call("WITH config AS MATERIALIZED (SELECT set_config('app.flare_generation_revision',%s,true)) "
+                          'SELECT public.finish_analysis_job(%s,%s,%s,%s,%s,%s) AS value FROM config',
+                          (revision, claim.job_id, claim.lease_token, Jsonb(result) if result is not None else None,
                            Jsonb(metadata) if metadata is not None else None, error, retry_seconds))['value']

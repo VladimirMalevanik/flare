@@ -27,23 +27,18 @@ export interface Evidence {
   sourceTitle: string;
   sourceType: ItemType;
   excerpt: string;
+  sourceUrl?: string | null;
 }
-export type InsightKind =
-  | "Contradiction"
-  | "Repeated Problem"
-  | "Hidden Connection"
-  | "Unresolved Question";
+export type FlareType = "Reminder" | "Warning" | "Recommendation";
 export interface Insight {
   id: string;
+  type: FlareType;
   title: string;
-  summary: string;
-  explanation: string;
+  statement: string;
+  action: string | null;
+  reason: string;
   evidence: Evidence[];
   createdAt: string;
-  kind?: InsightKind;
-  /** User-facing label; internal detector names remain stable for API seams. */
-  flareType?: "Discovery" | "Reminder" | "Warning";
-  detailTitle?: string;
 }
 export interface CreateItemInput {
   type: ItemType;

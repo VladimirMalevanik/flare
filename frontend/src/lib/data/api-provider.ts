@@ -84,6 +84,34 @@ function mapItem(value: unknown): Item {
   };
 }
 
+function mapFlare(value: unknown): Insight {
+  const dto = asRecord(value);
+  const type = stringField(dto, "type");
+  if (type !== "Reminder" && type !== "Warning" && type !== "Recommendation") {
+    throw new FlareApiError("The server returned an unknown Flare type.");
+  }
+  const action = dto.action;
+  if (action !== null && typeof action !== "string") throw new FlareApiError("Invalid Flare action.");
+  if (type === "Recommendation" && !action?.trim()) throw new FlareApiError("Recommendation requires an action.");
+  const createdAt = stringField(dto, "createdAt");
+  if (!Number.isFinite(Date.parse(createdAt))) throw new FlareApiError("Invalid Flare date.");
+  if (!Array.isArray(dto.evidence) || dto.evidence.length < 1 || dto.evidence.length > 4) {
+    throw new FlareApiError("Invalid Flare evidence.");
+  }
+  return {
+    id: stringField(dto, "id"), type, title: stringField(dto, "title"),
+    statement: stringField(dto, "statement"), action, reason: stringField(dto, "reason"), createdAt,
+    evidence: dto.evidence.map((value) => {
+      const e = asRecord(value);
+      const sourceType = stringField(e, "sourceType");
+      if (!itemTypes.includes(sourceType as ItemType)) throw new FlareApiError("Invalid evidence type.");
+      if (e.sourceUrl !== null && typeof e.sourceUrl !== "string") throw new FlareApiError("Invalid source URL.");
+      return { itemId: stringField(e, "itemId"), sourceTitle: stringField(e, "sourceTitle"),
+        sourceType: sourceType as ItemType, excerpt: stringField(e, "excerpt"), sourceUrl: e.sourceUrl };
+    }),
+  };
+}
+
 async function errorMessage(response: Response): Promise<string> {
   try {
     const body: unknown = await response.json();
@@ -191,12 +219,19 @@ export class ApiDataProvider implements FlareDataProvider {
     });
   }
 
-  listInsights(): Promise<Insight[]> {
-    return this.fallback.listInsights();
+  async listInsights(): Promise<Insight[]> {
+    const body = await this.request("/flares");
+    if (!Array.isArray(body)) throw new FlareApiError("The server returned an invalid Flare list.");
+    return body.map(mapFlare);
   }
 
-  getInsight(id: string): Promise<Insight | null> {
-    return this.fallback.getInsight(id);
+  async getInsight(id: string): Promise<Insight | null> {
+    try {
+      return mapFlare(await this.request(`/flares/${encodeURIComponent(id)}`));
+    } catch (error) {
+      if (error instanceof FlareApiError && error.status === 404) return null;
+      throw error;
+    }
   }
 
   resetDemoData(): Promise<void> {

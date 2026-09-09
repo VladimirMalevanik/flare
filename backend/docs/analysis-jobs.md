@@ -1,8 +1,8 @@
 # Block 3: durable analysis jobs
 
 Internal flow only; Item HTTP routes and Note saving do not enqueue work.
-The Block 2 analyzer remains a pure `Evidence[]` component. No Flare/insight
-writes, frontend, voice, quotas, embeddings or new dependencies are added.
+The Block 2 analyzer remains a pure `Evidence[]` component. Block 4 adds a separate [Flare generation stage](flare-generation.md) after
+completion; extraction still persists only TextAnalysis on its job.
 
 ## Schema and dedupe
 
@@ -18,7 +18,9 @@ Migration `0005_analysis_jobs.py` adds:
 Uniqueness covers workspace + requester + task + fingerprint of sorted chunk
 IDs and pipeline revision. The revision hashes prompt/schema versions, configured
 20B model, low reasoning effort and input/output bounds. Bump prompt/schema version
-when changing their meaning. Different source order produces the same job.
+when changing their meaning. Different source order produces the same job. Since migration 0006, future source
+ordinals follow document creation time, document ID, version number, chunk ordinal
+and chunk ID. Sorted UUIDs remain only the dedupe input; historical ordinals stay unchanged.
 Requester identity is included so one user's job cannot replace another's request.
 
 Repeated/concurrent enqueue returns the same job, including completed/failed jobs;
@@ -35,10 +37,11 @@ Only real `auth_users` identities with owner/editor membership can enqueue.
 Existing string membership IDs and migrations 0001–0004 are unchanged.
 
 `flare_worker` is LOGIN, NOSUPERUSER, NOBYPASSRLS, NOINHERIT, NOCREATEROLE and
-NOCREATEDB. It has no direct tenant-table grants. Its three EXECUTE capabilities:
-`claim_analysis_job`, `load_analysis_evidence`, `finish_analysis_job`.
+NOCREATEDB. It has no direct tenant-table grants. Its three extraction EXECUTE capabilities:
+`claim_analysis_job`, `load_analysis_evidence`, `finish_analysis_job`. Block 4 adds
+four separate generation capabilities; no direct worker table grants.
 
-Five SECURITY DEFINER functions (including enqueue and a private validation
+The five extraction SECURITY DEFINER functions (including enqueue and a private validation
 helper) belong to dedicated `flare_job_executor`: NOLOGIN, no superuser/BYPASSRLS,
 no role members. All revoke PUBLIC execution, use qualified table/function
 references and fixed `search_path=pg_catalog,public,pg_temp`. The public schema
@@ -69,6 +72,10 @@ Atomic claim uses `FOR UPDATE SKIP LOCKED`, increments attempts and creates a fr
 UUID lease token. Expired processing jobs can be reclaimed; old tokens cannot
 load evidence or finalize. A crash on the last allowed attempt is marked failed
 by a bounded cleanup within subsequent claims (up to 100 rows per call).
+
+Successful completion also inserts a Stage 2 run in the same transaction through
+a migration-0006 trigger. The worker supplies the configured generation revision.
+Stage 2 retries reuse the completed extraction result.
 
 The processor checks pipeline compatibility, bounds evidence before loading,
 calls the existing analyzer, then repeats typed parsing and exact quote/source

@@ -11,7 +11,7 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 
-CURRENT_SCHEMA_REVISION = "0005"
+CURRENT_SCHEMA_REVISION = "0006"
 TENANT_TABLES = (
     "workspaces",
     "workspace_members",
@@ -22,6 +22,7 @@ TENANT_TABLES = (
     "insight_sources",
     "analysis_jobs",
     "analysis_job_sources",
+    "flare_generation_runs",
 )
 
 
@@ -89,6 +90,7 @@ def _connection_is_ready(connection: Connection) -> bool:
                UNION ALL SELECT 1 FROM public.insight_sources
                UNION ALL SELECT 1 FROM public.analysis_jobs
                UNION ALL SELECT 1 FROM public.analysis_job_sources
+               UNION ALL SELECT 1 FROM public.flare_generation_runs
            )"""
     ).fetchone()
     if customer_rows_are_hidden != (True,):

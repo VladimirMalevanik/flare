@@ -1,6 +1,6 @@
 # Flare MVP implementation plan
 
-Agreed scope, 2026-09-07. Documentation only: **do not begin implementation until the team selects the first work item**. This plan governs MVP scope; broader model-routing and storage options in earlier research are future work.
+Agreed scope, 2026-09-07; implementation status updated 2026-09-09. This plan governs MVP scope; broader model-routing and storage options in earlier research are future work.
 
 Related technical research and architecture:
 
@@ -8,6 +8,18 @@ Related technical research and architecture:
 - [Backend architecture](../backend/docs/architecture.md): layer boundaries.
 - [Database design](../backend/docs/database.md): workspace isolation, immutable versions and citations.
 - [Frontend API contract](../frontend/docs/API_CONTRACT.md): existing data shapes and adapters.
+
+## Current status
+
+- Blocks 1–3: implemented and merged (authentication, pure 20B extraction, durable jobs).
+- Block 4: implemented locally; PostgreSQL, detector/API and frontend checks cover
+  persisted Flares. Required browser acceptance remains pending because browser
+  tool approval was blocked. Not published or accepted as fully green yet.
+- Block 5 Analyze/context selection: not implemented. Note saving does not enqueue
+  work. Block 4 reasons only over the completed parent's pinned context, not the
+  whole project history. Voice and quota work are also deferred.
+
+See [Block 4 implementation](../backend/docs/flare-generation.md).
 
 ## Goal
 
@@ -64,12 +76,12 @@ Replace mock Flares with backend-generated records. Reuse `insights` / `insight_
 
 Each Flare must contain:
 
-- Type: **Discovery / Reminder / Warning**.
-- Title and explanation.
+- Type: **Recommendation / Reminder / Warning**.
+- Title, statement, specific action when applicable, and reason.
 - Evidence/citations with source IDs and chunk IDs.
 - Creation timestamp and model/prompt provenance.
 
-Validate citations against the exact evidence supplied to the model, including workspace ownership and quoted text. A weak single mention should not automatically become a Flare. Allow an empty result or an insufficient-evidence outcome. Keep the public Flare type distinct from the existing internal `Insight.kind`; agree on persistence/DTO mapping rather than silently renaming contracts.
+Validate citations against the exact evidence supplied to the model, including workspace ownership and quoted text. A weak single mention should not automatically become a Flare. Allow an empty result or an insufficient-evidence outcome. The public taxonomy is separate from extraction categories. The frontend keeps the internal `Insight` name with the typed Flare DTO; legacy untyped insights remain hidden.
 
 ## Phase 5 — Analyze flow
 
@@ -129,22 +141,21 @@ Existing pgvector/schema capacity can remain unused; this scope does not require
 9. Complete free-tier quota enforcement.
 10. End-to-end hardening/tests.
 
-Phases 2–3 can be developed as isolated components; expose production analysis only once durable jobs and explicit Analyze are connected. Select the first work item as a team before starting.
+Phases 2–3 can be developed as isolated components; expose production analysis only once durable jobs and explicit Analyze are connected. Block 5 is the next separately authorized implementation step.
 
 ## Definition of MVP
 
-A real user can register/login, enter a workspace, add notes/context, see it persisted after refresh, press Analyze, receive asynchronous analysis, see real Discovery/Reminder/Warning Flares, inspect their evidence, and add a voice note with a saved transcript. Other workspaces remain inaccessible.
+A real user can register/login, enter a workspace, add notes/context, see it persisted after refresh, press Analyze, receive asynchronous analysis, see real Recommendation/Reminder/Warning Flares, inspect their evidence, and add a voice note with a saved transcript. Other workspaces remain inaccessible.
 
 The system survives provider failures, retries safely, preserves raw text and successful transcripts, respects free-tier quotas, rejects fabricated evidence, and can move from Groq Free to Developer without architectural changes. Original audio follows the temporary retention policy above.
 
-Acceptance checks must cover authentication/roles, cross-workspace reads and writes, persistence after refresh, crash recovery and duplicate jobs, invalid citations, insufficient evidence, provider failures/quota exhaustion, audio cleanup, and the complete frontend flow. These are future implementation checks; this documentation task changes no product behavior.
+Acceptance checks must cover authentication/roles, cross-workspace reads and writes, persistence after refresh, crash recovery and duplicate jobs, invalid citations, insufficient evidence, provider failures/quota exhaustion, audio cleanup, and the complete frontend flow. The complete MVP gate still depends on the deferred Analyze, audio and quota slices.
 
 ## Decisions still needed
 
-- First implementation work item and owner; authentication provider/session design and workspace onboarding.
 - Exact configurable user/workspace quotas, Analyze context/token budgets and the organization's available free limits.
 - Temporary audio staging location, maximum upload size/duration and expiry/cleanup behavior after terminal failure or crash.
-- Flare quality acceptance examples, type mapping, job-status API and polling/delivery contract.
+- Representative Flare quality evaluation on real project data; job-status API and polling/delivery contract.
 - Groq data-retention settings: application-side audio deletion does not control provider retention; see [AI research](AI_MODELS.md).
 
 Settled for MVP: 20B only, explicit Analyze, Postgres worker preferred, no embeddings, no automatic V3 fallback and no permanent audio retention.

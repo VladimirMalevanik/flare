@@ -4,29 +4,22 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   dataProvider,
-  dataProviderMode,
   type Insight,
 } from "@/lib/data";
 import { Icon } from "@/components/icons";
 import { useWorkspace } from "@/components/workspace-context";
-const flareTypes = ["Discovery", "Reminder", "Warning"] as const;
+const flareTypes = ["Reminder", "Warning", "Recommendation"] as const;
 type FlareType = (typeof flareTypes)[number];
 const plural: Record<FlareType, string> = {
-  Discovery: "Discoveries",
-  Reminder: "Reminders",
-  Warning: "Warnings",
+  Reminder: "Reminders", Warning: "Warnings", Recommendation: "Recommendations",
 };
-const flareTypeFor = (insight: Insight): FlareType =>
-  insight.flareType ??
-  (insight.kind === "Contradiction"
-    ? "Warning"
-    : insight.kind === "Hidden Connection"
-      ? "Discovery"
-      : "Reminder");
+const flareTypeFor = (insight: Insight): FlareType => insight.type;
 export function InsightsPage() {
   const params = useSearchParams();
+  const detailId = params.get("insight");
   const [insights, setInsights] = useState<Insight[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Insight | null>(null);
+  const [detail, setDetail] = useState<{ id: string; value: Insight | null; error: string } | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [itemCount, setItemCount] = useState(0);
   const [filter, setFilter] = useState<FlareType | "All">("All");
@@ -41,7 +34,6 @@ export function InsightsPage() {
           setError("");
           setInsights(list);
           setItemCount(items.length);
-          setSelected(params.get("insight"));
         }
       })
       .catch(() => {
@@ -54,17 +46,36 @@ export function InsightsPage() {
     return () => {
       live = false;
     };
-  }, [params, revision]);
+  }, [revision]);
+  useEffect(() => {
+    if (!detailId) return;
+    let live = true;
+    void dataProvider.getInsight(detailId)
+      .then((value) => {
+        if (live) {
+          setDetail({ id: detailId, value, error: "" });
+          setPanelOpen(true);
+        }
+      })
+      .catch(() => {
+        if (live) {
+          setDetail({ id: detailId, value: null, error: "Flare could not be loaded. Refresh to try again." });
+          setPanelOpen(true);
+        }
+      });
+    return () => { live = false; };
+  }, [detailId, revision]);
   const visible = insights.filter(
     (insight) => filter === "All" || flareTypeFor(insight) === filter,
   );
-  const active = panelOpen ? visible.find((i) => i.id === selected) : undefined;
+  const urlDetail = detail?.id === detailId ? detail : null;
+  const active = panelOpen ? (detailId ? urlDetail?.value : selected) : null;
   useEffect(() => {
     if (!panelOpen) return;
     const outside = (event: PointerEvent) => {
       if (
         event.target instanceof Element &&
-        !event.target.closest(".evidence-panel, .insight-card")
+        !event.target.closest(".evidence-panel, .insight-card, .filters")
       )
         setPanelOpen(false);
     };
@@ -79,9 +90,14 @@ export function InsightsPage() {
     };
   }, [panelOpen]);
   const toggleInsight = (id: string) => {
-    const opening = !panelOpen || selected !== id;
-    setSelected(id);
+    const opening = !panelOpen || active?.id !== id;
+    setSelected(insights.find((insight) => insight.id === id) ?? null);
     setPanelOpen(opening);
+    if (opening && detailId !== id) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("insight", id);
+      window.history.pushState(null, "", url);
+    }
     if (!opening) return;
     if (window.innerWidth <= 1050)
       requestAnimationFrame(() =>
@@ -106,7 +122,6 @@ export function InsightsPage() {
             className={`filter ${filter === "All" ? "selected" : ""}`}
             onClick={() => {
               setFilter("All");
-              setPanelOpen(false);
             }}
           >
             All <span>{insights.length}</span>
@@ -117,11 +132,6 @@ export function InsightsPage() {
               className={`filter ${filter === kind ? "selected" : ""}`}
               onClick={() => {
                 setFilter(kind);
-                setSelected(
-                  insights.find((insight) => flareTypeFor(insight) === kind)
-                    ?.id ?? null,
-                );
-                setPanelOpen(false);
               }}
             >
               {plural[kind]}{" "}
@@ -132,6 +142,12 @@ export function InsightsPage() {
             </button>
           ))}
         </div>
+        {detailId && !urlDetail && <p className="state" role="status">Loading Flare…</p>}
+        {detailId && urlDetail && !urlDetail.value && (
+          <p className="state" role={urlDetail.error ? "alert" : "status"}>
+            {urlDetail.error || "Flare not found."}
+          </p>
+        )}
         {loading ? (
           <p className="state" role="status">
             Loading Flares…
@@ -145,8 +161,8 @@ export function InsightsPage() {
             <h2>{itemCount ? `${itemCount} item${itemCount === 1 ? "" : "s"} remembered` : "No Flares yet"}</h2>
             <p>
               {itemCount
-                ? "Keep adding context. Flares appear when there is enough evidence."
-                : "Flare needs context before it can notice anything."}
+                ? "No completed Flares are available for this workspace."
+                : "Add a note to keep project context here."}
             </p>
             {!itemCount && (
               <>
@@ -159,7 +175,7 @@ export function InsightsPage() {
                   </Link>
                 </div>
                 <p className="muted meta">
-                  Add notes, files, or voice memos. Flare will surface connections as your context grows.
+                  Saved notes remain available in your Vault.
                 </p>
               </>
             )}
@@ -217,12 +233,13 @@ export function InsightsPage() {
                   )}
                 </div>
                 <h2>{insight.title}</h2>
-                <p className="description">{insight.summary}</p>
+                <p className="description">{insight.statement}</p>
+                {insight.action && <p className="description"><strong>Next action: </strong>{insight.action}</p>}
                 <div className="callout">
                   <Icon name="info" />
                   <p>
                     <strong>Why it matters</strong>
-                    <span>{insight.explanation}</span>
+                    <span>{insight.reason}</span>
                   </p>
                 </div>
                 <footer className="card-footer">
@@ -257,39 +274,22 @@ export function InsightsPage() {
           </header>
           <div className="evidence-body">
             <p className="eyebrow accent">{flareTypeFor(active)}</p>
-            <h2>{active.detailTitle ?? active.title}</h2>
+            <h2>{active.title}</h2>
             <div className="card attention">
               <h3>Why this requires attention</h3>
-              <p>{active.explanation}</p>
+              <p>{active.reason}</p>
             </div>
             <h3 className="eyebrow muted">VERIFIABLE QUOTES</h3>
-            {dataProviderMode === "api" && (
-              <p className="muted">
-                Demo insight: these evidence sources are not stored in the
-                workspace database yet.
-              </p>
-            )}
             {active.evidence.map((e, i) => (
               <article className="quote-card" key={`${e.itemId}-${i}`}>
                 <div className="quote-meta">
-                  {dataProviderMode === "mock" ? (
-                    <Link href={`/vault?item=${e.itemId}`}>{e.sourceTitle}</Link>
-                  ) : (
-                    <span>{e.sourceTitle}</span>
-                  )}
+                  <Link href={`/vault?item=${encodeURIComponent(e.itemId)}`}>{e.sourceTitle}</Link>
                   <span className="muted">{e.sourceType}</span>
                 </div>
                 <blockquote>“{e.excerpt}”</blockquote>
-                {dataProviderMode === "mock" ? (
-                  <Link
-                    className="text-button"
-                    href={`/vault?item=${e.itemId}`}
-                  >
-                    Open source <Icon name="arrow" />
-                  </Link>
-                ) : (
-                  <span className="muted">Demo source</span>
-                )}
+                <Link className="text-button" href={`/vault?item=${encodeURIComponent(e.itemId)}`}>
+                  Open source <Icon name="arrow" />
+                </Link>
               </article>
             ))}
           </div>
@@ -298,7 +298,7 @@ export function InsightsPage() {
               className="button primary"
               onClick={() =>
                 openCapture(
-                  `Resolution note: ${active.detailTitle ?? active.title}\n\n${active.explanation}\n\nEvidence:\n${active.evidence.map((e) => `- ${e.sourceTitle}: ${e.excerpt}`).join("\n")}\n\nDecision: `,
+                  `Resolution note: ${active.title}\n\n${active.reason}\n\nEvidence:\n${active.evidence.map((e) => `- ${e.sourceTitle}: ${e.excerpt}`).join("\n")}\n\nDecision: `,
                 )
               }
             >
