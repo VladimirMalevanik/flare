@@ -159,3 +159,13 @@ Acceptance checks must cover authentication/roles, cross-workspace reads and wri
 - Groq data-retention settings: application-side audio deletion does not control provider retention; see [AI research](AI_MODELS.md).
 
 Settled for MVP: 20B only, explicit Analyze, Postgres worker preferred, no embeddings, no automatic V3 fallback and no permanent audio retention.
+
+## Block 6 status
+
+- **6A implemented:** real browser Blob recording and isolated Groq Whisper Turbo
+  provider boundary with audio/transcript validation and mock-transport tests.
+- **6B pending teammate API/DB review:** FastAPI upload, server media duration
+  inspection and durable transcript persistence through the ordinary Note path.
+  Voice end-to-end is not ready; no automatic Analyze or permanent audio storage.
+
+See [voice boundary and 6B requirements](../backend/docs/voice-transcription.md).

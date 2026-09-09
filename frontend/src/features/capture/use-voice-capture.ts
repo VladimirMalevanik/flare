@@ -1,95 +1,21 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { VoiceRecorder, type VoiceSnapshot } from "./voice-recorder";
 
-export function useVoiceCapture(onTranscript: (text: string) => void) {
-  const [state, setState] = useState<
-    "idle" | "requesting" | "recording" | "transcribing"
-  >("idle");
+export function useVoiceCapture() {
+  const [snapshot, setSnapshot] = useState<VoiceSnapshot>({ state: "idle", recording: null, error: "" });
+  const [controller] = useState(() => new VoiceRecorder(setSnapshot));
   const [seconds, setSeconds] = useState(0);
-  const [error, setError] = useState("");
-  const stream = useRef<MediaStream | null>(null);
-  const recorder = useRef<MediaRecorder | null>(null);
-  const generation = useRef(0);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const release = () => {
-    if (recorder.current?.state === "recording") recorder.current.stop();
-    stream.current?.getTracks().forEach((track) => track.stop());
-    stream.current = null;
-    recorder.current = null;
-  };
-  const cancel = () => {
-    generation.current += 1;
-    release();
-    if (timer.current) clearTimeout(timer.current);
-    setState("idle");
-    setError("");
-  };
-  useEffect(
-    () => () => {
-      generation.current += 1;
-      release();
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
+  useEffect(() => () => controller.dispose(), [controller]);
   useEffect(() => {
-    if (state !== "recording") return;
+    if (snapshot.state !== "recording") return;
     const started = Date.now();
-    const interval = setInterval(
-      () => setSeconds(Math.floor((Date.now() - started) / 1000)),
-      250,
-    );
+    const interval = setInterval(() => setSeconds(Math.floor((Date.now() - started) / 1000)), 250);
     return () => clearInterval(interval);
-  }, [state]);
-  const transcribe = () => {
-    generation.current += 1;
-    release();
-    setError("");
-    setState("transcribing");
-    timer.current = setTimeout(() => {
-      onTranscript(
-        "Demo transcript: Review the mobile sync contract and confirm expected retry behavior with the team.",
-      );
-      setState("idle");
-    }, 1100);
-  };
-  const start = async () => {
-    if (state !== "idle") return;
-    const id = ++generation.current;
-    setError("");
+  }, [snapshot.state]);
+  const start = () => {
     setSeconds(0);
-    setState("requesting");
-    try {
-      if (
-        !navigator.mediaDevices?.getUserMedia ||
-        typeof MediaRecorder === "undefined"
-      )
-        throw new Error("Unavailable");
-      const media = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (id !== generation.current) {
-        media.getTracks().forEach((track) => track.stop());
-        return;
-      }
-      stream.current = media;
-      const next = new MediaRecorder(media);
-      recorder.current = next;
-      next.onerror = () => {
-        release();
-        setState("idle");
-        setError(
-          "Recording interrupted. Try again or use the demo transcript.",
-        );
-      };
-      next.start();
-      setState("recording");
-    } catch {
-      if (id !== generation.current) return;
-      release();
-      setState("idle");
-      setError(
-        "Microphone unavailable. Allow access and try again, or use a demo transcript.",
-      );
-    }
+    return controller.start();
   };
-  return { state, seconds, error, start, transcribe, cancel };
+  return { ...snapshot, seconds, start, stop: controller.stop, cancel: controller.cancel };
 }
