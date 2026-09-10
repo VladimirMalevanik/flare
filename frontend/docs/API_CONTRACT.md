@@ -52,8 +52,27 @@ still uses the mock fallback; Flares never do.
   where the source is loaded through `GET /items/{itemId}`.
 - Any deleted supporting document hides the entire Flare. Untyped legacy insights
   are excluded. Internal run IDs, raw responses, errors and reasoning are absent.
-- No POST Flare/Analyze route exists. Note saving does not enqueue analysis.
-  Generation consumes only pinned evidence of an internally enqueued parent job.
+- Note saving does not enqueue analysis. Explicit Analyze selects and pins context.
+
+## Analyze (Block 5)
+
+`POST /analyze` requires a session cookie, allowed Origin, owner/editor role,
+`Idempotency-Key: UUID` and exactly `{}` as JSON. Identity and sources are server-owned.
+It returns 202 while pending/processing; replay of a terminal run returns 200.
+`GET /analysis-runs/{id}` returns 200 for any current member of the same workspace,
+or 404 for an unknown/foreign run. Both responses are no-store:
+
+```ts
+{ id: string; status: "pending" | "processing" | "completed" | "failed";
+  stage: "analysis" | "flare_generation" | "completed" | "failed";
+  selectedChunkCount: number; flareIds: string[]; error: string | null }
+```
+
+Completion includes Flare generation, including valid empty output. Errors are safe
+codes only. Polling backs off from 1 to 10 seconds, stops after 40 polls or five
+minutes, and cancels on navigation. Check status resumes an existing run; retry
+after terminal failure uses a new key. An uncertain POST retries the same key.
+API mode never substitutes demo results.
 
 ## Authentication (Block 1)
 

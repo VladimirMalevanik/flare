@@ -1,4 +1,5 @@
 import type {
+  AnalysisRun,
   CreateItemInput,
   Insight,
   Item,
@@ -6,6 +7,8 @@ import type {
   Source,
 } from "./types";
 export interface FlareDataProvider {
+  startAnalysis(key: string, signal?: AbortSignal): Promise<AnalysisRun>;
+  getAnalysisRun(id: string, signal?: AbortSignal): Promise<AnalysisRun>;
   listSources(): Promise<Source[]>;
   saveSource(source: Source): Promise<Source>;
   listItems(options?: ListItemOptions): Promise<Item[]>;

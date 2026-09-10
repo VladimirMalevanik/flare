@@ -37,23 +37,32 @@ Only real `auth_users` identities with owner/editor membership can enqueue.
 Existing string membership IDs and migrations 0001–0004 are unchanged.
 
 `flare_worker` is LOGIN, NOSUPERUSER, NOBYPASSRLS, NOINHERIT, NOCREATEROLE and
-NOCREATEDB. It has no direct tenant-table grants. Its three extraction EXECUTE capabilities:
-`claim_analysis_job`, `load_analysis_evidence`, `finish_analysis_job`. Block 4 adds
-four separate generation capabilities; no direct worker table grants.
+NOCREATEDB. On self-managed PostgreSQL migration `0005` creates it; on Yandex
+Managed PostgreSQL it must be created through the Yandex Cloud control plane
+before migrations. It has no direct tenant-table grants. Its three EXECUTE
+capabilities: `claim_analysis_job`, `load_analysis_evidence`,
+`finish_analysis_job`.
 
-The five extraction SECURITY DEFINER functions (including enqueue and a private validation
-helper) belong to dedicated `flare_job_executor`: NOLOGIN, no superuser/BYPASSRLS,
-no role members. All revoke PUBLIC execution, use qualified table/function
-references and fixed `search_path=pg_catalog,public,pg_temp`. The public schema
-must remain non-writable to runtime roles (existing `init-role.sql`).
+Five SECURITY DEFINER functions (including enqueue and a private validation
+helper) belong to dedicated `flare_job_executor` on self-managed PostgreSQL. It
+is NOLOGIN, has no superuser/BYPASSRLS and has no role members. Yandex Managed
+PostgreSQL does not allow creating that custom role, so the functions belong to
+the database owner `flare_owner`; its connection URL is restricted to migration
+operations and never enters the API or worker environment. All functions revoke
+PUBLIC execution, use qualified table/function references and a fixed
+`search_path=pg_catalog,public,pg_temp`. The public schema must remain
+non-writable to runtime roles. Block 4 adds four separate generation
+capabilities; no direct worker table grants.
 
-The executor has explicit queue policies and narrow tenant grants. Tenant tables
-remain FORCE RLS; their existing workspace policy is intersected with new
-executor requester/membership restrictions. Only this non-login role receives
-column UPDATE privileges required for row locks. Worker-supplied workspace/user
-GUCs are never used to choose evidence: the validation helper derives context
-from the claimed job and verifies its active account, owner/editor membership,
-ready chunk versions, Note document type and absence of soft deletion.
+On self-managed PostgreSQL the executor has explicit queue policies and narrow
+tenant grants. On Yandex Managed PostgreSQL `flare_owner` necessarily retains
+the broader ownership privileges used for migrations, so its credentials must
+remain outside runtime environments. Tenant tables remain FORCE RLS; their
+existing workspace policy is intersected with new executor requester/membership
+restrictions. Worker-supplied workspace/user GUCs are never used to choose
+evidence: the validation helper derives context from the claimed job and verifies
+its active account, owner/editor membership, ready chunk versions, Note document
+type and absence of soft deletion.
 
 Every capability uses its own connection context:
 
@@ -94,8 +103,9 @@ analyzer errors are terminal. Database failures leave leases for crash recovery.
 
 ## Configuration and running
 
-Provision migrations with an administrator, then set the worker password through
-an administrator-only psql process (WORKER_PASSWORD already in its environment):
+For self-managed PostgreSQL, provision migrations with an administrator, then
+set the worker password through an administrator-only psql process
+(WORKER_PASSWORD already in its environment):
 
 ```sh
 psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/db/configure-worker.sql
@@ -103,8 +113,13 @@ psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/db/configure-worker.sql
 
 Keep the worker's environment separate: it needs `WORKER_DATABASE_URL` for the
 restricted role and existing `GROQ_API_KEY`/20B AI settings. Do not give the worker
-an admin or API database URL. Migration creates roles; pre-existing conflicting
-role names fail closed. Do not commit credentials.
+an owner or API database URL. In self-managed mode the migrations create the
+legacy NOLOGIN function-owner roles and `flare_worker`; pre-existing conflicting
+role names fail closed. In Yandex mode `flare_owner`, `flare_app` and
+`flare_worker` are created through Yandex Cloud before migration and worker's
+password is managed there, so `configure-worker.sql` is not used. See the
+[Yandex Managed PostgreSQL guide](yandex-managed-postgresql.md). Do not commit
+credentials.
 
 | Variable | Default |
 | --- | --- |

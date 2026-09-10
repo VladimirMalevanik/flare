@@ -11,7 +11,7 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 
-CURRENT_SCHEMA_REVISION = "0006"
+CURRENT_SCHEMA_REVISION = "0007"
 TENANT_TABLES = (
     "workspaces",
     "workspace_members",
@@ -23,6 +23,7 @@ TENANT_TABLES = (
     "analysis_jobs",
     "analysis_job_sources",
     "flare_generation_runs",
+    "analysis_runs",
 )
 
 
@@ -50,6 +51,8 @@ def _connection_is_ready(connection: Connection) -> bool:
     """Validate the runtime role, schema head and fail-closed tenant access."""
     safe_role = connection.execute(
         "SELECT rolname = 'flare_app' AND NOT rolsuper AND NOT rolbypassrls "
+        "AND NOT rolcreatedb AND NOT rolcreaterole AND NOT EXISTS ("
+        "SELECT 1 FROM pg_auth_members WHERE member = pg_roles.oid) "
         "FROM pg_roles WHERE rolname = current_user"
     ).fetchone()
     if safe_role != (True,):
@@ -91,13 +94,15 @@ def _connection_is_ready(connection: Connection) -> bool:
                UNION ALL SELECT 1 FROM public.analysis_jobs
                UNION ALL SELECT 1 FROM public.analysis_job_sources
                UNION ALL SELECT 1 FROM public.flare_generation_runs
+               UNION ALL SELECT 1 FROM public.analysis_runs
            )"""
     ).fetchone()
     if customer_rows_are_hidden != (True,):
         return False
 
     extension = connection.execute(
-        "SELECT 1 FROM pg_extension WHERE extname = 'vector'"
+        "SELECT 1 FROM pg_extension "
+        "WHERE extname IN ('vector', 'pgvector') AND to_regtype('vector') IS NOT NULL"
     ).fetchone()
     return extension is not None
 
@@ -120,7 +125,11 @@ class Database:
             self._pool.open(wait=True, timeout=10)
             with self._pool.connection() as connection:
                 safe_role = connection.execute(
-                    """SELECT rolname = 'flare_app' AND NOT rolsuper AND NOT rolbypassrls AS safe
+                    """SELECT rolname = 'flare_app' AND NOT rolsuper AND NOT rolbypassrls
+                              AND NOT rolcreatedb AND NOT rolcreaterole
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM pg_auth_members WHERE member = pg_roles.oid
+                              ) AS safe
                        FROM pg_roles WHERE rolname = current_user"""
                 ).fetchone()
                 if safe_role is None or safe_role["safe"] is not True:

@@ -72,3 +72,12 @@ export interface ListItemOptions {
   type?: ItemType | "all";
   limit?: number;
 }
+
+export interface AnalysisRun {
+  id: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  stage: "analysis" | "flare_generation" | "completed" | "failed";
+  selectedChunkCount: number;
+  flareIds: string[];
+  error: string | null;
+}

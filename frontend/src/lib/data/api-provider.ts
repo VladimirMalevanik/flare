@@ -1,5 +1,6 @@
 import type { FlareDataProvider } from "./provider";
 import type {
+  AnalysisRun,
   CreateItemInput,
   Insight,
   Item,
@@ -126,6 +127,25 @@ async function errorMessage(response: Response): Promise<string> {
   return response.statusText || `Request failed with status ${response.status}`;
 }
 
+function mapAnalysisRun(value: unknown): AnalysisRun {
+  const dto = asRecord(value);
+  const status = stringField(dto, "status");
+  const stage = stringField(dto, "stage");
+  if (!["pending", "processing", "completed", "failed"].includes(status)
+    || !["analysis", "flare_generation", "completed", "failed"].includes(stage)
+    || ((status === "completed" || status === "failed") ? stage !== status : !["analysis", "flare_generation"].includes(stage))
+    || !Number.isInteger(dto.selectedChunkCount) || (dto.selectedChunkCount as number) < 1
+    || (dto.selectedChunkCount as number) > 100
+    || !Array.isArray(dto.flareIds) || dto.flareIds.length > 3 || dto.flareIds.some(id => typeof id !== "string")
+    || (status !== "completed" && dto.flareIds.length !== 0)
+    || (dto.error !== null && typeof dto.error !== "string")) {
+    throw new FlareApiError("Invalid analysis status.");
+  }
+  return { id: stringField(dto, "id"), status: status as AnalysisRun["status"],
+    stage: stage as AnalysisRun["stage"], selectedChunkCount: dto.selectedChunkCount as number,
+    flareIds: dto.flareIds as string[], error: dto.error as string | null };
+}
+
 export class ApiDataProvider implements FlareDataProvider {
   private readonly baseUrl: string;
   private readonly fallback: FlareDataProvider;
@@ -161,6 +181,16 @@ export class ApiDataProvider implements FlareDataProvider {
     }
     if (response.status === 204) return undefined;
     return response.json();
+  }
+
+  async startAnalysis(key: string, signal?: AbortSignal): Promise<AnalysisRun> {
+    return mapAnalysisRun(await this.request("/analyze", {
+      method: "POST", headers: { "Idempotency-Key": key }, body: "{}", signal,
+    }));
+  }
+
+  async getAnalysisRun(id: string, signal?: AbortSignal): Promise<AnalysisRun> {
+    return mapAnalysisRun(await this.request(`/analysis-runs/${encodeURIComponent(id)}`, { signal }));
   }
 
   listSources(): Promise<Source[]> {

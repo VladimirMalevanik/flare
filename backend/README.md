@@ -23,8 +23,14 @@ Frontend использует `/api` через same-origin Next.js rewrite.
 В production обязательны `FLARE_ENV=production`, `DATABASE_URL`, точный
 HTTPS frontend origin в `CORS_ORIGINS` и TLS на внешнем входе. Runtime БД —
 только `flare_app`, без SUPERUSER/BYPASSRLS. Миграции выполняются отдельным
-администратором; `0004` также создаёт выделенную кластерную NOLOGIN-роль
-`flare_onboarding` (имя зарезервировано для этой установки).
+владельцем. В self-managed PostgreSQL миграции создают выделенные NOLOGIN-роли
+`flare_onboarding` и `flare_job_executor`, а также worker-роль. В Yandex Managed
+PostgreSQL пользователи `flare_owner`, `flare_app`, `flare_worker` создаются
+через Yandex Cloud, SECURITY DEFINER-функции принадлежат `flare_owner`, а его
+`MIGRATION_DATABASE_URL` не передаётся API или worker. Для этого используются
+отдельные `.env.yandex.migrate`, `.env.yandex.api` и `.env.yandex.worker`, а
+нужный файл выбирается через `FLARE_DOTENV_PATH`. Пошаговая настройка:
+[docs/yandex-managed-postgresql.md](docs/yandex-managed-postgresql.md).
 
 ## HTTP-контракт
 

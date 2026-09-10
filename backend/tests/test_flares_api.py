@@ -39,7 +39,7 @@ def test_real_flare_reads_auth_isolation_and_deletion(stage,jobs,admin_url):
         assert client.get('/items/'+f['evidence'][0]['itemId']).status_code==200
         for limit in (0,101): assert client.get('/flares',params={'limit':limit}).status_code==422
         assert client.post('/flares',headers={'Origin':'http://testserver'},json={}).status_code==405
-        assert client.post('/analyze',headers={'Origin':'http://testserver'},json={}).status_code==404
+        assert client.post('/analyze',headers={'Origin':'http://testserver'},json={}).status_code==422
         client.cookies.clear()
         assert client.get('/flares').status_code==401
         assert client.get('/flares/'+f['id']).status_code==401
@@ -107,3 +107,70 @@ def test_one_deleted_support_hides_multi_document_flare(stage, jobs, admin_url):
         assert deleted.json() == missing.json()
         live = next(e['itemId'] for e in flare['evidence'] if e['itemId'] != str(note.id))
         assert client.get('/items/' + live).status_code == 200
+
+
+def test_worker_generation_and_api_reads_with_separate_process_secrets(stage, jobs, tmp_path):
+    """Only restricted login DSNs cross into runtime subprocesses; no migration DSN."""
+    import json
+    import os
+    from pathlib import Path
+    import subprocess
+    import sys
+
+    backend = Path(__file__).resolve().parents[1]
+    worker_file = tmp_path / 'worker.env'
+    worker_file.write_text(
+        'FLARE_PROCESS_ROLE=worker\nFLARE_ENV=test\n'
+        f'WORKER_DATABASE_URL={jobs[1]._database_url}\nGROQ_API_KEY=test-only-no-network\n'
+    )
+    worker_file.chmod(0o600)
+    # Inherit only runtime basics; intentionally exclude all ambient DB/key variables.
+    env = {key: value for key, value in os.environ.items() if key in ('PATH', 'SYSTEMROOT', 'LANG')}
+    env['PYTHONPATH'] = os.pathsep.join((str(backend), str(backend / 'tests')))
+    env['FLARE_DOTENV_PATH'] = str(worker_file)
+    worker_code = '''
+import asyncio
+import os
+from app.workers.config import load_worker_settings
+from app.config import load_ai_settings, settings
+from app.ai_engine.flare_config import load_flare_settings
+from app.services.flare_generation import FlareProcessor
+from app.models.flare_runs import FlareRuns
+from test_flare_runs import Detector
+assert settings.database_url is None
+assert 'DATABASE_URL' not in os.environ
+assert 'MIGRATION_DATABASE_URL' not in os.environ
+config = load_worker_settings()
+processor = FlareProcessor(FlareRuns(config.database_url), Detector(),
+                           load_ai_settings(), load_flare_settings(), config)
+assert asyncio.run(processor.process_one()) == 'completed'
+'''
+    subprocess.run([sys.executable, '-c', worker_code], env=env, check=True, timeout=30)
+
+    api_file = tmp_path / 'api.env'
+    api_file.write_text('FLARE_PROCESS_ROLE=api\nFLARE_ENV=test\n'
+                        f'DATABASE_URL={os.environ["DATABASE_URL"]}\nCORS_ORIGINS=http://testserver\n')
+    api_file.chmod(0o600)
+    env['FLARE_DOTENV_PATH'] = str(api_file)
+    with jobs[0].database.connection() as c:
+        email = c.execute('SELECT email FROM auth_users WHERE id=%s', (stage[3].user_id,)).fetchone()['email']
+    api_code = '''
+import json
+import os
+import sys
+from fastapi.testclient import TestClient
+from app.main import create_app
+from app.services.auth_service import AuthService
+assert all(name not in os.environ for name in ('WORKER_DATABASE_URL','GROQ_API_KEY','MIGRATION_DATABASE_URL'))
+app = create_app()
+with TestClient(app) as client:
+    token = AuthService(app.state.database).login(json.load(sys.stdin)['email'], 'a-long-test-password')
+    client.cookies.set('flare_session', token)
+    response = client.get('/flares')
+    assert response.status_code == 200 and len(response.json()) == 1
+    flare = response.json()[0]
+    assert client.get('/flares/' + flare['id']).json() == flare
+    assert flare['evidence']
+'''
+    subprocess.run([sys.executable, '-c', api_code], env=env,
+                   input=json.dumps({'email': email}), text=True, check=True, timeout=30)

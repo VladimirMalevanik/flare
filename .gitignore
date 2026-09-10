@@ -1,6 +1,9 @@
 .env
 .env.*
 !.env.example
+!.env.yandex.migrate.example
+!.env.yandex.api.example
+!.env.yandex.worker.example
 .venv/
 __pycache__/
 *.py[cod]
@@ -10,4 +13,3 @@ __pycache__/
 .ruff_cache/
 dist/
 build/
-

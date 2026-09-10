@@ -1,4 +1,6 @@
 """Durable Flare stage, atomic handoff and typed evidence-backed persistence."""
+import os
+
 from alembic import op
 
 revision = '0006'
@@ -8,6 +10,8 @@ depends_on = None
 
 
 def upgrade():
+    yandex = os.getenv("FLARE_DATABASE_PROVIDER", "self-managed") == "yandex"
+    executor_role = "flare_owner" if yandex else "flare_job_executor"
     op.execute(r"""
     CREATE TABLE public.flare_generation_runs (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -244,7 +248,7 @@ def upgrade():
             completed_at=CASE WHEN next_status IN ('completed','failed') THEN clock_timestamp() ELSE NULL END WHERE id=run.id;
         RETURN next_status;
     END $$;
-    """)
+    """.replace("flare_job_executor", executor_role))
     signatures = {
         'flare_normalize(text)': None,
         'enqueue_flare_generation(uuid,text,integer)': 'flare_worker',
@@ -254,7 +258,7 @@ def upgrade():
         'finish_flare_generation(uuid,uuid,jsonb,jsonb,text,double precision)': 'flare_worker',
     }
     for signature, role in signatures.items():
-        op.execute(f'ALTER FUNCTION public.{signature} OWNER TO flare_job_executor')
+        op.execute(f'ALTER FUNCTION public.{signature} OWNER TO {executor_role}')
         op.execute(f'REVOKE ALL ON FUNCTION public.{signature} FROM PUBLIC')
         if role:
             op.execute(f'GRANT EXECUTE ON FUNCTION public.{signature} TO {role}')
