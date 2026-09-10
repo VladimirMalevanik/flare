@@ -56,6 +56,11 @@ docker compose up --build
 
 Compose применяет Alembic отдельным одноразовым сервисом `migrate`; backend
 получает только ограниченный `DATABASE_URL` роли `flare_app`.
+В стек также входит `worker`: `configure-worker` задаёт пароль роли из
+`WORKER_PASSWORD`. Для обработки Analyze через Groq укажите `GROQ_API_KEY`
+в локальном `.env`; ключ получает только worker. Без ключа worker не запускает
+обработку, но регистрация и сохранение Notes доступны. Пароли из `.env.example`
+предназначены только для локальной разработки.
 
 После запуска:
 
@@ -92,8 +97,9 @@ Compose по умолчанию использует `FLARE_ENV=development` и
 проксирует запросы в FastAPI. Для production задайте `FLARE_ENV=production`,
 точный HTTPS origin в `CORS_ORIGINS` и настройте TLS перед Next.js. Подробности
 сессий, конфигурации и ограничений — в [backend/README.md](backend/README.md).
-Sources и Flares пока используют существующие демонстрационные данные.
-Файлы, URL, аудио, workers и AI остаются следующими этапами.
+Sources пока использует демонстрационные данные. Flares загружаются из БД;
+кнопка Analyze запускает обработку Notes через worker. Файлы, URL и аудио
+остаются следующими этапами.
 
 Проверить сохранение можно через интерфейс: создайте Note, откройте Vault и
 обновите страницу. Запись также видна напрямую в PostgreSQL:
