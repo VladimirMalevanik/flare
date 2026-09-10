@@ -12,12 +12,11 @@ Related technical research and architecture:
 ## Current status
 
 - Blocks 1–3: implemented and merged (authentication, pure 20B extraction, durable jobs).
-- Block 4: implemented locally; PostgreSQL, detector/API and frontend checks cover
-  persisted Flares. Required browser acceptance remains pending because browser
-  tool approval was blocked. Not published or accepted as fully green yet.
-- Block 5 Analyze/context selection: not implemented. Note saving does not enqueue
-  work. Block 4 reasons only over the completed parent's pinned context, not the
-  whole project history. Voice and quota work are also deferred.
+- Block 4 and Yandex verification: merged into main.
+- Block 5: implemented for review: explicit Analyze, bounded current Note selection,
+  immutable job sources, idempotent runs, status API, frontend polling and Compose worker.
+  Note saving does not enqueue work. Live Groq acceptance requires a local worker key.
+- Voice and quota work remain outside this change.
 
 See [Block 4 implementation](../backend/docs/flare-generation.md).
 
@@ -141,7 +140,7 @@ Existing pgvector/schema capacity can remain unused; this scope does not require
 9. Complete free-tier quota enforcement.
 10. End-to-end hardening/tests.
 
-Phases 2–3 can be developed as isolated components; expose production analysis only once durable jobs and explicit Analyze are connected. Block 5 is the next separately authorized implementation step.
+Phases 2–3 can be developed as isolated components; expose production analysis only once durable jobs and explicit Analyze are connected. Block 5 connects the explicit trigger to durable jobs; see [Analyze flow](../backend/docs/analyze.md).
 
 ## Definition of MVP
 
@@ -149,7 +148,7 @@ A real user can register/login, enter a workspace, add notes/context, see it per
 
 The system survives provider failures, retries safely, preserves raw text and successful transcripts, respects free-tier quotas, rejects fabricated evidence, and can move from Groq Free to Developer without architectural changes. Original audio follows the temporary retention policy above.
 
-Acceptance checks must cover authentication/roles, cross-workspace reads and writes, persistence after refresh, crash recovery and duplicate jobs, invalid citations, insufficient evidence, provider failures/quota exhaustion, audio cleanup, and the complete frontend flow. The complete MVP gate still depends on the deferred Analyze, audio and quota slices.
+Acceptance checks must cover authentication/roles, cross-workspace reads and writes, persistence after refresh, crash recovery and duplicate jobs, invalid citations, insufficient evidence, provider failures/quota exhaustion, audio cleanup, and the complete frontend flow. The complete MVP gate still depends on the live Analyze acceptance, audio and quota slices.
 
 ## Decisions still needed
 

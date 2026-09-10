@@ -39,7 +39,7 @@ def test_real_flare_reads_auth_isolation_and_deletion(stage,jobs,admin_url):
         assert client.get('/items/'+f['evidence'][0]['itemId']).status_code==200
         for limit in (0,101): assert client.get('/flares',params={'limit':limit}).status_code==422
         assert client.post('/flares',headers={'Origin':'http://testserver'},json={}).status_code==405
-        assert client.post('/analyze',headers={'Origin':'http://testserver'},json={}).status_code==404
+        assert client.post('/analyze',headers={'Origin':'http://testserver'},json={}).status_code==422
         client.cookies.clear()
         assert client.get('/flares').status_code==401
         assert client.get('/flares/'+f['id']).status_code==401

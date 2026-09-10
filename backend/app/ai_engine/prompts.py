@@ -41,3 +41,22 @@ def build_request(evidence: Sequence[Evidence]) -> dict:
 def request_size_bytes(body: dict) -> int:
     """Safety bound for serialized input, including instructions/schema; not tokens."""
     return len(json.dumps(body, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
+
+
+def build_bounded_request(evidence: Sequence[Evidence], settings) -> dict:
+    """One request budget shared by public selection and the provider boundary."""
+    if not 1 <= len(evidence) <= settings.max_sources:
+        raise ValueError('Invalid evidence count')
+    if any(not isinstance(source, Evidence) for source in evidence):
+        raise ValueError('Typed evidence is required')
+    if len({source.source_id for source in evidence}) != len(evidence):
+        raise ValueError('Duplicate evidence source IDs')
+    if sum(len(source.content.encode('utf-8')) for source in evidence) > settings.max_input_bytes:
+        raise ValueError('AI input size limit exceeded')
+    request = build_request(evidence)
+    request.update(model=settings.model, reasoning_effort=settings.reasoning_effort,
+                   max_completion_tokens=settings.max_completion_tokens,
+                   include_reasoning=False, stream=False)
+    if request_size_bytes(request) > settings.max_input_bytes:
+        raise ValueError('AI input size limit exceeded')
+    return request

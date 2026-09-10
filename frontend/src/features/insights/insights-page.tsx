@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { AnalyzeAction } from "@/features/analyze/analyze-action";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -117,6 +118,7 @@ export function InsightsPage() {
           <h1>Flares</h1>
           <p>Things you might have missed, forgotten, or contradicted.</p>
         </header>
+        <AnalyzeAction />
         <div className="filters">
           <button
             className={`filter ${filter === "All" ? "selected" : ""}`}

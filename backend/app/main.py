@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 from app.api.auth import router as auth_router
 from app.api.flares import router as flares_router
+from app.api.analysis import router as analysis_router
 from app.config import Settings, settings
 from app.models.database import Database, WorkspaceIdentity
 
@@ -54,7 +55,7 @@ def create_app(
         allow_origins=configured.cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "DELETE"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "Idempotency-Key"],
     )
     @application.middleware("http")
     async def origin_guard(request: Request, call_next):
@@ -62,7 +63,7 @@ def create_app(
             if request.headers.get("origin") not in configured.cors_origins:
                 return JSONResponse({"detail": "Request origin is not allowed"}, status_code=403)
         response = await call_next(request)
-        if request.url.path.startswith(("/auth", "/items", "/flares")):
+        if request.url.path.startswith(("/auth", "/items", "/flares", "/analyze", "/analysis-runs")):
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -76,6 +77,7 @@ def create_app(
 
     application.include_router(auth_router)
     application.include_router(flares_router)
+    application.include_router(analysis_router)
     application.include_router(router)
     return application
 

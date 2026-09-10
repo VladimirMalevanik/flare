@@ -7,7 +7,7 @@ import { seedSources } from "@/mocks/sources";
 import { readLocal, writeLocal } from "@/lib/storage/preferences";
 import type { Source } from "./types";
 import type { FlareDataProvider } from "./provider";
-import type { CreateItemInput, Insight, Item, ListItemOptions } from "./types";
+import type { AnalysisRun, CreateItemInput, Insight, Item, ListItemOptions } from "./types";
 const STORAGE_KEY = "flare-user-items-v1";
 const DELETED_ITEMS_KEY = "flare-deleted-items-v1";
 const LEGACY_DEMO_SOURCE_IDS = new Set([
@@ -63,6 +63,21 @@ const titleFor = (input: CreateItemInput) =>
       ? "New voice memo"
       : (input.fileName ?? "Untitled note"));
 export class MockDataProvider implements FlareDataProvider {
+  private analysisRuns = new Map<string, AnalysisRun>();
+  async startAnalysis(key: string): Promise<AnalysisRun> {
+    const prior = this.analysisRuns.get(key);
+    if (prior) return clone(prior);
+    const run: AnalysisRun = { id: key, status: "completed", stage: "completed",
+      selectedChunkCount: 1, flareIds: seedInsights.slice(0, 3).map(flare => flare.id), error: null };
+    this.analysisRuns.set(key, run);
+    return clone(run);
+  }
+  async getAnalysisRun(id: string): Promise<AnalysisRun> {
+    const run = this.analysisRuns.get(id);
+    if (!run) throw new Error("Demo run not found.");
+    return clone(run);
+  }
+
   async listSources(): Promise<Source[]> {
     const saved = readLocal<Source[] | null>("flare-sources-v1", null);
     if (!Array.isArray(saved)) return clone(seedSources);
