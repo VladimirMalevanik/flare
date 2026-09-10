@@ -1,8 +1,8 @@
 # Block 3: durable analysis jobs
 
 Internal flow only; Item HTTP routes and Note saving do not enqueue work.
-The Block 2 analyzer remains a pure `Evidence[]` component. No Flare/insight
-writes, frontend, voice, quotas, embeddings or new dependencies are added.
+The Block 2 analyzer remains a pure `Evidence[]` component. Block 4 adds a separate [Flare generation stage](flare-generation.md) after
+completion; extraction still persists only TextAnalysis on its job.
 
 ## Schema and dedupe
 
@@ -18,7 +18,9 @@ Migration `0005_analysis_jobs.py` adds:
 Uniqueness covers workspace + requester + task + fingerprint of sorted chunk
 IDs and pipeline revision. The revision hashes prompt/schema versions, configured
 20B model, low reasoning effort and input/output bounds. Bump prompt/schema version
-when changing their meaning. Different source order produces the same job.
+when changing their meaning. Different source order produces the same job. Since migration 0006, future source
+ordinals follow document creation time, document ID, version number, chunk ordinal
+and chunk ID. Sorted UUIDs remain only the dedupe input; historical ordinals stay unchanged.
 Requester identity is included so one user's job cannot replace another's request.
 
 Repeated/concurrent enqueue returns the same job, including completed/failed jobs;
@@ -49,7 +51,8 @@ the database owner `flare_owner`; its connection URL is restricted to migration
 operations and never enters the API or worker environment. All functions revoke
 PUBLIC execution, use qualified table/function references and a fixed
 `search_path=pg_catalog,public,pg_temp`. The public schema must remain
-non-writable to runtime roles.
+non-writable to runtime roles. Block 4 adds four separate generation
+capabilities; no direct worker table grants.
 
 On self-managed PostgreSQL the executor has explicit queue policies and narrow
 tenant grants. On Yandex Managed PostgreSQL `flare_owner` necessarily retains
@@ -78,6 +81,10 @@ Atomic claim uses `FOR UPDATE SKIP LOCKED`, increments attempts and creates a fr
 UUID lease token. Expired processing jobs can be reclaimed; old tokens cannot
 load evidence or finalize. A crash on the last allowed attempt is marked failed
 by a bounded cleanup within subsequent claims (up to 100 rows per call).
+
+Successful completion also inserts a Stage 2 run in the same transaction through
+a migration-0006 trigger. The worker supplies the configured generation revision.
+Stage 2 retries reuse the completed extraction result.
 
 The processor checks pipeline compatibility, bounds evidence before loading,
 calls the existing analyzer, then repeats typed parsing and exact quote/source

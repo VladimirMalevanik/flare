@@ -8,10 +8,17 @@
 | --- | --- |
 | `api` | HTTP-маршруты и схемы входных/выходных данных |
 | `models` | Подключение к PostgreSQL и модели хранения |
-| `services` | Сценарии загрузки документов, поиска и создания инсайтов |
-| `ai_engine` | Независимые от поставщика интерфейсы extraction, embeddings и LLM |
-| `workers` | Фоновая обработка документов и синхронизация источников |
+| `services` | Сохранение Notes, auth, orchestration analysis jobs и чтение Flares |
+| `ai_engine` | TextAnalyzer и FlareDetector, типы, валидация и Groq adapters |
+| `workers` | Последовательное выполнение durable extraction и Flare generation |
 
 Направление зависимостей: HTTP и workers вызывают services; services используют
 models, storage и AI-интерфейсы. Реализации конкретных AI- и storage-провайдеров
 не должны проникать в API или доменные модели.
+
+Block 4 добавляет отдельную `flare_generation_runs`: completed TextAnalysis и
+pinned evidence родительского job → FlareDetector → атомарные записи в
+`insights`/`insight_sources` → read-only `/flares`. Обе стадии освобождают DB
+connection до вызова провайдера. API не вызывает модель; сохранение Note не
+ставит job. Выбор контекста и Analyze относятся к Block 5 и ещё не реализованы.
+Подробности: [Flare generation](flare-generation.md).

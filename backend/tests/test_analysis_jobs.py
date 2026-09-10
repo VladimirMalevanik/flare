@@ -96,6 +96,8 @@ def jobs(admin_url):
     yield AnalysisJobs(db), WorkerJobs(worker_url), users, chunks
     db.close()
     with psycopg.connect(admin_url) as conn:
+        conn.execute('DELETE FROM public.insight_sources WHERE workspace_id=ANY(%s)', ([u.workspace_id for u in users],))
+        conn.execute('DELETE FROM public.insights WHERE workspace_id=ANY(%s)', ([u.workspace_id for u in users],))
         conn.execute('DELETE FROM public.analysis_jobs WHERE workspace_id=ANY(%s)', ([u.workspace_id for u in users],))
         conn.execute('DELETE FROM public.auth_users WHERE id=ANY(%s)', ([u.user_id for u in users],))
     cleanup = ApiEnvironment(runtime, admin_url)

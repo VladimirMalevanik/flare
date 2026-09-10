@@ -8,6 +8,10 @@ import psycopg
 
 from app.ai_engine.errors import AnalysisError
 from app.ai_engine.groq_adapter import GroqTextAnalyzer
+from app.ai_engine.groq_flare_adapter import GroqFlareDetector
+from app.ai_engine.flare_config import load_flare_settings
+from app.models.flare_runs import FlareRuns
+from app.services.flare_generation import FlareProcessor, PipelineProcessor
 from app.config import load_ai_settings
 from app.models.analysis_jobs import JobUnavailable, WorkerJobs
 from app.services.analysis_jobs import AnalysisProcessor
@@ -40,6 +44,7 @@ async def run_loop(processor: AnalysisProcessor, stop: asyncio.Event, *, once: b
 async def run(*, once: bool = False) -> None:
     ai, config = load_ai_settings(), load_worker_settings()
     config.validate(ai)
+    flare = load_flare_settings()
     if not config.database_url:
         raise ValueError('WORKER_DATABASE_URL is required')
     stop = asyncio.Event()
@@ -47,9 +52,10 @@ async def run(*, once: bool = False) -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop.set)
     try:
-        async with GroqTextAnalyzer(ai) as analyzer:
+        async with GroqTextAnalyzer(ai) as analyzer, GroqFlareDetector(ai, flare) as detector:
             processor = AnalysisProcessor(WorkerJobs(config.database_url), analyzer, ai, config)
-            await run_loop(processor, stop, once=once)
+            generation = FlareProcessor(FlareRuns(config.database_url), detector, ai, flare, config)
+            await run_loop(PipelineProcessor(processor, generation), stop, once=once)
     finally:
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.remove_signal_handler(sig)

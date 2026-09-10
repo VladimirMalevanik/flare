@@ -12,8 +12,12 @@ interface Item {
   status: ItemStatus; createdAt: string;
   extractedFacts: ExtractedFact[]; relatedItemIds: string[];
 }
-interface Evidence { itemId: string; sourceTitle: string; sourceType: ItemType; excerpt: string }
-interface Insight { id: string; title: string; summary: string; explanation: string; evidence: Evidence[]; createdAt: string }
+interface Evidence { itemId: string; sourceTitle: string; sourceType: ItemType; excerpt: string; sourceUrl?: string | null }
+type FlareType = "Reminder" | "Warning" | "Recommendation";
+interface Insight {
+  id: string; type: FlareType; title: string; statement: string; action: string | null;
+  reason: string; evidence: Evidence[]; createdAt: string;
+}
 ```
 
 Logical operations expected by the interface:
@@ -27,9 +31,29 @@ Logical operations expected by the interface:
 - `listSources() → Source[]`
 - `saveSource(source) → Source`
 
-Cupertino additions are optional on existing item/insight records: `Item.category` (discussion, pull-request, note, voice), `sourceLabel`, `author`, and `fileType`; `Insight.kind` (Contradiction, Repeated Problem, Hidden Connection, Unresolved Question), `detailTitle`, and the display-only `flareType` (Discovery, Reminder, Warning). The UI calls these records “Flares”; the `Insight`, `InsightKind`, `listInsights()`, and `getInsight()` names remain internal contracts until a coordinated API migration. Old locally captured items continue to work without these fields. `Source` contains `id`, `name`, `scope`, `description`, `channels`, `status` (connected, syncing, disconnected, ready, coming-soon), and a human-readable `updated` label. The source adapter must replace demo connection behavior with the real authorization/sync flow during integration.
+Optional Item display fields remain `category`, `sourceLabel`, `author`, and
+`fileType`. The internal names `Insight`, `listInsights`, and `getInsight` remain;
+the public Flare types are Reminder, Warning and Recommendation. Legacy Discovery
+records are not converted into Recommendations.
 
-The current REST adapter uses `GET /items`, `GET /items/:id`, `POST /items`, and `DELETE /items/:id`. The first API slice accepts notes; URL, file, and audio ingestion remain explicit follow-up work. Insights and Sources continue through the mock fallback until their endpoints exist. `POST /items` may later become asynchronous: return an `Item` with `status: "processing"`, then allow the client to refresh or subscribe. Authentication, upload URLs, pagination, and delivery mechanism remain backend concerns.
+The REST adapter uses `GET /items`, `GET /items/:id`, `POST /items`, and
+`DELETE /items/:id`. Only Note ingestion is implemented. Sources configuration
+still uses the mock fallback; Flares never do.
+
+## Flares (Block 4)
+
+- `GET /flares?limit=50`: authenticated current workspace, limit 1–100;
+  newest first (`created_at DESC, id DESC`); `[]` is valid.
+- `GET /flares/{id}`: the same DTO; missing, foreign and deleted-evidence records
+  return the same 404. `getInsight` maps only 404 to null; other errors propagate.
+- Both responses use `Cache-Control: no-store`. Browser requests include cookies.
+- DTO fields match `Insight` above; evidence `sourceUrl` is nullable on the wire
+  and remains nullable/optional in the frontend. Quotes navigate to `/vault?item={itemId}`,
+  where the source is loaded through `GET /items/{itemId}`.
+- Any deleted supporting document hides the entire Flare. Untyped legacy insights
+  are excluded. Internal run IDs, raw responses, errors and reasoning are absent.
+- No POST Flare/Analyze route exists. Note saving does not enqueue analysis.
+  Generation consumes only pinned evidence of an internally enqueued parent job.
 
 ## Authentication (Block 1)
 

@@ -118,3 +118,11 @@ editing не реализован. TLS/reverse-proxy deployment проверяе
 Добавлен внутренний enqueue и отдельный PostgreSQL worker для анализа immutable
 chunks. API сохранения Notes не запускает анализ. Схема 0005, роли, настройка,
 команда запуска и проверки: [docs/analysis-jobs.md](docs/analysis-jobs.md).
+
+### Block 4: persisted Flares
+
+Migration 0006 adds a separate durable generation stage after completed analysis.
+The same worker alternates extraction/generation attempts. Authenticated
+`GET /flares` and `GET /flares/{id}` expose typed, evidence-backed records.
+No Analyze trigger or automatic Note processing is added.
+See [generation configuration, security and checks](docs/flare-generation.md).

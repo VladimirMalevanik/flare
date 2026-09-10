@@ -95,6 +95,8 @@ def tenants(db):
         )
         version_id, chunk_id = add_version(db, workspace_id, document_id, 1, content=f"{name} evidence v1")
         db.execute("UPDATE public.documents SET current_version_id = %s WHERE id = %s", (version_id, document_id))
+        # Legacy fixtures are admin-seeded; runtime Flare writes are now forbidden.
+        db.execute("RESET ROLE")
         db.execute(
             """INSERT INTO public.insights
                (id, workspace_id, title, summary, body, model, prompt_version)
@@ -111,6 +113,7 @@ def tenants(db):
             "INSERT INTO public.insight_sources (workspace_id, insight_id, chunk_id) VALUES (%s, %s, %s)",
             (workspace_id, insight_id, chunk_id),
         )
+        db.execute("SET LOCAL ROLE flare_app")
         result.append(dict(workspace=workspace_id, document=document_id, version=version_id, chunk=chunk_id, insight=insight_id))
     select_workspace(db, result[0]["workspace"])
     return result
@@ -198,8 +201,13 @@ def test_cross_tenant_parent_reference_is_rejected(db, tenants):
                    VALUES (%s, %s, 2, %s, 'v1')""",
                 (a["workspace"], b["document"], "a" * 64),
             )
+    with pytest.raises(InsufficientPrivilege):
+        with db.transaction():
+            db.execute("INSERT INTO public.insight_sources(workspace_id,insight_id,chunk_id) VALUES(%s,%s,%s)",
+                       (a["workspace"],a["insight"],a["chunk"]))
     with pytest.raises(ForeignKeyViolation):
         with db.transaction():
+            db.execute("RESET ROLE")
             db.execute(
                 "INSERT INTO public.insight_sources (workspace_id, insight_id, chunk_id) VALUES (%s, %s, %s)",
                 (a["workspace"], a["insight"], b["chunk"]),
@@ -341,6 +349,7 @@ def test_frontend_contract_fields_are_persisted(db, tenants):
            VALUES (%s, %s, 'Voice memo', 'audio', '{"duration_seconds": 42}')""",
         (document_id, workspace_id),
     )
+    db.execute("RESET ROLE")
     db.execute(
         """INSERT INTO public.insights
            (id, workspace_id, title, summary, body, kind, detail_title,
@@ -350,6 +359,7 @@ def test_frontend_contract_fields_are_persisted(db, tenants):
                    'Evidence', 'test-model', 'v1')""",
         (insight_id, workspace_id),
     )
+    db.execute("SET LOCAL ROLE flare_app")
     assert db.execute(
         "SELECT source_type, metadata->>'duration_seconds' FROM public.documents WHERE id = %s",
         (document_id,),
