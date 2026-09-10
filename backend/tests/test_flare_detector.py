@@ -14,6 +14,7 @@ from app.ai_engine.flare_config import FlareSettings
 from app.ai_engine.groq_flare_adapter import GroqFlareDetector
 from app.ai_engine.errors import AnalysisError
 from app.config import AISettings
+from app.ai_engine.flare_prompts import PROMPT_VERSION, SCHEMA_VERSION, SYSTEM_PROMPT, build_flare_request
 from test_groq_adapter import completion
 
 S1, S2 = str(uuid4()), str(uuid4())
@@ -117,6 +118,7 @@ def test_sdk_contract_and_safe_result():
         assert body['model']=='openai/gpt-oss-20b' and body['reasoning_effort']=='low'
         assert body['include_reasoning'] is False and body['stream'] is False
         assert body['response_format']['json_schema']['strict'] is True
+        assert body['messages'][0] == {'role': 'system', 'content': SYSTEM_PROMPT}
         response = completion(json.dumps({'flares':[candidate()]}))
         response['choices'][0]['message']['reasoning'] = 'hidden provider reasoning sentinel'
         return httpx.Response(200,json=response)
@@ -126,6 +128,40 @@ def test_sdk_contract_and_safe_result():
     result=asyncio.run(run())
     assert len(calls)==1 and len(result.candidates.flares)==1 and result.metadata.validation_outcome=='valid'
     assert 'hidden provider reasoning sentinel' not in repr(result)
+
+
+def test_support_prompt_contract_and_unchanged_schema():
+    request = build_flare_request(EMPTY, SOURCES)
+    prompt = ' '.join(request['messages'][0]['content'].split())
+    schema = request['response_format']['json_schema']
+    assert schema['strict'] is True
+    roles = schema['schema']['$defs']['FlareEvidence']['properties']['supports']['items']['enum']
+    assert roles == ['goal', 'state', 'constraint', 'commitment', 'relevance', 'conflict']
+    assert 'ONLY these six exact strings: ' + ', '.join(f'"{role}"' for role in roles) + '.' in prompt
+    assert 'fact/decision/intention/problem/entity are a separate taxonomy and are forbidden in supports' in prompt
+    assert 'semantic role of the quoted evidence for the Flare, not the observation category' in prompt
+    assert 'A decision quote may support "commitment" and/or "constraint" only when semantically justified' in prompt
+    assert 'A current state/problem/plan quote involved in a contradiction may support "state"/"conflict" only when semantically justified' in prompt
+    assert 'Never output "decision", "problem", "fact", "intention", or "entity" inside supports' in prompt
+
+
+@pytest.mark.parametrize('category', ['fact', 'decision', 'intention', 'problem', 'entity'])
+def test_observation_categories_still_rejected_as_supports(category):
+    c = candidate()
+    c['evidence'][0]['supports'] = [category, 'constraint']
+    with pytest.raises(ValidationError):
+        FlareCandidates(flares=[c])
+
+
+def test_prompt_revision_changes_generation_identity(monkeypatch):
+    import app.ai_engine.flare_config as config
+    assert PROMPT_VERSION == 'flare-v2'
+    assert SCHEMA_VERSION == 'flare-v1'
+    settings, ai = FlareSettings(), AISettings()
+    current = settings.revision(ai)
+    assert current == settings.revision(ai)
+    monkeypatch.setattr(config, 'PROMPT_VERSION', 'flare-v1')
+    assert current != settings.revision(ai)
 
 
 @pytest.mark.parametrize('finish', ['length','tool_calls','content_filter'])
