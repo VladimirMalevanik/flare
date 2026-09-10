@@ -16,8 +16,13 @@ def main():
     if not args.live:
         parser.error('Pass --live to authorize one real Groq request')
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from app.environment import load_project_dotenv
+    try:
+        load_project_dotenv(allowed_roles={'worker'})
+    except RuntimeError:
+        parser.exit(2, 'FAILED: worker environment is invalid.\n')
     if not os.getenv('GROQ_API_KEY', '').strip():
-        parser.exit(2, 'SKIPPED: backend GROQ_API_KEY is not configured.\n')
+        parser.exit(2, 'SKIPPED: worker GROQ_API_KEY is not configured.\n')
     from app.ai_engine.voice import AudioInput, VoiceError
     from app.ai_engine.voice_config import load_voice_settings
     from app.ai_engine.groq_voice_adapter import GroqVoiceTranscriber

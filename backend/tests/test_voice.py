@@ -120,3 +120,29 @@ def test_environment(monkeypatch):
     monkeypatch.setenv('VOICE_PROVIDER_DEADLINE_SECONDS', 'bad')
     with pytest.raises(ValueError, match='Invalid voice configuration'):
         load_voice_settings()
+
+
+@pytest.mark.parametrize('role,key,expected', [
+    ('worker', 'test-only-key', 'FAILED: local file or configuration is invalid'),
+    ('worker', '', 'SKIPPED: worker GROQ_API_KEY is not configured'),
+    ('api', 'test-only-key', 'FAILED: worker environment is invalid'),
+    ('migration', 'test-only-key', 'FAILED: worker environment is invalid'),
+])
+def test_smoke_initializes_selected_worker_environment(tmp_path, role, key, expected):
+    import os
+    from pathlib import Path
+    import subprocess
+    import sys
+    selected = tmp_path / 'selected.env'
+    selected.write_text(f'FLARE_PROCESS_ROLE={role}\nGROQ_API_KEY={key}\n')
+    env = {**os.environ, 'FLARE_DOTENV_PATH': str(selected)}
+    env.pop('GROQ_API_KEY', None)
+    env.pop('PYTHON_DOTENV_DISABLED', None)
+    script = Path(__file__).resolve().parents[1] / 'scripts/smoke_groq_voice.py'
+    # A missing local file prevents any provider request, even with a test key.
+    result = subprocess.run([sys.executable, str(script), str(tmp_path / 'missing.webm'),
+                             '--content-type', 'audio/webm', '--live'],
+                            env=env, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert expected in result.stderr
+    assert 'test-only-key' not in result.stdout + result.stderr

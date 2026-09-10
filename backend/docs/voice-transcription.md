@@ -75,7 +75,10 @@ node --test frontend/tests/*.test.cjs
 python backend/scripts/smoke_groq_voice.py memo.webm --content-type audio/webm --live
 ```
 
-Smoke requires an explicitly provided backend environment key. It prints transcript
+Smoke loads the existing worker environment before checking the key. An explicit
+`FLARE_DOTENV_PATH` must select a file with `FLARE_PROCESS_ROLE=worker`; API and
+migration files are rejected. API credentials and Compose remain unchanged.
+Smoke requires a locally provided worker key. It prints transcript
 and model to the terminal and never stores them; avoid redirecting sensitive output.
 It is not run by automated tests. The original local file remains owned by the user.
 
