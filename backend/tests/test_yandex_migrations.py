@@ -133,3 +133,28 @@ def test_self_managed_migrations_keep_existing_role_provisioning(monkeypatch, fi
     assert "CREATE ROLE" in sql
     expected_owner = "flare_onboarding" if filename == "0004_auth.py" else "flare_job_executor"
     assert "OWNER TO " + expected_owner in sql
+
+
+@pytest.mark.parametrize('provider,owner', [
+    ('self-managed', 'flare_job_executor'), ('yandex', 'flare_owner'),
+])
+def test_flare_migration_uses_selected_capability_owner(monkeypatch, provider, owner):
+    migration = load_migration('0006_real_flares.py')
+    operation = FakeOp()
+    monkeypatch.setattr(migration, 'op', operation)
+    monkeypatch.setenv('FLARE_DATABASE_PROVIDER', provider)
+    migration.upgrade()
+    sql = '\n'.join(operation.statements)
+    assert 'CREATE ROLE' not in sql
+    if provider == 'yandex':
+        assert 'flare_job_executor' not in sql
+    for fragment in (
+        'GRANT SELECT,INSERT,UPDATE ON public.flare_generation_runs TO ',
+        'CREATE POLICY flare_run_executor ON public.flare_generation_runs TO ',
+        'GRANT SELECT,INSERT ON public.insights,public.insight_sources TO ',
+        'CREATE POLICY flare_writer ON public.insights AS RESTRICTIVE TO ',
+        'CREATE POLICY flare_writer ON public.insight_sources AS RESTRICTIVE TO ',
+    ):
+        assert fragment + owner in sql
+    assert sql.count('OWNER TO ' + owner) == 6
+    assert sql.count('FROM PUBLIC') == 7

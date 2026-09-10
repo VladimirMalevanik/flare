@@ -47,10 +47,12 @@ jobs:
         run: psql -h 127.0.0.1 -U postgres -d flare -v ON_ERROR_STOP=1 -f backend/db/init-role.sql
       - if: matrix.database_provider == 'yandex'
         run: psql -h 127.0.0.1 -U postgres -d flare -v ON_ERROR_STOP=1 -f backend/db/provision-yandex-test.sql
+      - run: alembic -c backend/alembic.ini upgrade 0005
       - run: alembic -c backend/alembic.ini upgrade head
       - run: alembic -c backend/alembic.ini upgrade head
       - if: matrix.database_provider == 'self-managed'
         run: psql -h 127.0.0.1 -U postgres -d flare -v ON_ERROR_STOP=1 -f backend/db/configure-worker.sql
+      - run: python -m pip check
       - run: pytest -q backend/tests
 
   frontend:
@@ -66,6 +68,6 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-      - run: node --test tests/flare-provider.test.cjs
+      - run: node --test tests/*.test.cjs
       - run: npm run lint
       - run: npm run build

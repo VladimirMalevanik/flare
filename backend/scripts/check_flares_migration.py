@@ -18,6 +18,7 @@ from psycopg.conninfo import make_conninfo
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--pg-bin', default='', help='Directory containing initdb, pg_ctl and psql')
+    parser.add_argument('--provider', choices=('self-managed', 'yandex'), default='self-managed')
     args = parser.parse_args()
     backend = Path(__file__).resolve().parents[1]
     def binary(name):
@@ -32,9 +33,16 @@ def main():
              '-o', f"-h '' -k {root}", '-w', 'start'])
         try:
             dsn = make_conninfo(host=root, dbname='postgres', user='flare_upgrade_admin')
-            env = {**os.environ, 'APP_PASSWORD': 'migration-test-only',
-                   'MIGRATION_DATABASE_URL': f'postgresql+psycopg://flare_upgrade_admin@/postgres?host={root}'}
-            run([binary('psql'), dsn, '-v', 'ON_ERROR_STOP=1', '-f', str(backend/'db/init-role.sql')], env=env)
+            owner = 'flare_owner' if args.provider == 'yandex' else 'flare_upgrade_admin'
+            env = {**os.environ, 'FLARE_DATABASE_PROVIDER': args.provider,
+                   'OWNER_PASSWORD': 'migration-test-only', 'APP_PASSWORD': 'migration-test-only',
+                   'WORKER_PASSWORD': 'migration-test-only',
+                   'MIGRATION_DATABASE_URL': f'postgresql+psycopg://{owner}@/postgres?host={root}'}
+            # Only the disposable cluster is selected, never an ambient dotenv file.
+            env.pop('FLARE_DOTENV_PATH', None)
+            env['PYTHON_DOTENV_DISABLED'] = '1'
+            bootstrap = 'provision-yandex-test.sql' if args.provider == 'yandex' else 'init-role.sql'
+            run([binary('psql'), dsn, '-v', 'ON_ERROR_STOP=1', '-f', str(backend/'db'/bootstrap)], env=env)
             migrate = [sys.executable, '-m', 'alembic', '-c', str(backend/'alembic.ini'), 'upgrade']
             run(migrate + ['0005'], env=env)
             wid, doc, version, chunk = [uuid4() for _ in range(4)]
@@ -73,6 +81,14 @@ def main():
                     for (old,),(new,) in zip(old_rows,new_rows):
                         assert all(new[k]==v for k,v in old.items())
                 assert conn.execute('SELECT version_num FROM alembic_version').fetchone() == ('0006',)
+                executor = 'flare_owner' if args.provider == 'yandex' else 'flare_job_executor'
+                owners = conn.execute("""SELECT DISTINCT pg_get_userbyid(proowner)
+                    FROM pg_proc WHERE pronamespace='public'::regnamespace
+                    AND proname LIKE '%flare_generation%'""").fetchall()
+                assert owners == [(executor,)]
+                if args.provider == 'yandex':
+                    assert conn.execute("SELECT count(*) FROM pg_roles WHERE rolname='flare_job_executor'").fetchone() == (0,)
+
                 conn.execute('SET LOCAL ROLE flare_app')
                 conn.execute("SELECT set_config('app.workspace_id',%s,true),set_config('app.user_id','legacy|string-owner',true)", (str(wid),))
                 assert conn.execute('SELECT content FROM chunks').fetchall() == [('Saved evidence',)]
@@ -94,7 +110,7 @@ def main():
                 conn.execute("SELECT public.finish_analysis_job(%s,%s,'{\"observations\":[]}','{}',NULL,NULL)",(job,token))
                 conn.execute('RESET ROLE')
                 assert conn.execute('SELECT count(*) FROM flare_generation_runs WHERE analysis_job_id=%s',(job,)).fetchone()==(1,)
-            print('PASS: 0005 -> 0006; eleven tables preserved; historical ordinals preserved; repeat startup; legacy identity/RLS; old-parent enqueue; atomic handoff')
+            print(f'PASS ({args.provider}): 0005 -> 0006; eleven tables preserved; historical ordinals preserved; repeat startup; legacy identity/RLS; old-parent enqueue; atomic handoff')
         finally:
             run([binary('pg_ctl'), '-D', data, '-m', 'fast', '-w', 'stop'])
 

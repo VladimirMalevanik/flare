@@ -16,7 +16,7 @@ from app.models.flare_runs import FlareRuns
 from app.services.flare_generation import FlareProcessor
 from app.services.item_service import ItemService
 from app.workers.config import WorkerSettings
-from test_analysis_jobs import jobs, admin_url, invalidate
+from test_analysis_jobs import jobs, admin_url, invalidate, executor_role
 
 pytestmark=pytest.mark.integration
 TEXT='Our goal is to ship the MVP this week, but the core analysis flow is unfinished.'
@@ -203,9 +203,10 @@ def test_grants_and_function_security(admin_url):
         for table in ('insights','insight_sources','flare_generation_runs'):
             assert not c.execute("SELECT has_table_privilege('flare_worker',%s,'SELECT,INSERT,UPDATE,DELETE')",(table,)).fetchone()[0]
             assert c.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass',(table,)).fetchone()==(True,True)
-        funcs=c.execute("SELECT p.proname,p.proconfig,r.rolcanlogin,r.rolsuper,r.rolbypassrls FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.prosecdef AND p.proname LIKE '%flare_generation%'").fetchall()
+        funcs=c.execute("SELECT p.proname,p.proconfig,r.rolname,r.rolcanlogin,r.rolsuper,r.rolbypassrls,r.rolcreatedb,r.rolcreaterole FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.prosecdef AND p.proname LIKE '%flare_generation%'").fetchall()
         assert len(funcs)==5
-        assert all(row[1:]==(['search_path=pg_catalog, public, pg_temp'],False,False,False) for row in funcs)
+        owner = executor_role()
+        assert all(row[1:]==(['search_path=pg_catalog, public, pg_temp'],owner,owner == 'flare_owner',False,False,False,False) for row in funcs)
         assert not c.execute("SELECT has_function_privilege('flare_app','public.finish_flare_generation(uuid,uuid,jsonb,jsonb,text,double precision)','EXECUTE')").fetchone()[0]
 
 
@@ -315,8 +316,14 @@ def test_effective_privileges_include_columns_and_public(admin_url):
             LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
             WHERE p.pronamespace='public'::regnamespace AND p.proname LIKE '%flare_generation%'
               AND a.grantee=0 AND a.privilege_type='EXECUTE'""").fetchone() == (0,)
-        assert c.execute("SELECT rolcanlogin,rolsuper,rolbypassrls FROM pg_roles WHERE rolname='flare_job_executor'").fetchone() == (False, False, False)
-        assert c.execute("SELECT count(*) FROM pg_auth_members WHERE roleid='flare_job_executor'::regrole OR member='flare_job_executor'::regrole").fetchone() == (0,)
+        owner = executor_role()
+        assert c.execute("SELECT rolcanlogin,rolsuper,rolbypassrls,rolcreatedb,rolcreaterole FROM pg_roles WHERE rolname=%s", (owner,)).fetchone() == (owner == 'flare_owner', False, False, False, False)
+        assert c.execute("SELECT count(*) FROM pg_auth_members WHERE roleid=%s::regrole OR member=%s::regrole", (owner, owner)).fetchone() == (0,)
+        if owner == 'flare_owner':
+            assert c.execute("SELECT count(*) FROM pg_roles WHERE rolname='flare_job_executor'").fetchone() == (0,)
+        for role in ('flare_worker', 'flare_app'):
+            assert c.execute("SELECT rolsuper,rolbypassrls,rolcreatedb,rolcreaterole FROM pg_roles WHERE rolname=%s", (role,)).fetchone() == (False, False, False, False)
+            assert c.execute("SELECT count(*) FROM pg_auth_members WHERE member=%s::regrole", (role,)).fetchone() == (0,)
 
 
 def test_ordering_timestamp_ties_versions_and_chunks(jobs, admin_url):
@@ -340,3 +347,27 @@ def test_ordering_timestamp_ties_versions_and_chunks(jobs, admin_url):
     assert queue.enqueue(users[0], tuple(sorted(expected)), 'ordering-ties') == parent
     with queue.database.workspace_transaction(users[0]) as c:
         assert [r['chunk_id'] for r in c.execute('SELECT chunk_id FROM analysis_job_sources WHERE job_id=%s ORDER BY ordinal', (parent,))] == expected
+
+
+def test_runtime_connections_cannot_bypass_flare_capabilities(jobs):
+    """Actual login roles, not admin sessions whose privileges could mask failures."""
+    import os
+    queue, worker, _, _ = jobs
+    for role, url in [('flare_app', os.environ['DATABASE_URL']),
+                      ('flare_worker', worker._database_url)]:
+        with psycopg.connect(url) as c:
+            assert c.execute('SELECT session_user,current_user').fetchone() == (role, role)
+            for table in ('insights', 'insight_sources', 'flare_generation_runs'):
+                for statement in (f'INSERT INTO public.{table} DEFAULT VALUES',
+                                  f'UPDATE public.{table} SET workspace_id=workspace_id WHERE false',
+                                  f'DELETE FROM public.{table} WHERE false'):
+                    with pytest.raises(psycopg.errors.InsufficientPrivilege), c.transaction():
+                        c.execute(statement)
+            functions = c.execute("""SELECT p.proname,
+                has_function_privilege(current_user,p.oid,'EXECUTE')
+                FROM pg_proc p WHERE p.pronamespace='public'::regnamespace
+                AND (p.proname LIKE '%flare_generation%' OR p.proname='flare_normalize')""").fetchall()
+            assert len(functions) == 6
+            allowed = {'enqueue_flare_generation', 'claim_flare_generation',
+                       'load_flare_generation', 'finish_flare_generation'} if role == 'flare_worker' else set()
+            assert {name for name, executable in functions if executable} == allowed
