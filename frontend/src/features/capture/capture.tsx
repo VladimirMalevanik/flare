@@ -91,7 +91,6 @@ export function Capture() {
     captureOrbSize === "small" ? 36 : captureOrbSize === "large" ? 52 : 44;
   const [hovered, setHovered] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [hasTranscript, setHasTranscript] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
@@ -102,11 +101,8 @@ export function Capture() {
   const fileInput = useRef<HTMLInputElement>(null);
   const pointerStart = useRef<PointerStart | null>(null);
   const suppressClick = useRef(false);
-  const voice = useVoiceCapture((text) => {
-    setDraft([draft.trim(), text].filter(Boolean).join("\n\n"));
-    setHasTranscript(true);
-  });
-  const voiceIsland = voice.state !== "idle";
+  const voice = useVoiceCapture();
+  const voiceIsland = !["idle", "error", "ready"].includes(voice.state);
   const detectedUrl = detectUrl(draft);
 
   useEffect(() => {
@@ -172,7 +168,6 @@ export function Capture() {
   const attach = (next: File | undefined) => {
     if (!next || voiceIsland || busy) return;
     setFile(next);
-    setHasTranscript(false);
   };
 
   const startOrbDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -235,7 +230,7 @@ export function Capture() {
   };
 
   const submit = async () => {
-    if (busy || voiceIsland || (!draft.trim() && !file)) return;
+    if (busy || voice.recording || voiceIsland || (!draft.trim() && !file)) return;
     setBusy(true);
     setError("");
     try {
@@ -250,26 +245,23 @@ export function Capture() {
               content ||
               `File metadata only: ${file.type || "unknown type"}, ${file.size} bytes.`,
           }
-        : hasTranscript
-          ? { type: "audio", title: "Voice memo", status: "ready", content }
-          : detectedUrl
-            ? {
-                type: "url",
-                title: detectedUrl.hostname,
-                sourceUrl: detectedUrl.href,
-                content,
-              }
-            : {
-                type: "note",
-                title: content.split("\n")[0].slice(0, 100),
-                content,
-              };
+        : detectedUrl
+          ? {
+              type: "url",
+              title: detectedUrl.hostname,
+              sourceUrl: detectedUrl.href,
+              content,
+            }
+          : {
+              type: "note",
+              title: content.split("\n")[0].slice(0, 100),
+              content,
+            };
       const item = await dataProvider.createItem(input);
       refresh();
       setSaved(item.id);
       setDraft("");
       setFile(null);
-      setHasTranscript(false);
       closeCapture();
     } catch (caught) {
       setError(dataErrorMessage(caught, "Capture failed. Try again."));
@@ -355,7 +347,7 @@ export function Capture() {
                 <button
                   className="voice-stop"
                   aria-label="Stop recording"
-                  onClick={voice.transcribe}
+                  onClick={voice.stop}
                 >
                   <span />
                 </button>
@@ -364,9 +356,12 @@ export function Capture() {
               <span className="recording-status">
                 {voice.state === "requesting"
                   ? "Allow microphone…"
-                  : "Transcribing…"}
+                  : "Finishing recording…"}
               </span>
             )}
+            <button className="icon-button" aria-label="Cancel recording" onClick={voice.cancel}>
+              <Icon name="close" />
+            </button>
           </div>
         ) : (
           <section
@@ -428,23 +423,21 @@ export function Capture() {
                   </button>
                 </div>
               )}
-              {hasTranscript && (
-                <p className="capture-hint">
-                  Demo transcript · edit before capturing
-                </p>
-              )}
-              {detectedUrl && !file && !hasTranscript && (
+              {detectedUrl && !file && (
                 <p className="capture-hint accent">
                   URL detected · {detectedUrl.hostname}
                 </p>
               )}
             </div>
+            {voice.recording && (
+              <div className="capture-hint" role="status">
+                Recording ready. Transcription is not available yet. Audio has not been saved.
+                <button className="text-button" onClick={voice.cancel}>Discard recording</button>
+              </div>
+            )}
             {voice.error && (
               <div className="capture-error" role="alert">
                 <p>{voice.error}</p>
-                <button className="text-button" onClick={voice.transcribe}>
-                  Use demo transcript
-                </button>
               </div>
             )}
             {error && (
@@ -464,7 +457,7 @@ export function Capture() {
               <button
                 className="icon-button"
                 aria-label="Start recording"
-                disabled={!!file || busy}
+                disabled={!!file || busy || !!voice.recording}
                 onClick={() => void voice.start()}
               >
                 <Icon name="audio" />
@@ -474,7 +467,7 @@ export function Capture() {
               </span>
               <button
                 className="button primary"
-                disabled={busy || (!draft.trim() && !file)}
+                disabled={busy || !!voice.recording || (!draft.trim() && !file)}
                 onClick={() => void submit()}
               >
                 {busy ? "Saving…" : "Capture"}
