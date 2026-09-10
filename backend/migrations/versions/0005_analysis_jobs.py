@@ -1,4 +1,6 @@
 """Durable analysis jobs and an EXECUTE-only worker capability."""
+import os
+
 from alembic import op
 
 revision = "0005"
@@ -8,11 +10,17 @@ depends_on = None
 
 
 def upgrade():
-    op.execute(r"""
+    yandex = os.getenv("FLARE_DATABASE_PROVIDER", "self-managed") == "yandex"
+    executor_role = "flare_owner" if yandex else "flare_job_executor"
+    role_setup = """
+        GRANT USAGE ON SCHEMA public TO flare_worker;
+    """ if yandex else """
         CREATE ROLE flare_job_executor NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
         CREATE ROLE flare_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
         GRANT USAGE ON SCHEMA public TO flare_job_executor, flare_worker;
-
+    """
+    op.execute(role_setup)
+    schema_sql = r"""
         CREATE TABLE public.analysis_jobs (
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             workspace_id uuid NOT NULL REFERENCES public.workspaces(id),
@@ -80,17 +88,18 @@ def upgrade():
         CREATE POLICY job_source_reader ON public.analysis_job_sources TO flare_app USING (
             EXISTS (SELECT 1 FROM public.analysis_jobs j WHERE j.id = analysis_job_sources.job_id)
         );
-        -- Row locking needs UPDATE on at least one column; only the non-login
-        -- function owner receives it, never the API or worker role.
+        -- Row locking needs UPDATE on at least one column; only the function
+        -- owner receives it, never the API or worker role.
         GRANT SELECT (id, disabled), UPDATE (disabled) ON public.auth_users TO flare_job_executor;
         GRANT SELECT, UPDATE (role) ON public.workspace_members TO flare_job_executor;
         GRANT SELECT, UPDATE (deleted_at) ON public.documents TO flare_job_executor;
         GRANT SELECT ON public.document_versions, public.chunks TO flare_job_executor;
         CREATE POLICY executor_identity ON public.workspace_members AS RESTRICTIVE TO flare_job_executor
             USING (user_id = nullif(current_setting('app.user_id', true),''));
-    """)
+    """.replace("flare_job_executor", executor_role)
+    op.execute(schema_sql)
     for table in ("documents", "document_versions", "chunks"):
-        op.execute(f"""CREATE POLICY executor_member ON public.{table} AS RESTRICTIVE TO flare_job_executor
+        op.execute(f"""CREATE POLICY executor_member ON public.{table} AS RESTRICTIVE TO {executor_role}
             USING (EXISTS (SELECT 1 FROM public.workspace_members m
                 WHERE m.workspace_id = {table}.workspace_id
                 AND m.user_id = nullif(current_setting('app.user_id', true),'')
@@ -262,7 +271,8 @@ def upgrade():
         "finish_analysis_job(uuid,uuid,jsonb,jsonb,text,double precision)": "flare_worker",
     }
     for signature, role in signatures.items():
-        op.execute(f"ALTER FUNCTION public.{signature} OWNER TO flare_job_executor")
+        if not yandex:
+            op.execute(f"ALTER FUNCTION public.{signature} OWNER TO flare_job_executor")
         op.execute(f"REVOKE ALL ON FUNCTION public.{signature} FROM PUBLIC")
         if role:
             op.execute(f"GRANT EXECUTE ON FUNCTION public.{signature} TO {role}")

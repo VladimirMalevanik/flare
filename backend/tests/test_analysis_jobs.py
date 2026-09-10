@@ -8,6 +8,10 @@ import pytest
 pytestmark = pytest.mark.integration
 
 
+def executor_role():
+    return 'flare_owner' if os.getenv('FLARE_DATABASE_PROVIDER') == 'yandex' else 'flare_job_executor'
+
+
 @pytest.fixture
 def admin_url():
     value = os.getenv('TEST_DATABASE_URL')
@@ -18,12 +22,25 @@ def admin_url():
 
 def test_worker_roles_and_function_capabilities(admin_url):
     with psycopg.connect(admin_url) as conn:
-        roles = conn.execute("SELECT rolname,rolsuper,rolbypassrls,rolcanlogin,rolcreaterole FROM pg_roles WHERE rolname IN ('flare_worker','flare_job_executor') ORDER BY rolname").fetchall()
-        assert roles == [('flare_job_executor', False, False, False, False), ('flare_worker', False, False, True, False)]
-        funcs = conn.execute("SELECT p.proname,p.prosecdef,p.proconfig,r.rolname FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE r.rolname='flare_job_executor'").fetchall()
+        owner = executor_role()
+        roles = conn.execute("""SELECT rolname,rolsuper,rolbypassrls,rolcanlogin,rolcreaterole
+                                FROM pg_roles WHERE rolname IN ('flare_worker',%s)
+                                ORDER BY rolname""", (owner,)).fetchall()
+        expected_owner = (owner, False, False, owner == 'flare_owner', False)
+        assert roles == sorted([expected_owner, ('flare_worker', False, False, True, False)])
+        funcs = conn.execute("""SELECT p.proname,p.prosecdef,p.proconfig,r.rolname
+                                FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
+                                WHERE r.rolname=%s AND p.proname=ANY(%s)
+                                ORDER BY p.proname""", (owner, [
+            'analysis_job_check', 'enqueue_analysis_job', 'claim_analysis_job',
+            'load_analysis_evidence', 'finish_analysis_job',
+        ])).fetchall()
         assert len(funcs) == 5
-        assert all(row[1:] == (True, ['search_path=pg_catalog, public, pg_temp'], 'flare_job_executor') for row in funcs)
-        assert conn.execute("SELECT count(*) FROM pg_auth_members WHERE roleid=(SELECT oid FROM pg_roles WHERE rolname='flare_job_executor')").fetchone() == (0,)
+        assert all(row[1:] == (True, ['search_path=pg_catalog, public, pg_temp'], owner) for row in funcs)
+        if owner == 'flare_job_executor':
+            assert conn.execute("SELECT count(*) FROM pg_auth_members WHERE roleid=(SELECT oid FROM pg_roles WHERE rolname=%s)", (owner,)).fetchone() == (0,)
+        else:
+            assert conn.execute("SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database()").fetchone() == ('flare_owner',)
         for role in ('flare_app', 'flare_worker'):
             assert not conn.execute("SELECT has_function_privilege(%s, 'public.analysis_job_check(public.analysis_jobs)', 'EXECUTE')", (role,)).fetchone()[0]
         assert not conn.execute("SELECT has_function_privilege('flare_app', 'public.claim_analysis_job(uuid,integer)', 'EXECUTE')").fetchone()[0]
@@ -35,7 +52,7 @@ def test_force_rls_and_fail_closed_context(admin_url):
     with psycopg.connect(admin_url) as conn:
         for table in ('analysis_jobs','analysis_job_sources','documents','chunks','workspace_members'):
             assert conn.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass', ('public.'+table,)).fetchone() == (True, True)
-        conn.execute('SET LOCAL ROLE flare_job_executor')
+        conn.execute('SET LOCAL ROLE ' + executor_role())
         for table in ('documents','chunks','workspace_members'):
             assert conn.execute(f'SELECT count(*) FROM public.{table}').fetchone() == (0,)
         conn.execute('RESET ROLE')
@@ -392,9 +409,11 @@ def test_force_rls_even_if_executor_owned_tenant_table(jobs, admin_url):
     # Rollback-only ownership change proves FORCE matters, including real rows.
     with psycopg.connect(admin_url) as conn:
         try:
-            conn.execute('GRANT CREATE ON SCHEMA public TO flare_job_executor')
-            conn.execute('ALTER TABLE public.documents OWNER TO flare_job_executor')
-            conn.execute('SET LOCAL ROLE flare_job_executor')
+            owner = executor_role()
+            if owner == 'flare_job_executor':
+                conn.execute('GRANT CREATE ON SCHEMA public TO flare_job_executor')
+                conn.execute('ALTER TABLE public.documents OWNER TO flare_job_executor')
+            conn.execute('SET LOCAL ROLE ' + owner)
             assert conn.execute('SELECT count(*) FROM public.documents').fetchone() == (0,)
             conn.execute("SELECT set_config('app.workspace_id',%s,true),set_config('app.user_id',%s,true)",
                          (str(jobs[2][0].workspace_id), jobs[2][0].user_id))

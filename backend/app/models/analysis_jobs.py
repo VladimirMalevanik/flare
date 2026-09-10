@@ -51,7 +51,14 @@ class WorkerJobs:
         with psycopg.connect(self._database_url, connect_timeout=3, row_factory=dict_row,
                              application_name='flare-analysis-worker',
                              options='-c statement_timeout=10000 -c lock_timeout=5000') as conn:
-            safe = conn.execute("SELECT current_user='flare_worker' AND NOT rolsuper AND NOT rolbypassrls AS safe FROM pg_roles WHERE rolname=current_user").fetchone()
+            safe = conn.execute("""SELECT current_user='flare_worker'
+                                      AND NOT rolsuper AND NOT rolbypassrls
+                                      AND NOT rolcreatedb AND NOT rolcreaterole
+                                      AND NOT EXISTS (
+                                          SELECT 1 FROM pg_auth_members
+                                          WHERE member = pg_roles.oid
+                                      ) AS safe
+                                   FROM pg_roles WHERE rolname=current_user""").fetchone()
             if not safe or not safe['safe']:
                 raise JobUnavailable('Worker requires restricted flare_worker role')
             return conn.execute(sql, params).fetchone()
