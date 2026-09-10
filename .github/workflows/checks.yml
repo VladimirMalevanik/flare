@@ -6,7 +6,16 @@ permissions:
 
 jobs:
   backend:
+    name: backend (${{ matrix.database_provider }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - database_provider: self-managed
+            migration_database_url: postgresql+psycopg://postgres:ci_admin@127.0.0.1:5432/flare
+          - database_provider: yandex
+            migration_database_url: postgresql+psycopg://flare_owner:ci_owner@127.0.0.1:5432/flare
     services:
       postgres:
         image: pgvector/pgvector:pg17
@@ -19,12 +28,14 @@ jobs:
           --health-cmd "pg_isready -U postgres -d flare"
           --health-interval 3s --health-timeout 3s --health-retries 20
     env:
+      FLARE_DATABASE_PROVIDER: ${{ matrix.database_provider }}
+      OWNER_PASSWORD: ci_owner
       APP_PASSWORD: ci_app
       WORKER_PASSWORD: ci_worker
       WORKER_DATABASE_URL: postgresql://flare_worker:ci_worker@127.0.0.1:5432/flare
       PGPASSWORD: ci_admin
       DATABASE_URL: postgresql://flare_app:ci_app@127.0.0.1:5432/flare
-      MIGRATION_DATABASE_URL: postgresql+psycopg://postgres:ci_admin@127.0.0.1:5432/flare
+      MIGRATION_DATABASE_URL: ${{ matrix.migration_database_url }}
       TEST_DATABASE_URL: postgresql://postgres:ci_admin@127.0.0.1:5432/flare
     steps:
       - uses: actions/checkout@v4
@@ -32,10 +43,14 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e 'backend[dev]'
-      - run: psql -h 127.0.0.1 -U postgres -d flare -v ON_ERROR_STOP=1 -f backend/db/init-role.sql
+      - if: matrix.database_provider == 'self-managed'
+        run: psql -h 127.0.0.1 -U postgres -d flare -v ON_ERROR_STOP=1 -f backend/db/init-role.sql
+      - if: matrix.database_provider == 'yandex'
+        run: psql -h 127.0.0.1 -U postgres -d flare -v ON_ERROR_STOP=1 -f backend/db/provision-yandex-test.sql
       - run: alembic -c backend/alembic.ini upgrade head
       - run: alembic -c backend/alembic.ini upgrade head
-      - run: psql -h 127.0.0.1 -U postgres -d flare -v ON_ERROR_STOP=1 -f backend/db/configure-worker.sql
+      - if: matrix.database_provider == 'self-managed'
+        run: psql -h 127.0.0.1 -U postgres -d flare -v ON_ERROR_STOP=1 -f backend/db/configure-worker.sql
       - run: pytest -q backend/tests
 
   frontend:

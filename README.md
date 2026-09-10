@@ -54,12 +54,27 @@ cp .env.example .env
 docker compose up --build
 ```
 
+Compose применяет Alembic отдельным одноразовым сервисом `migrate`; backend
+получает только ограниченный `DATABASE_URL` роли `flare_app`.
+
 После запуска:
 
 - frontend: http://localhost:3000
 - API docs: http://localhost:8000/docs
 - backend health: http://localhost:8000/health
 - database readiness: http://localhost:8000/ready
+
+### PostgreSQL в Yandex Cloud без Docker
+
+Frontend и backend можно запускать локально, а базу хранить в Yandex Managed
+Service for PostgreSQL. Нужны PostgreSQL 17, пользователи `flare_owner`,
+`flare_app`, `flare_worker`, включённый через панель pgvector и TLS-подключение
+к порту `6432`. Секреты разделены между шаблонами
+`.env.yandex.migrate.example`, `.env.yandex.api.example` и
+`.env.yandex.worker.example`; каждый процесс получает свой файл через
+`FLARE_DOTENV_PATH`. Пошаговая настройка, проверка реального managed-кластера и
+откат описаны в
+[инструкции по Yandex Managed PostgreSQL](backend/docs/yandex-managed-postgresql.md).
 
 Docker Compose запускает первый сквозной сценарий с настоящей БД: заметка,
 созданная через Capture, отправляется в FastAPI, атомарно сохраняется в
@@ -98,13 +113,16 @@ npm --prefix frontend run lint
 npm --prefix frontend run build
 ```
 
-GitHub Actions выполняет обе группы проверок. Backend job поднимает настоящий
-PostgreSQL 17 с pgvector и дважды применяет миграции, проверяя повторный запуск.
+GitHub Actions выполняет обе группы проверок. Backend job поднимает PostgreSQL
+17 с pgvector и дважды применяет миграции, проверяя повторный запуск. Режим
+Yandex в CI эмулирует подготовку пользователей и расширения control plane, но
+не заменяет smoke-тест на настоящем Yandex Managed PostgreSQL.
 
 ## Документация
 
 [План реализации MVP](docs/MVP_IMPLEMENTATION_PLAN.md),
 [исследование AI-моделей](docs/AI_MODELS.md),
 [проект БД](backend/docs/database.md),
+[Yandex Managed PostgreSQL](backend/docs/yandex-managed-postgresql.md),
 [слои бэкенда](backend/docs/architecture.md),
 [контракт frontend](frontend/docs/API_CONTRACT.md).

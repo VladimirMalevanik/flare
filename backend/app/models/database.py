@@ -49,6 +49,8 @@ def _connection_is_ready(connection: Connection) -> bool:
     """Validate the runtime role, schema head and fail-closed tenant access."""
     safe_role = connection.execute(
         "SELECT rolname = 'flare_app' AND NOT rolsuper AND NOT rolbypassrls "
+        "AND NOT rolcreatedb AND NOT rolcreaterole AND NOT EXISTS ("
+        "SELECT 1 FROM pg_auth_members WHERE member = pg_roles.oid) "
         "FROM pg_roles WHERE rolname = current_user"
     ).fetchone()
     if safe_role != (True,):
@@ -95,7 +97,8 @@ def _connection_is_ready(connection: Connection) -> bool:
         return False
 
     extension = connection.execute(
-        "SELECT 1 FROM pg_extension WHERE extname = 'vector'"
+        "SELECT 1 FROM pg_extension "
+        "WHERE extname IN ('vector', 'pgvector') AND to_regtype('vector') IS NOT NULL"
     ).fetchone()
     return extension is not None
 
@@ -118,7 +121,11 @@ class Database:
             self._pool.open(wait=True, timeout=10)
             with self._pool.connection() as connection:
                 safe_role = connection.execute(
-                    """SELECT rolname = 'flare_app' AND NOT rolsuper AND NOT rolbypassrls AS safe
+                    """SELECT rolname = 'flare_app' AND NOT rolsuper AND NOT rolbypassrls
+                              AND NOT rolcreatedb AND NOT rolcreaterole
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM pg_auth_members WHERE member = pg_roles.oid
+                              ) AS safe
                        FROM pg_roles WHERE rolname = current_user"""
                 ).fetchone()
                 if safe_role is None or safe_role["safe"] is not True:

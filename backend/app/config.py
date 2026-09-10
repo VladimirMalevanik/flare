@@ -1,14 +1,14 @@
 """Environment-backed application configuration."""
 
-import os
 import math
+import os
 from dataclasses import dataclass, field
-from uuid import UUID
 from urllib.parse import urlsplit
+from uuid import UUID
 
-from dotenv import load_dotenv
+from app.environment import load_project_dotenv
 
-load_dotenv()
+load_project_dotenv(allowed_roles={"api", "worker"})
 
 
 @dataclass

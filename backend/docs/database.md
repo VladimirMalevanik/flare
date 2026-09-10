@@ -64,13 +64,16 @@ with connection.transaction():
 пользователя даже при ошибочно выбранном workspace; запись доступна owner/editor.
 
 API подключается только ролью `flare_app`, без SUPERUSER/BYPASSRLS и владения
-таблицами. Отдельный администратор применяет миграции. `0004` добавляет
-`auth_users` и `auth_sessions`, не переписывая старые membership IDs и миграции.
-Auth-таблицы доступны backend для входа до определения tenant. Новый workspace
-создаётся узкой SECURITY DEFINER-функцией под отдельной NOLOGIN-ролью;
-прямые изменения workspaces/memberships у runtime отозваны. Функция не позволяет
-присоединиться к существующему workspace. Подробности и ограничения —
-в [README](../README.md#сессии-и-авторизация).
+таблицами. Отдельный владелец применяет миграции. `0004` добавляет `auth_users`
+и `auth_sessions`, не переписывая старые membership IDs и миграции. Auth-таблицы
+доступны backend для входа до определения tenant. Новый workspace создаётся
+узкой SECURITY DEFINER-функцией. В self-managed PostgreSQL функцией владеет
+отдельная NOLOGIN-роль; в Yandex Managed PostgreSQL — `flare_owner`, чья строка
+подключения используется только для миграций и не передаётся runtime. Прямые
+изменения workspaces/memberships у runtime отозваны. Функция не позволяет
+присоединиться к существующему workspace. Подробности и ограничения — в
+[README](../README.md#сессии-и-авторизация), настройка облачной базы — в
+[инструкции по Yandex Managed PostgreSQL](yandex-managed-postgresql.md).
 
 ## Границы первого этапа
 

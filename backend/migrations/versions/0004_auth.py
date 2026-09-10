@@ -1,4 +1,6 @@
 """First-party users/sessions and user-aware tenant authorization."""
+import os
+
 from alembic import op
 
 revision = "0004"
@@ -8,6 +10,16 @@ depends_on = None
 
 
 def upgrade():
+    yandex = os.getenv("FLARE_DATABASE_PROVIDER", "self-managed") == "yandex"
+    onboarding_role = "" if yandex else """
+        -- An isolated function owner: no login, inheritance or RLS bypass.
+        CREATE ROLE flare_onboarding NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+        GRANT USAGE ON SCHEMA public TO flare_onboarding;
+        GRANT SELECT, INSERT ON public.workspaces, public.workspace_members TO flare_onboarding;
+    """
+    function_owner = "" if yandex else """
+        ALTER FUNCTION public.provision_workspace(uuid, text) OWNER TO flare_onboarding;
+    """
     op.execute("""
         CREATE TABLE public.auth_users (
             id text PRIMARY KEY,
@@ -31,11 +43,7 @@ def upgrade():
         CREATE INDEX auth_sessions_expiry_idx ON public.auth_sessions(expires_at);
         REVOKE ALL ON public.auth_users, public.auth_sessions FROM PUBLIC;
         GRANT SELECT, INSERT, UPDATE, DELETE ON public.auth_users, public.auth_sessions TO flare_app;
-
-        -- An isolated function owner: no login, inheritance or RLS bypass.
-        CREATE ROLE flare_onboarding NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
-        GRANT USAGE ON SCHEMA public TO flare_onboarding;
-        GRANT SELECT, INSERT ON public.workspaces, public.workspace_members TO flare_onboarding;
+    """ + onboarding_role + """
         CREATE FUNCTION public.provision_workspace(new_id uuid, new_name text)
         RETURNS void LANGUAGE plpgsql SECURITY DEFINER
         SET search_path = pg_catalog, public AS $$
@@ -49,7 +57,7 @@ def upgrade():
                 VALUES (new_id, caller_id, 'owner');
         END;
         $$;
-        ALTER FUNCTION public.provision_workspace(uuid, text) OWNER TO flare_onboarding;
+    """ + function_owner + """
         REVOKE ALL ON FUNCTION public.provision_workspace(uuid, text) FROM PUBLIC;
         GRANT EXECUTE ON FUNCTION public.provision_workspace(uuid, text) TO flare_app;
         REVOKE INSERT, UPDATE, DELETE ON public.workspace_members, public.workspaces FROM flare_app;
