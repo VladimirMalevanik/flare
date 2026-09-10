@@ -16,7 +16,7 @@ from groq import AsyncGroq
 from app.config import AISettings, load_ai_settings
 from app.ai_engine.errors import AnalysisError
 from app.ai_engine.analysis import AnalysisMetadata, AnalysisResult, Evidence, TextAnalysis, validate_evidence
-from app.ai_engine.prompts import PROMPT_VERSION, SCHEMA_VERSION, build_request, request_size_bytes
+from app.ai_engine.prompts import PROMPT_VERSION, SCHEMA_VERSION, build_bounded_request
 
 
 class GroqTextAnalyzer:
@@ -50,24 +50,7 @@ class GroqTextAnalyzer:
         await self._client.close()
 
     def _request(self, evidence: Sequence[Evidence]) -> dict:
-        if not 1 <= len(evidence) <= self.settings.max_sources:
-            raise ValueError('Invalid evidence count')
-        if any(not isinstance(source, Evidence) for source in evidence):
-            raise ValueError('Typed evidence is required')
-        if len({source.source_id for source in evidence}) != len(evidence):
-            raise ValueError('Duplicate evidence source IDs')
-        # Reject oversized content before building a potentially large JSON request.
-        if sum(len(source.content.encode('utf-8')) for source in evidence) > self.settings.max_input_bytes:
-            raise ValueError('AI input size limit exceeded')
-        request = build_request(evidence)
-        request.update(
-            model=self.settings.model, reasoning_effort=self.settings.reasoning_effort,
-            max_completion_tokens=self.settings.max_completion_tokens,
-            include_reasoning=False, stream=False,
-        )
-        if request_size_bytes(request) > self.settings.max_input_bytes:
-            raise ValueError('AI input size limit exceeded')
-        return request
+        return build_bounded_request(evidence, self.settings)
 
     async def analyze(self, evidence: Sequence[Evidence]) -> AnalysisResult:
         started = perf_counter()

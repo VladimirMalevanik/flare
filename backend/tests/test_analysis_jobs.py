@@ -35,7 +35,7 @@ def test_worker_roles_and_function_capabilities(admin_url):
             'analysis_job_check', 'enqueue_analysis_job', 'claim_analysis_job',
             'load_analysis_evidence', 'finish_analysis_job',
         ])).fetchall()
-        assert len(funcs) == 5
+        assert len(funcs) == 6
         assert all(row[1:] == (True, ['search_path=pg_catalog, public, pg_temp'], owner) for row in funcs)
         if owner == 'flare_job_executor':
             assert conn.execute("SELECT count(*) FROM pg_auth_members WHERE roleid=(SELECT oid FROM pg_roles WHERE rolname=%s)", (owner,)).fetchone() == (0,)

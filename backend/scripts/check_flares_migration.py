@@ -15,7 +15,7 @@ import psycopg
 from psycopg.conninfo import make_conninfo
 
 
-def main():
+def main(*, verify_analysis_runs=False):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--pg-bin', default='', help='Directory containing initdb, pg_ctl and psql')
     parser.add_argument('--provider', choices=('self-managed', 'yandex'), default='self-managed')
@@ -71,8 +71,8 @@ def main():
                 conn.execute("SELECT public.finish_analysis_job(%s,%s,'{\"observations\":[]}','{}',NULL,NULL)",claim)
                 conn.execute('RESET ROLE')
                 before = snapshot(conn)
-            run(migrate + ['head'], env=env)
-            run(migrate + ['head'], env=env)
+            run(migrate + ['0006'], env=env)
+            run(migrate + ['0006'], env=env)
             with psycopg.connect(dsn) as conn:
                 after = snapshot(conn)
                 # New nullable columns on legacy insights/sources are additive.
@@ -110,6 +110,20 @@ def main():
                 conn.execute("SELECT public.finish_analysis_job(%s,%s,'{\"observations\":[]}','{}',NULL,NULL)",(job,token))
                 conn.execute('RESET ROLE')
                 assert conn.execute('SELECT count(*) FROM flare_generation_runs WHERE analysis_job_id=%s',(job,)).fetchone()==(1,)
+            if verify_analysis_runs:
+                tables += ('flare_generation_runs',)
+                with psycopg.connect(dsn) as conn:
+                    preserved = snapshot(conn)
+                run(migrate + ['0007'], env=env)
+                run(migrate + ['0007'], env=env)
+                with psycopg.connect(dsn) as conn:
+                    assert snapshot(conn) == preserved
+                    assert conn.execute('SELECT version_num FROM alembic_version').fetchone() == ('0007',)
+                    assert conn.execute('SELECT count(*) FROM analysis_runs').fetchone() == (0,)
+                    owners = conn.execute("SELECT DISTINCT pg_get_userbyid(proowner) FROM pg_proc WHERE proname IN ('start_analysis_run','read_analysis_run')").fetchall()
+                    assert owners == [(executor,)]
+                    assert not conn.execute("SELECT has_table_privilege('flare_worker','analysis_runs','SELECT')").fetchone()[0]
+                print(f'PASS ({args.provider}): 0006 -> 0007; all existing data preserved; repeat upgrade; capability ownership; worker isolation')
             print(f'PASS ({args.provider}): 0005 -> 0006; eleven tables preserved; historical ordinals preserved; repeat startup; legacy identity/RLS; old-parent enqueue; atomic handoff')
         finally:
             run([binary('pg_ctl'), '-D', data, '-m', 'fast', '-w', 'stop'])

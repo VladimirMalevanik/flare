@@ -58,6 +58,18 @@ class AnalysisJobService:
         return self.queue.enqueue(identity, chunks, pipeline_revision(self.ai), self.settings.max_attempts)
 
 
+    def start_run(self, identity: WorkspaceIdentity, key: UUID, generation_revision: str):
+        from app.models.analysis_runs import AnalysisRuns
+        with self.queue.database.workspace_transaction(identity, write=True) as conn:
+            return AnalysisRuns.start(conn, identity, key, self.ai, pipeline_revision(self.ai),
+                                      generation_revision, self.settings.max_attempts)
+
+    def read_run(self, identity: WorkspaceIdentity, run_id: UUID):
+        from app.models.analysis_runs import AnalysisRuns
+        with self.queue.database.workspace_transaction(identity) as conn:
+            return AnalysisRuns.read(conn, run_id)
+
+
 class AnalysisProcessor:
     def __init__(self, jobs: WorkerJobs, analyzer: TextAnalyzer, ai: AISettings,
                  settings: WorkerSettings, *, owner: UUID | None = None):

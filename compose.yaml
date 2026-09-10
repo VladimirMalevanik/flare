@@ -23,6 +23,13 @@ services:
       DATABASE_URL: postgresql://flare_app:${APP_PASSWORD:?Copy .env.example to .env}@db:5432/flare
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       FLARE_ENV: ${FLARE_ENV:-development}
+      LLM_DEFAULT_MODEL: ${LLM_DEFAULT_MODEL:-openai/gpt-oss-20b}
+      LLM_DEFAULT_REASONING_EFFORT: ${LLM_DEFAULT_REASONING_EFFORT:-low}
+      LLM_MAX_SOURCES: ${LLM_MAX_SOURCES:-5}
+      LLM_MAX_INPUT_BYTES: ${LLM_MAX_INPUT_BYTES:-4000}
+      LLM_MAX_COMPLETION_TOKENS: ${LLM_MAX_COMPLETION_TOKENS:-2000}
+      FLARE_MAX_COMPLETION_TOKENS: ${FLARE_MAX_COMPLETION_TOKENS:-1024}
+      FLARE_MAX_REQUEST_BYTES: ${FLARE_MAX_REQUEST_BYTES:-32000}
       SESSION_LIFETIME_SECONDS: ${SESSION_LIFETIME_SECONDS:-604800}
       SESSION_IDLE_SECONDS: ${SESSION_IDLE_SECONDS:-86400}
       FLARE_DEV_MODE: ${FLARE_DEV_MODE:-false}
@@ -50,6 +57,39 @@ services:
       db:
         condition: service_healthy
     restart: "no"
+
+  configure-worker:
+    image: pgvector/pgvector:pg17
+    entrypoint: ["psql", "-h", "db", "-U", "postgres", "-d", "flare", "-v", "ON_ERROR_STOP=1", "-f", "/configure-worker.sql"]
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Copy .env.example to .env}
+      WORKER_PASSWORD: ${WORKER_PASSWORD:?Set WORKER_PASSWORD for the worker role}
+    volumes:
+      - ./backend/db/configure-worker.sql:/configure-worker.sql:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  worker:
+    build: ./backend
+    command: ["python", "-m", "app.workers.analysis_worker"]
+    environment:
+      WORKER_DATABASE_URL: postgresql://flare_worker:${WORKER_PASSWORD:?Set WORKER_PASSWORD for the worker role}@db:5432/flare
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      LLM_DEFAULT_MODEL: ${LLM_DEFAULT_MODEL:-openai/gpt-oss-20b}
+      LLM_DEFAULT_REASONING_EFFORT: ${LLM_DEFAULT_REASONING_EFFORT:-low}
+      LLM_MAX_SOURCES: ${LLM_MAX_SOURCES:-5}
+      LLM_MAX_INPUT_BYTES: ${LLM_MAX_INPUT_BYTES:-4000}
+      LLM_MAX_COMPLETION_TOKENS: ${LLM_MAX_COMPLETION_TOKENS:-2000}
+      FLARE_MAX_COMPLETION_TOKENS: ${FLARE_MAX_COMPLETION_TOKENS:-1024}
+      FLARE_MAX_REQUEST_BYTES: ${FLARE_MAX_REQUEST_BYTES:-32000}
+    depends_on:
+      configure-worker:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+    restart: on-failure
 
   frontend:
     build:

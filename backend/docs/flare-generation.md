@@ -1,8 +1,9 @@
 # Block 4: real Flares
 
 The input is a completed `TextAnalysis` plus the parent's pinned, authorized
-chunks. This stage does not select project history. There is no Analyze endpoint,
-frontend trigger or automatic analysis after Note saving; those belong to Block 5.
+chunks. This stage consumes the parent job snapshot. Block 5 adds explicit Analyze and
+bounded Note selection; saving a Note still does not enqueue analysis.
+See [Analyze flow](analyze.md).
 
 ## Two durable stages
 
