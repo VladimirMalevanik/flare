@@ -11,6 +11,7 @@ from time import perf_counter
 
 import httpx
 import groq
+from app.ai_engine.groq_structured import create_strict_completion
 from groq import AsyncGroq
 
 from app.config import AISettings, load_ai_settings
@@ -65,7 +66,7 @@ class GroqTextAnalyzer:
         raw = None
         try:
             async with asyncio.timeout(self.settings.deadline_seconds):
-                raw = await self._client.chat.completions.with_raw_response.create(**request)
+                raw = await create_strict_completion(self._client, request)
                 response = await raw.parse()
         except (groq.APITimeoutError, TimeoutError):
             failure = AnalysisError('timeout', retryable=True)

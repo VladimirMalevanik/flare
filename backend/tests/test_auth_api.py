@@ -155,3 +155,14 @@ def test_disabled_user_cannot_use_existing_session_or_login(client):
 def test_production_rejects_unsafe_origins(origins):
     with pytest.raises(RuntimeError):
         Settings(database_url='postgresql://unused', cors_origins=origins).validate()
+
+
+@pytest.mark.parametrize('password,status', [('eight123', 201), ('seven12', 422)])
+def test_registration_password_minimum(client, password, status):
+    email = f'{uuid4()}@auth-test.invalid'
+    response = client.post('/auth/register', json={'email': email, 'password': password, 'name': 'Password Test'})
+    assert response.status_code == status
+    if status == 201:
+        assert client.get('/auth/me').status_code == 200
+        client.post('/auth/logout')
+        assert client.post('/auth/login', json={'email': email, 'password': password}).status_code == 200
