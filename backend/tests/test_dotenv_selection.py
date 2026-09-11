@@ -67,6 +67,7 @@ def test_unset_path_preserves_default_discovery(monkeypatch):
 
 def test_application_scrubs_ambient_migration_credentials(monkeypatch):
     monkeypatch.delenv("FLARE_DOTENV_PATH", raising=False)
+    monkeypatch.delenv("FLARE_PROCESS_ROLE", raising=False)
     monkeypatch.setenv("DATABASE_URL", "postgresql://app")
     monkeypatch.setenv("WORKER_DATABASE_URL", "postgresql://worker")
     monkeypatch.setenv("MIGRATION_DATABASE_URL", "postgresql://owner")
@@ -77,3 +78,42 @@ def test_application_scrubs_ambient_migration_credentials(monkeypatch):
     assert environment.os.environ["DATABASE_URL"] == "postgresql://app"
     assert environment.os.environ["WORKER_DATABASE_URL"] == "postgresql://worker"
     assert "MIGRATION_DATABASE_URL" not in environment.os.environ
+
+
+def test_worker_process_scrubs_ambient_github_private_key(monkeypatch, tmp_path: Path):
+    selected = tmp_path / "worker.env"
+    selected.write_text(
+        "FLARE_PROCESS_ROLE=worker\nWORKER_DATABASE_URL=postgresql://worker\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FLARE_DOTENV_PATH", str(selected))
+    monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY", "must-not-reach-worker")
+    monkeypatch.setenv("GITHUB_CLIENT_SECRET", "must-not-reach-worker")
+    # load_project_dotenv removes disallowed variables directly; register the
+    # suite's runtime DSN with monkeypatch so it is restored after this test.
+    if "DATABASE_URL" in environment.os.environ:
+        monkeypatch.setenv("DATABASE_URL", environment.os.environ["DATABASE_URL"])
+
+    environment.load_project_dotenv(allowed_roles={"api", "worker"})
+
+    assert "GITHUB_APP_PRIVATE_KEY" not in environment.os.environ
+    assert "GITHUB_CLIENT_SECRET" not in environment.os.environ
+
+
+def test_default_discovery_uses_explicit_process_role_for_secret_separation(monkeypatch):
+    monkeypatch.delenv("FLARE_DOTENV_PATH", raising=False)
+    monkeypatch.setenv("FLARE_PROCESS_ROLE", "worker")
+    monkeypatch.setenv("WORKER_DATABASE_URL", "postgresql://worker")
+    monkeypatch.setenv("GROQ_API_KEY", "worker-only")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://api")
+    monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY", "api-only")
+    monkeypatch.setenv("GITHUB_CLIENT_SECRET", "api-only")
+    monkeypatch.setattr(environment, "load_dotenv", lambda: None)
+
+    environment.load_project_dotenv(allowed_roles={"api", "worker"})
+
+    assert environment.os.environ["WORKER_DATABASE_URL"] == "postgresql://worker"
+    assert environment.os.environ["GROQ_API_KEY"] == "worker-only"
+    assert "DATABASE_URL" not in environment.os.environ
+    assert "GITHUB_APP_PRIVATE_KEY" not in environment.os.environ
+    assert "GITHUB_CLIENT_SECRET" not in environment.os.environ

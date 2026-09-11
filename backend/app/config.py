@@ -2,6 +2,7 @@
 
 import math
 import os
+import re
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -100,6 +101,51 @@ def load_settings() -> Settings:
 
 
 settings = load_settings()
+
+
+@dataclass(frozen=True)
+class GitHubSettings:
+    app_id: int
+    app_slug: str
+    private_key: str = field(repr=False)
+    frontend_return_url: str = ""
+    client_id: str = ""
+    client_secret: str = field(default="", repr=False)
+    state_ttl_seconds: int = 600
+
+    def validate(self) -> None:
+        if type(self.app_id) is not int or self.app_id <= 0:
+            raise ValueError("GITHUB_APP_ID must be a positive integer")
+        if not re.fullmatch(r"[A-Za-z0-9-]+", self.app_slug):
+            raise ValueError("GITHUB_APP_SLUG is invalid")
+        if "PRIVATE KEY-----" not in self.private_key:
+            raise ValueError("GITHUB_APP_PRIVATE_KEY is invalid")
+        if not self.client_id.strip() or len(self.client_id) > 255:
+            raise ValueError("GITHUB_CLIENT_ID is invalid")
+        if not self.client_secret.strip() or len(self.client_secret) > 255:
+            raise ValueError("GITHUB_CLIENT_SECRET is invalid")
+        parsed = urlsplit(self.frontend_return_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
+            raise ValueError("GITHUB_FRONTEND_RETURN_URL must be an absolute HTTP(S) URL")
+        if type(self.state_ttl_seconds) is not int or not 60 <= self.state_ttl_seconds <= 1800:
+            raise ValueError("GITHUB_STATE_TTL_SECONDS must be between 60 and 1800")
+
+
+def load_github_settings() -> GitHubSettings:
+    try:
+        configured = GitHubSettings(
+            app_id=int(os.getenv("GITHUB_APP_ID", "0")),
+            app_slug=os.getenv("GITHUB_APP_SLUG", ""),
+            private_key=os.getenv("GITHUB_APP_PRIVATE_KEY", "").replace("\\n", "\n"),
+            frontend_return_url=os.getenv("GITHUB_FRONTEND_RETURN_URL", ""),
+            client_id=os.getenv("GITHUB_CLIENT_ID", ""),
+            client_secret=os.getenv("GITHUB_CLIENT_SECRET", ""),
+            state_ttl_seconds=int(os.getenv("GITHUB_STATE_TTL_SECONDS", "600")),
+        )
+        configured.validate()
+        return configured
+    except (TypeError, ValueError):
+        raise ValueError("Invalid GitHub App configuration") from None
 
 
 # AI settings are loaded only by the analysis caller, never during API startup.

@@ -158,3 +158,21 @@ def test_flare_migration_uses_selected_capability_owner(monkeypatch, provider, o
         assert fragment + owner in sql
     assert sql.count('OWNER TO ' + owner) == 6
     assert sql.count('FROM PUBLIC') == 7
+
+
+@pytest.mark.parametrize('provider', ['self-managed', 'yandex'])
+def test_github_migration_is_provider_agnostic_and_keeps_rls(monkeypatch, provider):
+    migration = load_migration('0008_github_connections.py')
+    operation = FakeOp()
+    monkeypatch.setattr(migration, 'op', operation)
+    monkeypatch.setenv('FLARE_DATABASE_PROVIDER', provider)
+    migration.upgrade()
+    sql = '\n'.join(operation.statements)
+    assert 'CREATE ROLE' not in sql
+    assert 'github_connection_states' in sql
+    assert 'github_connections' in sql
+    assert 'authorized_user_id' in sql
+    assert 'authorized_user_login' in sql
+    assert sql.count('ENABLE ROW LEVEL SECURITY') == 2
+    assert sql.count('FORCE ROW LEVEL SECURITY') == 2
+    assert "m.role IN ('owner', 'editor')" in sql

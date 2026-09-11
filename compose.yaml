@@ -21,6 +21,7 @@ services:
     build: ./backend
     environment:
       DATABASE_URL: postgresql://flare_app:${APP_PASSWORD:?Copy .env.example to .env}@db:5432/flare
+      FLARE_PROCESS_ROLE: api
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       FLARE_ENV: ${FLARE_ENV:-development}
       LLM_DEFAULT_MODEL: ${LLM_DEFAULT_MODEL:-openai/gpt-oss-20b}
@@ -32,6 +33,13 @@ services:
       FLARE_MAX_REQUEST_BYTES: ${FLARE_MAX_REQUEST_BYTES:-32000}
       SESSION_LIFETIME_SECONDS: ${SESSION_LIFETIME_SECONDS:-604800}
       SESSION_IDLE_SECONDS: ${SESSION_IDLE_SECONDS:-86400}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_FRONTEND_RETURN_URL: ${GITHUB_FRONTEND_RETURN_URL:-http://localhost:3000/sources}
+      GITHUB_STATE_TTL_SECONDS: ${GITHUB_STATE_TTL_SECONDS:-600}
       FLARE_DEV_MODE: ${FLARE_DEV_MODE:-false}
       FLARE_DEV_WORKSPACE_ID: ${FLARE_DEV_WORKSPACE_ID:-00000000-0000-4000-8000-000000000001}
       FLARE_DEV_USER_ID: ${FLARE_DEV_USER_ID:-local-dev-user}
@@ -52,6 +60,7 @@ services:
     command: ["alembic", "upgrade", "head"]
     environment:
       FLARE_DATABASE_PROVIDER: self-managed
+      FLARE_PROCESS_ROLE: migration
       MIGRATION_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD:?Copy .env.example to .env}@db:5432/flare
     depends_on:
       db:
@@ -76,6 +85,7 @@ services:
     command: ["python", "-m", "app.workers.analysis_worker"]
     environment:
       WORKER_DATABASE_URL: postgresql://flare_worker:${WORKER_PASSWORD:?Set WORKER_PASSWORD for the worker role}@db:5432/flare
+      FLARE_PROCESS_ROLE: worker
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       LLM_DEFAULT_MODEL: ${LLM_DEFAULT_MODEL:-openai/gpt-oss-20b}
       LLM_DEFAULT_REASONING_EFFORT: ${LLM_DEFAULT_REASONING_EFFORT:-low}

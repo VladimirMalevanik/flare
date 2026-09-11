@@ -16,6 +16,7 @@ dependencies = [
   "python-dotenv>=1.0,<2",
   "pwdlib[argon2]>=0.3,<1",
   "groq>=1.7,<2",
+  "PyJWT[crypto]>=2.10,<3",
 ]
 
 [project.optional-dependencies]

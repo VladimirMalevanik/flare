@@ -56,9 +56,25 @@ export interface Source {
   scope: string;
   description: string;
   channels: string[];
-  status: "connected" | "syncing" | "disconnected" | "ready" | "coming-soon";
+  status: "connected" | "syncing" | "disconnected" | "error" | "ready" | "coming-soon";
   updated: string;
+  accountLogin?: string;
+  repository?: GitHubRepository;
+  error?: string;
   providers?: SourceProvider[];
+}
+export interface GitHubRepository {
+  id: number;
+  owner: string;
+  name: string;
+  fullName: string;
+  private: boolean;
+  htmlUrl: string;
+}
+export interface GitHubConnection {
+  status: "disconnected" | "pending" | "connected";
+  accountLogin?: string | null;
+  repository?: GitHubRepository | null;
 }
 export interface SourceProvider {
   id: string;

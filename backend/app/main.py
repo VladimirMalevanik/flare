@@ -12,6 +12,7 @@ from app.api.routes import router
 from app.api.auth import router as auth_router
 from app.api.flares import router as flares_router
 from app.api.analysis import router as analysis_router
+from app.api.github import router as github_router
 from app.config import Settings, settings
 from app.models.database import Database, WorkspaceIdentity
 
@@ -63,7 +64,7 @@ def create_app(
             if request.headers.get("origin") not in configured.cors_origins:
                 return JSONResponse({"detail": "Request origin is not allowed"}, status_code=403)
         response = await call_next(request)
-        if request.url.path.startswith(("/auth", "/items", "/flares", "/analyze", "/analysis-runs")):
+        if request.url.path.startswith(("/auth", "/items", "/flares", "/analyze", "/analysis-runs", "/integrations")):
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -78,6 +79,7 @@ def create_app(
     application.include_router(auth_router)
     application.include_router(flares_router)
     application.include_router(analysis_router)
+    application.include_router(github_router)
     application.include_router(router)
     return application
 

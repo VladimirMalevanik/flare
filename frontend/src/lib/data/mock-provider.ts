@@ -7,7 +7,7 @@ import { seedSources } from "@/mocks/sources";
 import { readLocal, writeLocal } from "@/lib/storage/preferences";
 import type { Source } from "./types";
 import type { FlareDataProvider } from "./provider";
-import type { AnalysisRun, CreateItemInput, Insight, Item, ListItemOptions } from "./types";
+import type { AnalysisRun, CreateItemInput, GitHubConnection, GitHubRepository, Insight, Item, ListItemOptions } from "./types";
 const STORAGE_KEY = "flare-user-items-v1";
 const DELETED_ITEMS_KEY = "flare-deleted-items-v1";
 const LEGACY_DEMO_SOURCE_IDS = new Set([
@@ -101,6 +101,19 @@ export class MockDataProvider implements FlareDataProvider {
     writeLocal("flare-sources-v1", sources);
     return source;
   }
+  async getGitHubConnection(): Promise<GitHubConnection> {
+    return { status: "disconnected" };
+  }
+  async startGitHubConnection(): Promise<string> {
+    throw new Error("GitHub connection requires the Flare API.");
+  }
+  async listGitHubRepositories(): Promise<GitHubRepository[]> {
+    return [];
+  }
+  async selectGitHubRepository(): Promise<GitHubConnection> {
+    throw new Error("GitHub connection requires the Flare API.");
+  }
+  async disconnectGitHub(): Promise<void> {}
   async listItems(options: ListItemOptions = {}): Promise<Item[]> {
     const query = options.query?.toLowerCase().trim() ?? "";
     const deleted = new Set(getDeletedItemIds());
