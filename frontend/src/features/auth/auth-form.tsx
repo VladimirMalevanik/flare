@@ -36,8 +36,8 @@ export function AuthForm({ register = false }: { register?: boolean }) {
         <form onSubmit={submit} className="auth-form" aria-busy={pending}>
           {register && <label>Full name<input name="name" autoComplete="name" required maxLength={100} disabled={pending} /></label>}
           <label>Email<input name="email" type="email" autoComplete="username" required maxLength={254} disabled={pending} /></label>
-          <label>Password<input name="password" type="password" autoComplete={register ? "new-password" : "current-password"} minLength={register ? 12 : 1} maxLength={128} required disabled={pending} aria-describedby={register ? "password-help" : undefined} /></label>
-          {register && <p id="password-help" className="muted">Use at least 12 characters.</p>}
+          <label>Password<input name="password" type="password" autoComplete={register ? "new-password" : "current-password"} minLength={register ? 8 : 1} maxLength={128} required disabled={pending} aria-describedby={register ? "password-help" : undefined} /></label>
+          {register && <p id="password-help" className="muted">Use at least 8 characters.</p>}
           {error && <p className="auth-error" role="alert">{error}</p>}
           <button className="button primary" disabled={pending}>{pending ? "Please wait…" : register ? "Create account" : "Sign in"}</button>
         </form>

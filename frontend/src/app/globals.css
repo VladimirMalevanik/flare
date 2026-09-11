@@ -876,9 +876,6 @@ blockquote {
 .waveform i:nth-child(n + 8) {
   background: var(--line);
 }
-[data-theme="dark"] .vault-grid:not(.list-view) .memory-card:first-child {
-  grid-column: span 2;
-}
 .list-view {
   grid-template-columns: 1fr;
 }
@@ -907,7 +904,7 @@ blockquote {
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
-.source-group-title:first-of-type {
+.source-group:first-of-type .source-group-title {
   margin-top: 28px;
 }
 .source-card {
@@ -921,7 +918,7 @@ blockquote {
   gap: 12px;
   align-items: flex-start;
 }
-.source-card h2 {
+.source-card h3 {
   font-size: 18px;
 }
 .source-card header p {
@@ -1491,9 +1488,6 @@ blockquote {
   }
   .memory-card {
     min-height: 240px;
-  }
-  [data-theme="dark"] .vault-grid:not(.list-view) .memory-card:first-child {
-    grid-column: auto;
   }
   .vault-toolbar {
     flex-wrap: wrap;

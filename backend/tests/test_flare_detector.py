@@ -141,7 +141,7 @@ def test_support_prompt_contract_and_unchanged_schema():
     assert 'fact/decision/intention/problem/entity are a separate taxonomy and are forbidden in supports' in prompt
     assert 'semantic role of the quoted evidence for the Flare, not the observation category' in prompt
     assert 'A decision quote may support "commitment" and/or "constraint" only when semantically justified' in prompt
-    assert 'A current state/problem/plan quote involved in a contradiction may support "state"/"conflict" only when semantically justified' in prompt
+    assert 'A current state/problem/plan quote involved in a contradiction may support both "state" and "conflict" only when semantically justified' in prompt
     assert 'Never output "decision", "problem", "fact", "intention", or "entity" inside supports' in prompt
 
 
@@ -155,12 +155,12 @@ def test_observation_categories_still_rejected_as_supports(category):
 
 def test_prompt_revision_changes_generation_identity(monkeypatch):
     import app.ai_engine.flare_config as config
-    assert PROMPT_VERSION == 'flare-v2'
+    assert PROMPT_VERSION == 'flare-v3'
     assert SCHEMA_VERSION == 'flare-v1'
     settings, ai = FlareSettings(), AISettings()
     current = settings.revision(ai)
     assert current == settings.revision(ai)
-    monkeypatch.setattr(config, 'PROMPT_VERSION', 'flare-v1')
+    monkeypatch.setattr(config, 'PROMPT_VERSION', 'flare-v2')
     assert current != settings.revision(ai)
 
 
@@ -319,3 +319,14 @@ def test_generic_team_anchor_cannot_link_unrelated_trajectory():
         ref['quote'] = source.content
     c['action'] = 'Repair the team coffee machine.'
     assert validated([c], sources).flares == []
+
+
+def test_support_arrays_and_final_allowlist_check():
+    prompt = ' '.join(SYSTEM_PROMPT.split())
+    assert '\"supports\": [\"commitment\", \"constraint\"]' in prompt
+    assert '\"supports\": [\"state\", \"conflict\"]' in prompt
+    assert 'not category conversions' in prompt
+    assert 'check every evidence.supports member against this exact allowlist' in prompt
+    assert 'Never copy analysis.observations[].category into supports' in prompt
+    assert 'Do not output combined labels or any other string' in prompt
+    assert 'omit any candidate left without sufficient evidence; zero Flares is valid' in prompt

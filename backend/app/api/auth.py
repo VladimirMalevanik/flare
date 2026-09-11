@@ -26,7 +26,7 @@ class LoginRequest(BaseModel):
 
 
 class RegisterRequest(LoginRequest):
-    password: str = Field(min_length=12, max_length=128)
+    password: str = Field(min_length=8, max_length=128)
     name: str = Field(min_length=1, max_length=100)
 
     @field_validator('name')

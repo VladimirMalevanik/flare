@@ -1,12 +1,12 @@
 import type { Source } from "@/lib/data/types";
 export const seedSources: Source[] = [
   {
-    id: "manual-capture", name: "Manual capture", scope: "Notes, links, and files",
-    description: "Add project context directly from the Flare orb.", channels: ["Notes", "Links", "Files"], status: "ready", updated: "Ready to use",
+    id: "manual-capture", name: "Manual capture", scope: "Notes only",
+    description: "Add project context directly from the Flare orb.", channels: ["Notes"], status: "ready", updated: "Ready to use",
   },
   {
     id: "voice", name: "Voice", scope: "Voice memos",
-    description: "Voice transcription and API persistence are planned after MVP.", channels: [], status: "coming-soon", updated: "Coming soon",
+    description: "Microphone recording is available in Capture. Transcription and saving are coming soon.", channels: [], status: "coming-soon", updated: "Coming soon",
   },
   {
     id: "obsidian", name: "Obsidian import", scope: "One-time onboarding import",

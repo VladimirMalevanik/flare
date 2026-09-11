@@ -25,15 +25,6 @@ type PointerStart = {
   moved: boolean;
 };
 
-function detectUrl(text: string) {
-  try {
-    const url = new URL(text.trim());
-    return ["http:", "https:"].includes(url.protocol) ? url : null;
-  } catch {
-    return null;
-  }
-}
-
 function elapsed(seconds: number) {
   return `${Math.floor(seconds / 60)
     .toString()
@@ -90,20 +81,16 @@ export function Capture() {
   const orbSize =
     captureOrbSize === "small" ? 36 : captureOrbSize === "large" ? 52 : 44;
   const [hovered, setHovered] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
-  const [dragging, setDragging] = useState(false);
   const [orbDragging, setOrbDragging] = useState(false);
   const [orbPosition, setOrbPosition] = useState<OrbPosition | null>(null);
   const island = useRef<HTMLDivElement>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
   const pointerStart = useRef<PointerStart | null>(null);
   const suppressClick = useRef(false);
   const voice = useVoiceCapture();
   const voiceIsland = !["idle", "error", "ready"].includes(voice.state);
-  const detectedUrl = detectUrl(draft);
 
   useEffect(() => {
     const savedPosition = readLocal<Partial<OrbPosition> | null>(
@@ -135,7 +122,6 @@ export function Capture() {
   const close = useCallback(() => {
     if (busy) return;
     voice.cancel();
-    setDragging(false);
     setHovered(false);
     closeCapture();
   }, [busy, closeCapture, voice]);
@@ -164,11 +150,6 @@ export function Capture() {
     document.addEventListener("pointerdown", outside);
     return () => document.removeEventListener("pointerdown", outside);
   }, [captureOpen, close]);
-
-  const attach = (next: File | undefined) => {
-    if (!next || voiceIsland || busy) return;
-    setFile(next);
-  };
 
   const startOrbDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (event.button !== 0 && event.pointerType !== "touch") return;
@@ -230,38 +211,20 @@ export function Capture() {
   };
 
   const submit = async () => {
-    if (busy || voice.recording || voiceIsland || (!draft.trim() && !file)) return;
+    if (busy || voice.recording || voiceIsland || !draft.trim()) return;
     setBusy(true);
     setError("");
     try {
       const content = draft.trim();
-      const input: CreateItemInput = file
-        ? {
-            type: "file",
-            fileName: file.name,
-            fileSize: file.size,
-            fileType: file.type,
-            content:
-              content ||
-              `File metadata only: ${file.type || "unknown type"}, ${file.size} bytes.`,
-          }
-        : detectedUrl
-          ? {
-              type: "url",
-              title: detectedUrl.hostname,
-              sourceUrl: detectedUrl.href,
-              content,
-            }
-          : {
-              type: "note",
-              title: content.split("\n")[0].slice(0, 100),
-              content,
-            };
+      const input: CreateItemInput = {
+        type: "note",
+        title: content.split("\n")[0].slice(0, 100),
+        content,
+      };
       const item = await dataProvider.createItem(input);
       refresh();
       setSaved(item.id);
       setDraft("");
-      setFile(null);
       closeCapture();
     } catch (caught) {
       setError(dataErrorMessage(caught, "Capture failed. Try again."));
@@ -286,7 +249,7 @@ export function Capture() {
     <>
       <div
         ref={island}
-        className={`flare-capture orb-size-${captureOrbSize} flare-capture--${stage} ${dragging ? "is-dragging" : ""} ${orbDragging ? "is-orb-dragging" : ""}`}
+        className={`flare-capture orb-size-${captureOrbSize} flare-capture--${stage} ${orbDragging ? "is-orb-dragging" : ""}`}
         data-capture-state={stage}
         style={
           displayPosition
@@ -371,30 +334,27 @@ export function Capture() {
           >
             <div
               className="capture-dropzone"
-              onDragOver={(event) => {
-                event.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={() => setDragging(false)}
+              onDragOver={(event) => { event.preventDefault(); }}
               onDrop={(event) => {
-                event.preventDefault();
-                setDragging(false);
-                attach(event.dataTransfer.files[0]);
+                if (event.dataTransfer.files.length) {
+                  event.preventDefault();
+                  setError("File capture is coming soon. Paste text to save a Note.");
+                }
               }}
             >
               <textarea
                 autoFocus
                 aria-label="Capture content"
-                placeholder="Type or paste anything…"
+                placeholder="Type or paste a Note…"
                 rows={3}
                 value={draft}
                 disabled={busy}
                 onChange={(event) => setDraft(event.target.value)}
                 onPaste={(event) => {
                   const pastedFile = event.clipboardData.files[0];
-                  if (pastedFile) {
+                  if (pastedFile && !event.clipboardData.getData("text/plain")) {
                     event.preventDefault();
-                    attach(pastedFile);
+                    setError("File capture is coming soon. Paste text to save a Note.");
                   }
                 }}
                 onKeyDown={(event) => {
@@ -407,27 +367,6 @@ export function Capture() {
                   }
                 }}
               />
-              {file && (
-                <div className="attachment">
-                  <Icon name="file" />
-                  <span>
-                    {file.name} · {(file.size / 1024).toFixed(1)} KB
-                  </span>
-                  <button
-                    className="icon-button"
-                    aria-label="Remove attachment"
-                    disabled={busy}
-                    onClick={() => setFile(null)}
-                  >
-                    <Icon name="close" />
-                  </button>
-                </div>
-              )}
-              {detectedUrl && !file && (
-                <p className="capture-hint accent">
-                  URL detected · {detectedUrl.hostname}
-                </p>
-              )}
             </div>
             {voice.recording && (
               <div className="capture-hint" role="status">
@@ -448,26 +387,26 @@ export function Capture() {
             <footer className="capture-actions">
               <button
                 className="icon-button"
-                aria-label="Add file"
-                disabled={busy}
-                onClick={() => fileInput.current?.click()}
+                aria-label="File capture — Coming soon"
+                title="File capture — Coming soon"
+                disabled
               >
                 <Icon name="file" />
               </button>
               <button
                 className="icon-button"
                 aria-label="Start recording"
-                disabled={!!file || busy || !!voice.recording}
+                disabled={busy || !!voice.recording}
                 onClick={() => void voice.start()}
               >
                 <Icon name="audio" />
               </button>
               <span className="capture-drop-hint">
-                {dragging ? "Drop to attach" : "Drop a file here"}
+                Files coming soon
               </span>
               <button
                 className="button primary"
-                disabled={busy || !!voice.recording || (!draft.trim() && !file)}
+                disabled={busy || !!voice.recording || !draft.trim()}
                 onClick={() => void submit()}
               >
                 {busy ? "Saving…" : "Capture"}
@@ -485,17 +424,6 @@ export function Capture() {
           </section>
         )}
       </div>
-      <input
-        ref={fileInput}
-        type="file"
-        className="sr-only"
-        tabIndex={-1}
-        aria-label="Capture file"
-        onChange={(event) => {
-          attach(event.target.files?.[0]);
-          event.target.value = "";
-        }}
-      />
       {saved && (
         <div className="toast" role="status">
           Captured in Vault{" "}
