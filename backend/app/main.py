@@ -14,18 +14,31 @@ from app.api.flares import router as flares_router
 from app.api.analysis import router as analysis_router
 from app.config import Settings, settings
 from app.models.database import Database, WorkspaceIdentity
-
+from app.services.email import EmailSender
+from app.services.smtp_email import LoggingEmailSender, SmtpEmailSender
 
 def create_app(
     application_settings: Settings | None = None,
     *,
     database: Database | None = None,
+    email_sender: EmailSender | None = None,
 ) -> FastAPI:
     configured = application_settings or settings
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         configured.validate()
+        if email_sender is not None:
+            application.state.email_sender = email_sender
+        elif not configured.email_verification_required:
+            application.state.email_sender = None
+        elif configured.smtp_url:
+            application.state.email_sender = SmtpEmailSender(
+                configured.smtp_url, configured.email_from or ""
+            )
+        else:
+            # validate() limits this sender to explicit localhost development/test.
+            application.state.email_sender = LoggingEmailSender()
         managed_database = database
         owns_database = managed_database is None
         database_opened = False
@@ -50,6 +63,7 @@ def create_app(
     application = FastAPI(title="Flare API", version="0.2.0", lifespan=lifespan)
     application.state.settings = configured
     application.state.database = database
+    application.state.email_sender = email_sender
     application.add_middleware(
         CORSMiddleware,
         allow_origins=configured.cors_origins,

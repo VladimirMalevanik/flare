@@ -7,7 +7,15 @@ from dotenv import dotenv_values, load_dotenv
 
 
 _ROLE_SECRETS = {
-    "api": {"DATABASE_URL"},
+    "api": {
+        "DATABASE_URL",
+        "EMAIL_VERIFICATION_REQUIRED",
+        "EMAIL_VERIFICATION_TTL_SECONDS",
+        "EMAIL_VERIFICATION_RESEND_SECONDS",
+        "APP_PUBLIC_URL",
+        "SMTP_URL",
+        "EMAIL_FROM",
+    },
     "worker": {"WORKER_DATABASE_URL", "GROQ_API_KEY"},
     "migration": {"MIGRATION_DATABASE_URL"},
 }
@@ -20,6 +28,12 @@ _PROCESS_SECRETS = {
     "APP_PASSWORD",
     "WORKER_PASSWORD",
     "GROQ_API_KEY",
+    "EMAIL_VERIFICATION_REQUIRED",
+    "EMAIL_VERIFICATION_TTL_SECONDS",
+    "EMAIL_VERIFICATION_RESEND_SECONDS",
+    "APP_PUBLIC_URL",
+    "SMTP_URL",
+    "EMAIL_FROM",
 }
 
 
@@ -29,8 +43,12 @@ def load_project_dotenv(*, allowed_roles: set[str] | None = None) -> None:
     if not configured_path:
         load_dotenv()
         if allowed_roles is not None:
+            process_role = os.getenv("FLARE_PROCESS_ROLE")
+            selected_roles = (
+                {process_role} if process_role in allowed_roles else allowed_roles
+            )
             allowed_secrets = set().union(
-                *(_ROLE_SECRETS[role] for role in allowed_roles)
+                *(_ROLE_SECRETS[role] for role in selected_roles)
             )
             for variable in _PROCESS_SECRETS - allowed_secrets:
                 os.environ.pop(variable, None)

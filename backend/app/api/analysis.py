@@ -6,7 +6,7 @@ import psycopg
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.api.auth import current_user
+from app.api.auth import verified_user
 from app.api.routes import _database
 from app.config import load_ai_settings
 from app.ai_engine.flare_config import load_flare_settings
@@ -33,10 +33,13 @@ class RunResponse(BaseModel):
     error: str | None = None
 
 
-def cookie_user(request: Request) -> AuthenticatedUser:
+def cookie_user(
+    request: Request,
+    user: Annotated[AuthenticatedUser, Depends(verified_user)],
+) -> AuthenticatedUser:
     if not request.cookies.get(request.app.state.settings.session_cookie_name):
         raise HTTPException(401, 'Authentication required')
-    return current_user(request)
+    return user
 
 
 def service(database: Annotated[Database, Depends(_database)]):

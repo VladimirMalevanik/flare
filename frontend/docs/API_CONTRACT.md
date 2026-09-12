@@ -78,12 +78,16 @@ API mode never substitutes demo results.
 
 Browser requests use same-origin `/api`, rewritten to FastAPI; server session
 bootstrap uses `API_INTERNAL_URL`. Set that URL at both build and runtime.
-`POST /auth/register` accepts `{email, password, name}`; `POST /auth/login`
-accepts `{email, password}`. Both set an HttpOnly session cookie.
-`GET /auth/me` returns `{user: {id, email, name}, workspace: {id, name, role}}`;
+`POST /auth/register` accepts `{email, password, name}` and may set a limited
+HttpOnly session while email verification is pending. `POST /auth/login`
+accepts `{email, password}` and returns the stable code
+`email_verification_required` for a correct but unverified account.
+`POST /auth/verify-email` consumes one token; `POST /auth/resend-verification`
+always returns a neutral 202. `GET /auth/me` returns
+`{user: {id, email, name, emailVerified}, workspace: {id, name, role}}`;
 `POST /auth/logout` revokes the session. Prefix these paths with `/api` in browsers.
 State-changing requests require an allowed Origin and `credentials: "include"`.
 401 redirects to login; 403 represents denied membership/role or Origin.
-All item routes require a session. Identity comes from the backend, never
+Items, Flares and Analyze require a verified session. Identity comes from the backend, never
 localStorage or arbitrary headers. One initial workspace is supported; there
 is no switching UI. Settings displays server profile fields read-only.

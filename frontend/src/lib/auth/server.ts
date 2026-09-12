@@ -15,5 +15,7 @@ export async function requireSession(): Promise<Session | null> {
   if (response.status === 401) redirect("/login");
   if (response.status === 403) redirect("/login?reason=membership");
   if (!response.ok) throw new Error("Authentication service is unavailable. Please retry.");
-  return response.json() as Promise<Session>;
+  const session = (await response.json()) as Session;
+  if (!session.user.emailVerified) redirect("/verify-email?pending=1");
+  return session;
 }

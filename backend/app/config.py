@@ -23,6 +23,17 @@ class Settings:
     dev_user_id: str | None = None
     dev_workspace_name: str | None = None
 
+    email_verification_required: bool | None = None
+    email_verification_ttl_seconds: int = 86_400
+    email_verification_resend_seconds: int = 60
+    app_public_url: str | None = None
+    smtp_url: str | None = field(default=None, repr=False)
+    email_from: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.email_verification_required is None:
+            self.email_verification_required = self.environment == "production"
+
     @property
     def secure_cookies(self) -> bool:
         return self.environment == "production"
@@ -48,6 +59,37 @@ class Settings:
                 raise RuntimeError("Production frontend origins must use HTTPS")
         if self.secure_cookies and (not self.database_url or not self.cors_origins):
             raise RuntimeError("Production requires DATABASE_URL and CORS_ORIGINS")
+        if self.email_verification_ttl_seconds <= 0:
+            raise RuntimeError("EMAIL_VERIFICATION_TTL_SECONDS must be positive")
+        if self.email_verification_resend_seconds <= 0:
+            raise RuntimeError("EMAIL_VERIFICATION_RESEND_SECONDS must be positive")
+        if self.email_verification_required:
+            if not self.app_public_url:
+                raise RuntimeError("Email verification requires APP_PUBLIC_URL")
+            public_url = urlsplit(self.app_public_url)
+            if (
+                public_url.scheme not in {"http", "https"}
+                or not public_url.netloc
+                or public_url.path not in {"", "/"}
+                or public_url.query
+                or public_url.fragment
+                or public_url.username
+                or public_url.password
+            ):
+                raise RuntimeError("APP_PUBLIC_URL must be an HTTP(S) origin")
+            if self.secure_cookies:
+                if (
+                    public_url.scheme != "https"
+                    or not self.smtp_url
+                    or not self.email_from
+                ):
+                    raise RuntimeError(
+                        "Production email verification requires an HTTPS APP_PUBLIC_URL, SMTP_URL and EMAIL_FROM"
+                    )
+            elif public_url.hostname not in {"localhost", "127.0.0.1", "::1"}:
+                raise RuntimeError(
+                    "Development email verification requires a localhost APP_PUBLIC_URL"
+                )
 
     def require_dev_identity(self) -> tuple[UUID, str, str]:
         """Return the server-owned development identity or fail closed."""
@@ -81,11 +123,22 @@ def _optional_uuid(name: str) -> UUID | None:
         raise RuntimeError(f"{name} must be a UUID") from error
 
 
+def _optional_bool(name: str) -> bool | None:
+    value = os.getenv(name)
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized not in {"true", "false"}:
+        raise RuntimeError(f"{name} must be true or false")
+    return normalized == "true"
+
+
 def load_settings() -> Settings:
     origins = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+    environment = os.getenv("FLARE_ENV", "production")
     configured = Settings(
         database_url=os.getenv("DATABASE_URL"),
-        environment=os.getenv("FLARE_ENV", "production"),
+        environment=environment,
         session_lifetime_seconds=int(os.getenv("SESSION_LIFETIME_SECONDS", "604800")),
         session_idle_seconds=int(os.getenv("SESSION_IDLE_SECONDS", "86400")),
         cors_origins=[origin.strip() for origin in origins.split(",") if origin.strip()],
@@ -93,6 +146,12 @@ def load_settings() -> Settings:
         dev_workspace_id=_optional_uuid("FLARE_DEV_WORKSPACE_ID"),
         dev_user_id=os.getenv("FLARE_DEV_USER_ID"),
         dev_workspace_name=os.getenv("FLARE_DEV_WORKSPACE_NAME"),
+        email_verification_required=_optional_bool("EMAIL_VERIFICATION_REQUIRED"),
+        email_verification_ttl_seconds=int(os.getenv("EMAIL_VERIFICATION_TTL_SECONDS", "86400")),
+        email_verification_resend_seconds=int(os.getenv("EMAIL_VERIFICATION_RESEND_SECONDS", "60")),
+        app_public_url=os.getenv("APP_PUBLIC_URL"),
+        smtp_url=os.getenv("SMTP_URL"),
+        email_from=os.getenv("EMAIL_FROM"),
     )
     if configured.dev_mode:
         configured.require_dev_identity()

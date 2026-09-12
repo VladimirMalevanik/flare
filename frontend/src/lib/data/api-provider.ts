@@ -113,18 +113,31 @@ function mapFlare(value: unknown): Insight {
   };
 }
 
-async function errorMessage(response: Response): Promise<string> {
+async function responseError(
+  response: Response,
+): Promise<{ message: string; code?: string }> {
   try {
     const body: unknown = await response.json();
     if (typeof body === "object" && body !== null) {
       const record = body as Record<string, unknown>;
-      if (typeof record.detail === "string") return record.detail;
-      if (typeof record.message === "string") return record.message;
+      if (typeof record.detail === "string") return { message: record.detail };
+      if (typeof record.detail === "object" && record.detail !== null) {
+        const detail = record.detail as Record<string, unknown>;
+        if (typeof detail.message === "string") {
+          return {
+            message: detail.message,
+            ...(typeof detail.code === "string" ? { code: detail.code } : {}),
+          };
+        }
+      }
+      if (typeof record.message === "string") return { message: record.message };
     }
   } catch {
     // The status text below is enough for non-JSON errors.
   }
-  return response.statusText || `Request failed with status ${response.status}`;
+  return {
+    message: response.statusText || `Request failed with status ${response.status}`,
+  };
 }
 
 function mapAnalysisRun(value: unknown): AnalysisRun {
@@ -177,7 +190,15 @@ export class ApiDataProvider implements FlareDataProvider {
       window.location.replace("/login");
     }
     if (!response.ok) {
-      throw new FlareApiError(await errorMessage(response), response.status);
+      const error = await responseError(response);
+      if (
+        response.status === 403 &&
+        error.code === "email_verification_required" &&
+        typeof window !== "undefined"
+      ) {
+        window.location.replace("/verify-email?pending=1");
+      }
+      throw new FlareApiError(error.message, response.status);
     }
     if (response.status === 204) return undefined;
     return response.json();

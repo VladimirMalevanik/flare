@@ -11,7 +11,7 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 
-CURRENT_SCHEMA_REVISION = "0007"
+CURRENT_SCHEMA_REVISION = "0008"
 TENANT_TABLES = (
     "workspaces",
     "workspace_members",
