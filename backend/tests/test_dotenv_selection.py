@@ -7,6 +7,21 @@ import pytest
 import app.environment as environment
 
 
+@pytest.fixture(autouse=True)
+def restore_process_environment():
+    names = environment._PROCESS_SECRETS | {
+        "FLARE_DATABASE_PROVIDER",
+        "FLARE_PROCESS_ROLE",
+    }
+    original = {name: environment.os.environ.get(name) for name in names}
+    yield
+    for name, value in original.items():
+        if value is None:
+            environment.os.environ.pop(name, None)
+        else:
+            environment.os.environ[name] = value
+
+
 def test_explicit_dotenv_is_authoritative(monkeypatch, tmp_path: Path):
     selected = tmp_path / "api.env"
     selected.write_text(
