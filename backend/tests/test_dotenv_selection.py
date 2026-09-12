@@ -16,7 +16,9 @@ def test_explicit_dotenv_is_authoritative(monkeypatch, tmp_path: Path):
         encoding="utf-8",
     )
     monkeypatch.setenv("FLARE_DOTENV_PATH", str(selected))
-    monkeypatch.delenv("FLARE_PROCESS_ROLE", raising=False)
+    # Register the variable with monkeypatch before python-dotenv overrides it,
+    # so teardown restores an originally absent variable instead of leaking api.
+    monkeypatch.setenv("FLARE_PROCESS_ROLE", "test-placeholder")
     monkeypatch.setenv("DATABASE_URL", "postgresql://ambient")
     monkeypatch.setenv("FLARE_DATABASE_PROVIDER", "self-managed")
     monkeypatch.setenv("MIGRATION_DATABASE_URL", "postgresql://owner")
