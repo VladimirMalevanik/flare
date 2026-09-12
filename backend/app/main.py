@@ -15,6 +15,17 @@ from app.api.analysis import router as analysis_router
 from app.config import Settings, settings
 from app.models.database import Database, WorkspaceIdentity
 
+from app.services.smtp_email import LoggingEmailSender, SmtpEmailSender
+import logging
+
+
+_logger = logging.getLogger("flare.email")
+_logger.setLevel(logging.INFO)
+if not _logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+    _logger.addHandler(_handler)
+_logger.propagate = False
 
 def create_app(
     application_settings: Settings | None = None,
@@ -26,6 +37,12 @@ def create_app(
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         configured.validate()
+        if configured.smtp_url:
+            application.state.email_sender = SmtpEmailSender(
+                configured.smtp_url, configured.email_from
+            )
+        else:
+            application.state.email_sender = LoggingEmailSender()
         managed_database = database
         owns_database = managed_database is None
         database_opened = False

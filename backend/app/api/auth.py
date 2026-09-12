@@ -7,6 +7,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.models.database import MembershipRequiredError
 from app.services.auth_service import AuthService, AuthenticatedUser, InvalidCredentials, RegistrationUnavailable
 
+from app.services.auth_service import (
+    AuthService, AuthenticatedUser, InvalidCredentials,
+    RegistrationUnavailable, EmailNotVerified, VerificationInvalid,
+)
+
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
@@ -100,6 +105,8 @@ def register(payload: RegisterRequest, request: Request, response: Response):
 def login(payload: LoginRequest, request: Request, response: Response):
     try:
         token = auth_service(request).login(payload.email, payload.password)
+    except EmailNotVerified:
+        raise HTTPException(403, 'Email verification is required') from None
     except (InvalidCredentials, MembershipRequiredError):
         raise HTTPException(401, 'Email or password is incorrect') from None
     set_session(request, response, token)
@@ -121,3 +128,83 @@ def logout(request: Request):
     response.delete_cookie(settings.session_cookie_name, path='/', secure=settings.secure_cookies,
                            httponly=True, samesite='lax')
     return response
+
+def auth_service(request: Request) -> AuthService:
+    db = request.app.state.database
+    if db is None:
+        raise HTTPException(503, 'Database is unavailable')
+    settings = request.app.state.settings
+    return AuthService(
+        db,
+        lifetime=settings.session_lifetime_seconds,
+        idle_seconds=settings.session_idle_seconds,
+        email_verification_required=settings.email_verification_required,
+        email_verification_ttl=settings.email_verification_ttl_seconds,
+        email_verification_resend=settings.email_verification_resend_seconds,
+        email_sender=getattr(request.app.state, "email_sender", None),
+        app_public_url=settings.app_public_url or "",
+    )
+
+class VerifyEmailRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    token: str = Field(min_length=43, max_length=43)
+
+
+class ResendVerificationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(min_length=3, max_length=254)
+
+    @field_validator('email')
+    @classmethod
+    def email_format(cls, value: str) -> str:
+        return LoginRequest.email_format(value)
+
+@router.post('/verify-email')
+def verify_email(payload: VerifyEmailRequest, request: Request):
+    try:
+        auth_service(request).verify_email(payload.token)
+    except VerificationInvalid:
+        raise HTTPException(400, 'Invalid or expired verification link') from None
+    return {'ok': True}
+
+
+@router.post('/resend-verification', status_code=202)
+def resend_verification(payload: ResendVerificationRequest, request: Request):
+    auth_service(request).resend_verification(payload.email)
+    return {'ok': True}
+
+@router.post('/login')
+def login(payload: LoginRequest, request: Request, response: Response):
+    try:
+        token = auth_service(request).login(payload.email, payload.password)
+    except EmailNotVerified:
+        raise HTTPException(403, 'Email verification is required') from None
+    except (InvalidCredentials, MembershipRequiredError):
+        raise HTTPException(401, 'Email or password is incorrect') from None
+    set_session(request, response, token)
+    return {'ok': True}
+
+@router.get('/me')
+def me(user: Annotated[AuthenticatedUser, Depends(current_user)], response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+    return {
+        'user': {
+            'id': user.user_id,
+            'email': user.email,
+            'name': user.name,
+            'emailVerified': user.email_verified,
+        },
+        'workspace': {
+            'id': str(user.workspace_id),
+            'name': user.workspace_name,
+            'role': user.role,
+        },
+    }
+
+def verified_user(
+    user: Annotated[AuthenticatedUser, Depends(current_user)]
+) -> AuthenticatedUser:
+    if not user.email_verified:
+        raise HTTPException(403, 'Email verification is required')
+    return user
+

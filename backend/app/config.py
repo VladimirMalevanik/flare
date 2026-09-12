@@ -23,6 +23,13 @@ class Settings:
     dev_user_id: str | None = None
     dev_workspace_name: str | None = None
 
+    email_verification_required: bool = True
+    email_verification_ttl_seconds: int = 86_400
+    email_verification_resend_seconds: int = 60
+    app_public_url: str | None = None
+    smtp_url: str | None = None
+    email_from: str = "Flare <no-reply@flare.example>"
+
     @property
     def secure_cookies(self) -> bool:
         return self.environment == "production"
@@ -48,6 +55,10 @@ class Settings:
                 raise RuntimeError("Production frontend origins must use HTTPS")
         if self.secure_cookies and (not self.database_url or not self.cors_origins):
             raise RuntimeError("Production requires DATABASE_URL and CORS_ORIGINS")
+
+        if self.email_verification_required and self.secure_cookies:
+            if not self.app_public_url or not self.smtp_url:
+                raise RuntimeError("Production email verification requires APP_PUBLIC_URL and SMTP_URL")
 
     def require_dev_identity(self) -> tuple[UUID, str, str]:
         """Return the server-owned development identity or fail closed."""
@@ -93,6 +104,12 @@ def load_settings() -> Settings:
         dev_workspace_id=_optional_uuid("FLARE_DEV_WORKSPACE_ID"),
         dev_user_id=os.getenv("FLARE_DEV_USER_ID"),
         dev_workspace_name=os.getenv("FLARE_DEV_WORKSPACE_NAME"),
+        email_verification_required=os.getenv("EMAIL_VERIFICATION_REQUIRED", "true").strip().lower() == "true",
+        email_verification_ttl_seconds=int(os.getenv("EMAIL_VERIFICATION_TTL_SECONDS", "86400")),
+        email_verification_resend_seconds=int(os.getenv("EMAIL_VERIFICATION_RESEND_SECONDS", "60")),
+        app_public_url=os.getenv("APP_PUBLIC_URL"),
+        smtp_url=os.getenv("SMTP_URL"),
+        email_from=os.getenv("EMAIL_FROM", "Flare <no-reply@flare.example>"),
     )
     if configured.dev_mode:
         configured.require_dev_identity()

@@ -18,6 +18,8 @@ from app.models.database import (
 )
 from app.services.item_service import ItemNotFoundError, ItemService
 
+from app.api.auth import verified_user
+
 router = APIRouter()
 
 
@@ -33,7 +35,7 @@ def _database(request: Request) -> Database:
 
 
 def _item_service(
-    user: Annotated[AuthenticatedUser, Depends(current_user)],
+    user: Annotated[AuthenticatedUser, Depends(verified_user)],
     database: Annotated[Database, Depends(_database)],
 ) -> ItemService:
     return ItemService(database, user.identity)

@@ -29,11 +29,12 @@ class AuthRepository:
 
     def resolve_session(self, token_hash: str, idle_seconds: int):
         return self.connection.execute(
-            """SELECT s.user_id, s.workspace_id, u.email, u.name
-               FROM public.auth_sessions s JOIN public.auth_users u ON u.id=s.user_id
-               WHERE s.token_hash=%s AND s.revoked_at IS NULL
-                 AND s.expires_at > now() AND NOT u.disabled
-                 AND s.last_seen_at > now() - %s * interval '1 second'""",
+            """SELECT s.user_id, s.workspace_id, u.email, u.name,
+                    u.email_verified_at IS NOT NULL AS email_verified
+            FROM public.auth_sessions s JOIN public.auth_users u ON u.id=s.user_id
+            WHERE s.token_hash=%s AND s.revoked_at IS NULL
+                AND s.expires_at > now() AND NOT u.disabled
+                AND s.last_seen_at > now() - %s * interval '1 second'""",
             (token_hash, idle_seconds),
         ).fetchone()
 
@@ -48,3 +49,71 @@ class AuthRepository:
             "UPDATE public.auth_sessions SET revoked_at=now() WHERE token_hash=%s AND revoked_at IS NULL",
             (token_hash,),
         )
+
+    def insert_email_verification(self, token_hash, user_id, email, ttl_seconds):
+        self.connection.execute(
+            "DELETE FROM public.auth_email_verifications WHERE user_id=%s AND consumed_at IS NULL",
+            (user_id,),
+        )
+        self.connection.execute(
+            """INSERT INTO public.auth_email_verifications(token_hash,user_id,email,expires_at)
+            VALUES (%s,%s,%s, now() + %s * interval '1 second')""",
+            (token_hash, user_id, email, ttl_seconds),
+        )
+
+    def consume_email_verification(self, token_hash):
+        return self.connection.execute(
+            """UPDATE public.auth_email_verifications SET consumed_at=now()
+            WHERE token_hash=%s AND consumed_at IS NULL AND expires_at > now()
+            RETURNING user_id, email""",
+            (token_hash,),
+        ).fetchone()
+
+    def mark_email_verified(self, user_id):
+        self.connection.execute(
+            "UPDATE public.auth_users SET email_verified_at=now() WHERE id=%s AND email_verified_at IS NULL",
+            (user_id,),
+        )
+
+    def last_verification_created_at(self, user_id):
+        row = self.connection.execute(
+            "SELECT created_at FROM public.auth_email_verifications WHERE user_id=%s "
+            "ORDER BY created_at DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        return row["created_at"] if row else None
+
+    def insert_email_verification(self, token_hash: str, user_id: str, email: str, ttl_seconds: int):
+        self.connection.execute(
+            "DELETE FROM public.auth_email_verifications "
+            "WHERE user_id=%s AND consumed_at IS NULL",
+            (user_id,),
+        )
+        self.connection.execute(
+            """INSERT INTO public.auth_email_verifications(token_hash,user_id,email,expires_at)
+            VALUES (%s,%s,%s, now() + %s * interval '1 second')""",
+            (token_hash, user_id, email, ttl_seconds),
+        )
+
+    def consume_email_verification(self, token_hash: str):
+        return self.connection.execute(
+            """UPDATE public.auth_email_verifications SET consumed_at=now()
+            WHERE token_hash=%s AND consumed_at IS NULL AND expires_at > now()
+            RETURNING user_id, email""",
+            (token_hash,),
+        ).fetchone()
+
+    def mark_email_verified(self, user_id: str) -> None:
+        self.connection.execute(
+            "UPDATE public.auth_users SET email_verified_at=now() "
+            "WHERE id=%s AND email_verified_at IS NULL",
+            (user_id,),
+        )
+
+    def last_verification_created_at(self, user_id: str):
+        row = self.connection.execute(
+            "SELECT created_at FROM public.auth_email_verifications "
+            "WHERE user_id=%s ORDER BY created_at DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        return row["created_at"] if row else None
