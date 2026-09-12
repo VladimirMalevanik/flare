@@ -16,6 +16,7 @@ def test_explicit_dotenv_is_authoritative(monkeypatch, tmp_path: Path):
         encoding="utf-8",
     )
     monkeypatch.setenv("FLARE_DOTENV_PATH", str(selected))
+    monkeypatch.delenv("FLARE_PROCESS_ROLE", raising=False)
     monkeypatch.setenv("DATABASE_URL", "postgresql://ambient")
     monkeypatch.setenv("FLARE_DATABASE_PROVIDER", "self-managed")
     monkeypatch.setenv("MIGRATION_DATABASE_URL", "postgresql://owner")
@@ -67,6 +68,7 @@ def test_unset_path_preserves_default_discovery(monkeypatch):
 
 def test_application_scrubs_ambient_migration_credentials(monkeypatch):
     monkeypatch.delenv("FLARE_DOTENV_PATH", raising=False)
+    monkeypatch.delenv("FLARE_PROCESS_ROLE", raising=False)
     monkeypatch.setenv("DATABASE_URL", "postgresql://app")
     monkeypatch.setenv("WORKER_DATABASE_URL", "postgresql://worker")
     monkeypatch.setenv("MIGRATION_DATABASE_URL", "postgresql://owner")
@@ -77,3 +79,23 @@ def test_application_scrubs_ambient_migration_credentials(monkeypatch):
     assert environment.os.environ["DATABASE_URL"] == "postgresql://app"
     assert environment.os.environ["WORKER_DATABASE_URL"] == "postgresql://worker"
     assert "MIGRATION_DATABASE_URL" not in environment.os.environ
+
+
+def test_worker_process_scrubs_email_delivery_configuration(monkeypatch):
+    monkeypatch.delenv("FLARE_DOTENV_PATH", raising=False)
+    monkeypatch.setenv("FLARE_PROCESS_ROLE", "worker")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://api")
+    monkeypatch.setenv("WORKER_DATABASE_URL", "postgresql://worker")
+    monkeypatch.setenv("GROQ_API_KEY", "worker-key")
+    monkeypatch.setenv("SMTP_URL", "smtps://secret@smtp.test")
+    monkeypatch.setenv("APP_PUBLIC_URL", "https://flare.test")
+    monkeypatch.setenv("EMAIL_FROM", "Flare <private@flare.test>")
+    monkeypatch.setattr(environment, "load_dotenv", lambda: None)
+
+    environment.load_project_dotenv(allowed_roles={"api", "worker"})
+
+    assert environment.os.environ["WORKER_DATABASE_URL"] == "postgresql://worker"
+    assert environment.os.environ["GROQ_API_KEY"] == "worker-key"
+    assert "SMTP_URL" not in environment.os.environ
+    assert "APP_PUBLIC_URL" not in environment.os.environ
+    assert "EMAIL_FROM" not in environment.os.environ

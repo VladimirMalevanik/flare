@@ -37,6 +37,16 @@ def upgrade() -> None:
             ondelete="CASCADE",
         ),
     )
+    op.create_check_constraint(
+        "auth_email_verifications_token_hash_check",
+        "auth_email_verifications",
+        "token_hash ~ '^[0-9a-f]{64}$'",
+    )
+    op.create_check_constraint(
+        "auth_email_verifications_email_check",
+        "auth_email_verifications",
+        "email = lower(btrim(email))",
+    )
 
     op.create_index(
         "auth_email_verifications_user_active_idx",
@@ -46,6 +56,14 @@ def upgrade() -> None:
         postgresql_where=sa.text("consumed_at IS NULL"),
     )
 
+    # Users created before this migration have already used the product and
+    # must retain access. New registrations omit the nullable column and start
+    # unverified when verification is enabled.
+    op.execute(
+        "UPDATE public.auth_users SET email_verified_at=now() "
+        "WHERE email_verified_at IS NULL"
+    )
+    op.execute("REVOKE ALL ON public.auth_email_verifications FROM PUBLIC")
     op.execute(
         "GRANT SELECT, INSERT, UPDATE, DELETE "
         "ON public.auth_email_verifications TO flare_app"

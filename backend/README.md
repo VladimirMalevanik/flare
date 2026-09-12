@@ -39,10 +39,12 @@ PostgreSQL пользователи `flare_owner`, `flare_app`, `flare_worker` �
 
 | Endpoint | JSON / результат |
 | --- | --- |
-| `POST /auth/register` | `{email, password, name}` → 201, cookie; один workspace с ролью owner |
-| `POST /auth/login` | `{email, password}` → 200, новая cookie |
+| `POST /auth/register` | `{email, password, name}` → 201, ограниченная cookie; один workspace с ролью owner |
+| `POST /auth/login` | `{email, password}` → 200, новая cookie; неподтверждённый email → `email_verification_required` |
 | `POST /auth/logout` | → 204, отзыв текущей сессии и удаление cookie |
-| `GET /auth/me` | `{user: {id, email, name}, workspace: {id, name, role}}` |
+| `GET /auth/me` | `{user: {id, email, name, emailVerified}, workspace: {id, name, role}}` |
+| `POST /auth/verify-email` | `{token}` → одноразовое подтверждение email |
+| `POST /auth/resend-verification` | `{email}` → нейтральный 202 без раскрытия аккаунта |
 | `POST /items` | `{type: "note", content, title?}` → документ, готовая версия и chunk |
 | `GET /items` | Поиск: `query`, `type`, `limit` |
 | `GET /items/{id}` | Активная заметка своего workspace |
@@ -78,6 +80,15 @@ membership/роль; RLS получает transaction-local `app.user_id` и `ap
 узкая SECURITY DEFINER-функция создаёт только новый workspace с владельцем.
 Restrictive RLS дополнительно проверяет пользователя и writer-role.
 
+В production email verification включена по умолчанию. Нужны HTTPS
+`APP_PUBLIC_URL`, `SMTP_URL` и `EMAIL_FROM`; TTL и cooldown задаются
+`EMAIL_VERIFICATION_TTL_SECONDS` и `EMAIL_VERIFICATION_RESEND_SECONDS` и должны
+быть положительными. В development/test verification выключена по умолчанию.
+Если включить её явно, `APP_PUBLIC_URL` должен быть localhost origin, а ссылка
+печатается локальным sender. SMTP-конфигурация принадлежит только API. Миграция
+`0008` помечает существующих пользователей подтверждёнными, поэтому rollout не
+блокирует уже созданные аккаунты.
+
 ## Локальный dev mode
 
 Только при `FLARE_ENV=development` или `test` можно явно задать
@@ -94,7 +105,7 @@ Auth-таблицы доступны только серверной DB-роли
 identity и не защищает от компрометации backend/DB credentials. Не выдавайте
 клиенту доступ к БД и не логируйте пароли, Cookie или Set-Cookie.
 
-В этом блоке нет email verification, reset, OAuth, invitations, лимитера входа,
+В этом блоке нет password reset, OAuth, invitations, лимитера входа,
 автоматической очистки истёкших сессий или списка устройств. Перед открытым
 публичным запуском нужны ограничения частоты входа/регистрации на внешнем
 входе и эксплуатационный процесс очистки сессий. Ответ 409 позволяет определить

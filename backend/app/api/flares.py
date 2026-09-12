@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, ConfigDict
-from app.api.auth import current_user
+from app.api.auth import verified_user
 from app.api.routes import _database
 from app.models.database import Database, MembershipRequiredError
 from app.services.auth_service import AuthenticatedUser
@@ -31,9 +31,11 @@ class FlareResponse(BaseModel):
     evidence: list[EvidenceResponse]
 
 
-def service(user: Annotated[AuthenticatedUser,Depends(current_user)],
-            db: Annotated[Database,Depends(_database)]):
-    return FlareService(db,user.identity)
+def service(
+    user: Annotated[AuthenticatedUser, Depends(verified_user)],
+    db: Annotated[Database, Depends(_database)],
+):
+    return FlareService(db, user.identity)
 
 
 router=APIRouter(prefix='/flares',tags=['flares'])

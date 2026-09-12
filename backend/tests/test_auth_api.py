@@ -92,7 +92,11 @@ def test_duplicate_email_and_password_not_echoed(client):
 
 
 def test_production_cookie_and_dev_rejection(auth):
-    settings = Settings(database_url=os.environ['DATABASE_URL'], cors_origins=['https://flare.test'])
+    settings = Settings(
+        database_url=os.environ['DATABASE_URL'],
+        cors_origins=['https://flare.test'],
+        email_verification_required=False,
+    )
     with TestClient(create_app(settings), base_url='https://flare.test', headers={'Origin':'https://flare.test'}) as client:
         _, response = register(client)
         assert 'Secure' in response.headers['set-cookie']

@@ -92,6 +92,14 @@ Docker Compose запускает первый сквозной сценарий
 HttpOnly cookie-сессию. Workspace и права определяет сервер; доступ к данным
 дополнительно ограничен PostgreSQL RLS. Переключения workspace пока нет.
 
+В production подтверждение email включено по умолчанию и требует HTTPS
+`APP_PUBLIC_URL`, `SMTP_URL` и `EMAIL_FROM`. До подтверждения сессия может
+открывать только `/auth/me`, logout и endpoints подтверждения/повторной отправки;
+Items, Vault, Analyze и Flares закрыты. Локальный Compose явно отключает эту
+проверку. Для ручной проверки установите `EMAIL_VERIFICATION_REQUIRED=true`:
+backend напечатает localhost-ссылку, не передавая SMTP или его секреты во
+frontend/worker.
+
 Compose по умолчанию использует `FLARE_ENV=development` и
 `FLARE_DEV_MODE=false`. Браузер обращается к `/api` на своём origin; Next.js
 проксирует запросы в FastAPI. Для production задайте `FLARE_ENV=production`,

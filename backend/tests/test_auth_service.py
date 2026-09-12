@@ -40,7 +40,7 @@ def account(auth):
 def test_register_login_logout_and_hashes(auth):
     email, token = account(auth)
     user = auth.current(token)
-    assert user.email == email and user.role == 'owner'
+    assert user.email == email and user.role == 'owner' and user.email_verified
     with auth.database.connection() as conn:
         stored = conn.execute('SELECT password_hash FROM auth_users WHERE id=%s', (user.user_id,)).fetchone()
         assert stored['password_hash'].startswith('$argon2id$')

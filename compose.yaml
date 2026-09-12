@@ -20,6 +20,7 @@ services:
   backend:
     build: ./backend
     environment:
+      FLARE_PROCESS_ROLE: api
       DATABASE_URL: postgresql://flare_app:${APP_PASSWORD:?Copy .env.example to .env}@db:5432/flare
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       FLARE_ENV: ${FLARE_ENV:-development}
@@ -32,6 +33,12 @@ services:
       FLARE_MAX_REQUEST_BYTES: ${FLARE_MAX_REQUEST_BYTES:-32000}
       SESSION_LIFETIME_SECONDS: ${SESSION_LIFETIME_SECONDS:-604800}
       SESSION_IDLE_SECONDS: ${SESSION_IDLE_SECONDS:-86400}
+      EMAIL_VERIFICATION_REQUIRED: ${EMAIL_VERIFICATION_REQUIRED:-false}
+      EMAIL_VERIFICATION_TTL_SECONDS: ${EMAIL_VERIFICATION_TTL_SECONDS:-86400}
+      EMAIL_VERIFICATION_RESEND_SECONDS: ${EMAIL_VERIFICATION_RESEND_SECONDS:-60}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:3000}
+      SMTP_URL: ${SMTP_URL:-}
+      EMAIL_FROM: ${EMAIL_FROM:-Flare <no-reply@localhost>}
       FLARE_DEV_MODE: ${FLARE_DEV_MODE:-false}
       FLARE_DEV_WORKSPACE_ID: ${FLARE_DEV_WORKSPACE_ID:-00000000-0000-4000-8000-000000000001}
       FLARE_DEV_USER_ID: ${FLARE_DEV_USER_ID:-local-dev-user}
@@ -75,6 +82,7 @@ services:
     build: ./backend
     command: ["python", "-m", "app.workers.analysis_worker"]
     environment:
+      FLARE_PROCESS_ROLE: worker
       WORKER_DATABASE_URL: postgresql://flare_worker:${WORKER_PASSWORD:?Set WORKER_PASSWORD for the worker role}@db:5432/flare
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       LLM_DEFAULT_MODEL: ${LLM_DEFAULT_MODEL:-openai/gpt-oss-20b}

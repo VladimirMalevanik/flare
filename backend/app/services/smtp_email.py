@@ -1,14 +1,10 @@
-"""SMTP implementation and a console sender for local development."""
+"""SMTP implementation and an explicit local-development sender."""
 from __future__ import annotations
 
-import logging
 import smtplib
 import ssl
 from email.message import EmailMessage
 from urllib.parse import urlparse
-
-logger = logging.getLogger("flare.email")
-
 
 class SmtpEmailSender:
     def __init__(self, smtp_url: str, default_from: str):
@@ -43,7 +39,7 @@ class SmtpEmailSender:
 
 
 class LoggingEmailSender:
-    """Dev sender: prints the message to stdout so the link is clickable."""
+    """Local-only sender: prints the verification link for manual testing."""
 
     def send(self, *, to: str, subject: str, text: str) -> None:
         print(
