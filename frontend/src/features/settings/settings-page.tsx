@@ -18,7 +18,7 @@ const defaults = {
   telegram: true,
   emailDelivery: true,
 };
-export function SettingsPage() {
+export function SettingsPage({ supportEmail }: { supportEmail: string | null }) {
   const session = useSession();
   const [loggingOut, setLoggingOut] = useState(false);
   async function logout() {
@@ -368,6 +368,28 @@ export function SettingsPage() {
           <span>Customer Research</span>
           <span>Launch</span>
         </div>
+      </SettingsSection>
+      <SettingsSection
+        title="Support"
+        subtitle="Get help with your Flare workspace."
+        icon="insights"
+      >
+        <SettingRow
+          title="Email support"
+          description={
+            supportEmail
+              ? "Open your email app to contact the Flare support team."
+              : "The support address will be available after launch."
+          }
+        >
+          {supportEmail ? (
+            <a className="button" href={`mailto:${supportEmail}`}>
+              Contact support
+            </a>
+          ) : (
+            <span className="muted">Not configured</span>
+          )}
+        </SettingRow>
       </SettingsSection>
     </section>
   );
