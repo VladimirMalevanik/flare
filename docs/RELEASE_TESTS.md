@@ -187,10 +187,46 @@ Severity meanings:
   is dry-run. Applied recovery affects only eligible workspace rows. Analytics contains
   allowlisted event names and bounded metadata, never imported or captured source text.
 
+## RT-19 — Email support configuration
+
+- **Severity:** P1
+- **Precondition:** The final support address has been approved. Run once with
+  `SUPPORT_EMAIL` set to that address and once with it absent or malformed.
+- **Steps:** Open Settings. Inspect and activate **Contact support** in the configured
+  case. Inspect the same row in the unconfigured case. Inspect the built client assets
+  for backend secrets.
+- **Expected:** The configured action is a `mailto:` link to the exact approved
+  address. The other case says **Not configured** and has no `mailto:` link. No
+  database, SMTP, Groq, GitHub, or other server credential appears in client assets.
+
+## RT-20 — SMTP unavailable behavior
+
+- **Severity:** P1
+- **Precondition:** Email verification is required and SMTP failure can be induced in
+  a controlled non-production environment.
+- **Steps:** Register a new address while SMTP is unavailable. Restore SMTP and request
+  resend, then consume the delivered link.
+- **Expected:** Registration returns the safe `email_delivery_failed` contract without
+  exposing SMTP or token details. Account/workspace state remains durable. Resend stays
+  enumeration-safe and can recover after SMTP returns.
+
+## RT-21 — Database unavailable behavior
+
+- **Severity:** P0
+- **Precondition:** A disposable release environment can interrupt API database
+  connectivity without risking customer data.
+- **Steps:** Record healthy `/ready`, interrupt connectivity, request `/ready` and one
+  authenticated read, restore connectivity, then retry both.
+- **Expected:** Readiness and the product request fail closed with safe 503 behavior;
+  no database URL, credential, SQL detail, or demo data is exposed. Both recover after
+  connectivity returns without data loss.
+
 ## Deferred from this release suite
 
 Voice is excluded until upload, server-side media inspection, durable transcript
 persistence, and cleanup are implemented. Quota behavior is excluded because shared
 quota accounting is not implemented; that gap remains a production decision and
-release risk. GitHub activity ingestion is excluded because only connection metadata
-is implemented.
+release risk; see `ANALYZE_QUOTA_DECISION.md`. Full project-history semantics are not
+guaranteed: Analyze selects a bounded set from recent Notes using keyword and recency
+signals. Do not interpret a passing RT-06 as proof of full durable project memory.
+GitHub activity ingestion is excluded because only connection metadata is implemented.

@@ -5,6 +5,12 @@ commit SHA, operator, timestamps, environment, and evidence links with the relea
 ticket. A checked item requires observed evidence from the target release candidate
 or production environment.
 
+**Current release status: BLOCKED.** Vova has not yet supplied the application
+server, and the exact AWS PostgreSQL service/network, public domain, TLS edge, SMTP
+provider, deployment automation, production secrets, and final support email are
+TBD. Repository checks can be completed now; infrastructure and production E2E items
+must remain unchecked until observed.
+
 ## A. Code gate
 
 - [ ] Record the release commit: `git rev-parse origin/main`.
@@ -18,6 +24,9 @@ or production environment.
 - [ ] Run the full self-managed backend suite against disposable PostgreSQL 17 with
   pgvector and the restricted API/worker roles.
 - [ ] Run the full Yandex-compatible backend suite with the CI provisioning model.
+- [ ] Review `docs/AWS_POSTGRESQL_READINESS.md` and record the disposable test plan
+  for the selected AWS PostgreSQL service. Existing local/Yandex matrices do not
+  replace that evidence.
 - [ ] Run frontend tests: `cd frontend && node --test tests/*.test.cjs`.
 - [ ] Run frontend lint: `npm --prefix frontend run lint`.
 - [ ] Run frontend production build/typecheck: `npm --prefix frontend run build`.
@@ -27,11 +36,14 @@ or production environment.
 
 ## B. Infrastructure prerequisites
 
-- [ ] **TBD:** provision the approved single application VPS.
+- [ ] **BLOCKED:** receive the approved single application server from Vova.
 - [ ] **TBD:** select VPS provider, country, and size.
 - [ ] **TBD:** select public domain structure and create DNS records.
 - [ ] **TBD:** select reverse proxy and terminate HTTPS with a trusted certificate.
-- [ ] **TBD:** provision managed PostgreSQL 17 with pgvector.
+- [ ] **TBD:** select and provision an AWS-managed PostgreSQL service with a supported
+  PostgreSQL 17 release and pgvector.
+- [ ] **TBD:** select the AWS region, VPC/subnet path, security groups, public/private
+  reachability, failover mode, and database endpoint policy.
 - [ ] Confirm the VPS can reach `https://api.groq.com` over HTTPS.
 - [ ] **TBD:** select and configure the SMTP provider and verified sender.
 - [ ] **TBD:** select deployment automation and secret-injection mechanism.
@@ -41,10 +53,14 @@ or production environment.
 ## C. Database release gate
 
 - [ ] Managed PostgreSQL is reachable from the application VPS using TLS.
+- [ ] The selected AWS service passes every required item in
+  `docs/AWS_POSTGRESQL_READINESS.md`; record service, engine, and pgvector versions.
 - [ ] The migration owner credentials connect and are unavailable to API/worker.
 - [ ] The `flare_app` credentials connect and pass `/ready` role/RLS checks.
 - [ ] The `flare_worker` credentials connect and pass restricted worker-role checks.
 - [ ] PostgreSQL reports version 17 and the `vector` type is available.
+- [ ] Database clients use `sslmode=verify-full` with the current AWS CA bundle, and
+  the service rejects non-TLS connections.
 - [ ] Take or confirm a restorable backup before migration.
 - [ ] Record the current `alembic_version` before deployment.
 - [ ] Apply `alembic -c backend/alembic.ini upgrade head` with the migration env.
@@ -55,11 +71,17 @@ or production environment.
 - [ ] Confirm the worker cannot directly read tenant tables and can execute only its
   reviewed claim/load/finish functions.
 - [ ] Record backup identifier, retention, and restore owner.
+- [ ] Restore the backup or point-in-time snapshot into a separate database and run
+  the readiness/security smoke against it.
+- [ ] Record the connection budget using
+  `API process count × 10 + worker concurrency + migration/admin/monitoring headroom`
+  and prove it stays below the selected service limit.
 
 ## D. Application deployment gate
 
 - [ ] Deploy the exact recorded commit to the application VPS.
 - [ ] Run the frontend, API, and worker as separate supervised processes.
+- [ ] Confirm exactly one worker is enabled for the initial release.
 - [ ] Configure automatic restart with a bounded backoff for each process.
 - [ ] Confirm the frontend responds on its internal port.
 - [ ] Confirm API `/health` returns success.
@@ -68,6 +90,9 @@ or production environment.
 - [ ] Confirm public HTTPS routes pages and `/api` to the intended processes.
 - [ ] Confirm process logs are accessible without exposing cookies, Note bodies,
   provider payloads, database URLs, or secrets.
+- [ ] Run `BASE_URL=https://<release-origin> python3 backend/scripts/release_smoke.py`.
+  For authenticated read checks, also set `SMOKE_EMAIL` and `SMOKE_PASSWORD`; set
+  `EXPECTED_SUPPORT_EMAIL` after the final contact address is configured.
 
 ## E. External dependency smoke
 
@@ -85,6 +110,8 @@ or production environment.
   production HTTPS origin.
 - [ ] Confirm a wrong SMTP credential produces an operationally visible failure
   without exposing the credential or verification token.
+- [ ] With SMTP deliberately unavailable, confirm registration remains durable,
+  returns the documented safe delivery failure, and a later resend can recover.
 
 ### PostgreSQL
 
@@ -92,6 +119,8 @@ or production environment.
 - [ ] Import one UTF-8 TXT or Markdown file and confirm the canonical item, batch
   status, bounded chunks, and analysis jobs persist after refresh.
 - [ ] Confirm all connections use TLS and the intended runtime role.
+- [ ] In a controlled environment, interrupt database access and confirm `/ready`
+  fails without exposing the URL or credentials; restore access and confirm recovery.
 
 ### GitHub, if included in this release
 
@@ -109,6 +138,15 @@ or production environment.
 - [ ] Confirm the certificate chain, hostname, expiry, and HTTP-to-HTTPS redirect.
 - [ ] Confirm session cookies are `Secure`, HttpOnly, SameSite=Lax, host-only, and use
   the `__Host-flare_session` name.
+
+### Support
+
+- [ ] **TBD:** Vladimir supplies the final domain-based support email.
+- [ ] Set `SUPPORT_EMAIL` only in the frontend runtime and restart the frontend; do
+  not place it in `NEXT_PUBLIC_*` build arguments.
+- [ ] Open Settings and confirm **Contact support** points to the exact approved
+  address. With the variable absent or malformed, confirm Settings shows **Not
+  configured** and renders no `mailto:` link.
 
 ## F. Authentication smoke
 
@@ -156,11 +194,15 @@ or production environment.
   the run resumes without duplicate terminal state.
 - [ ] Restart the API during a pending run and confirm the worker completes and status
   remains readable afterward.
+- [ ] Interrupt API database connectivity and confirm `/ready` returns 503, product
+  data is not replaced by demo data, and readiness recovers after connectivity does.
 - [ ] Simulate a temporary Groq failure and confirm a scheduled retry with bounded
   attempts and a safe public error code.
 - [ ] Replay the same `Idempotency-Key` and confirm it returns the same logical run.
 - [ ] Confirm malformed or fabricated AI evidence publishes no partial Flare set.
 - [ ] Confirm a permanently failed analysis does not modify or hide the saved Note.
+- [ ] Confirm SMTP unavailability produces the documented safe registration/resend
+  behavior and an operator-visible error without leaking credentials or tokens.
 - [ ] As a workspace owner, inspect `/ops/queue`, run maintenance with its default
   dry-run, then apply a controlled stale-lease recovery and verify the audit event.
 
@@ -184,6 +226,7 @@ Register
   log/dashboard evidence without recording secrets or Note contents.
 - [ ] Run the GitHub flow only when GitHub is explicitly included in this release and
   all GitHub checks in section E pass.
+- [ ] Open Settings and verify the configured email support action.
 
 ## K. Go / No-Go
 
@@ -194,8 +237,11 @@ Release is **GO** only when all statements are true:
 - [ ] The exact release SHA has green required CI.
 - [ ] The migration chain is valid and production is at `0013`.
 - [ ] PostgreSQL health, TLS, RLS, role separation, and backup are verified.
+- [ ] The exact selected AWS service passed the disposable migration and restore
+  rehearsal; the connection budget is recorded.
 - [ ] Groq returns HTTP 200 from the production VPS.
 - [ ] SMTP sends a usable production verification email.
+- [ ] The final support email is configured and the Settings contact action works.
 - [ ] The final production E2E passes.
 - [ ] Every enabled release integration has completed its live smoke.
 
@@ -220,5 +266,5 @@ Any unchecked required item is **NO-GO**. Record the decision maker and evidence
 - [ ] Record rollback start/end, application SHA, schema revision, backup used, data
   loss assessment, decision maker, and verification evidence.
 
-**TBD / unresolved.** Name the release owner, database owner, incident commander,
+**TBD / deferred.** Name the release owner, database owner, incident commander,
 and the person authorized to decide rollback before production launch.
