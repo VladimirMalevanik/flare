@@ -31,6 +31,11 @@ Logical operations expected by the interface:
 - `getInsight(id) → Insight | null`
 - `listSources() → Source[]`
 - `saveSource(source) → Source`
+- `getGitHubConnection() → GitHubConnection`
+- `startGitHubConnection() → authorizationUrl`
+- `listGitHubRepositories() → GitHubRepository[]`
+- `selectGitHubRepository(repositoryId) → GitHubConnection`
+- `disconnectGitHub() → void`
 
 Optional Item display fields remain `category`, `sourceLabel`, `author`, and
 `fileType`. The internal names `Insight`, `listInsights`, and `getInsight` remain;

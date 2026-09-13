@@ -105,7 +105,7 @@ Record job/request IDs, task/route reason, configured and returned model, prompt
 
 ## Configuration
 
-Block 2 wires the text settings in `backend/app/config.py` lazily; STT and escalation below remain future configuration:
+The current worker wires text settings in `backend/app/config.py` lazily. The isolated voice boundary exists, while durable STT and 120B escalation remain future configuration:
 
 ```dotenv
 GROQ_API_KEY=<injected server-side; never committed>
@@ -126,12 +126,12 @@ Centralize timeouts, token budgets and retry caps in the same settings/profile d
 | Existing location | Observed state → recommended change later |
 | --- | --- |
 | `backend/app/config.py` | Auth settings plus opt-in AI settings; see implemented boundary above. |
-| `backend/app/ai_engine/{llm,extractor,embedder}.py` | Existing protocols preserved; Block 2 adds TextAnalyzer, typed contracts and one Groq adapter. Transcription remains deferred. |
+| `backend/app/ai_engine/` | TextAnalyzer and FlareDetector contracts, typed validation, Groq adapters, and an isolated Whisper boundary. Durable voice ingestion remains deferred. |
 | `backend/app/services/item_service.py`, `models/tables.py` | Notes save and publish synchronously, with no model call → preserve raw input immediately; enqueue analysis on explicit Analyze. |
 | `backend/app/services/{file_service,insight_service,storage}.py` | Ingestion/flare orchestration placeholders and storage protocol → add temporary audio staging, transcript and citation-backed flare persistence; permanent audio storage is deferred. |
-| `backend/app/workers/` | Placeholders, including `celery_app.py`; no functioning queue → propose one Postgres-backed job runner, not mandatory Redis/Celery. |
-| `backend/app/api/routes.py`, `api/schemas.py` | Authenticated Notes-only POST; Block 2 leaves it unchanged. Upload and job-status contracts remain future work. |
-| `frontend/src/lib/data/api-provider.ts` | Rejects non-note creation; flares/sources use mock fallback → connect audio upload, processing status and real flare endpoints through this provider. |
+| `backend/app/workers/` | Functioning PostgreSQL-backed extraction and Flare-generation worker; Celery placeholders are unused. |
+| `backend/app/api/routes.py`, `api/analysis.py` | Authenticated Notes-only creation plus explicit Analyze and status routes. Upload remains future work. |
+| `frontend/src/lib/data/api-provider.ts` | Rejects non-Note creation; real Notes, Analyze, Flares, and GitHub connection flow; other Sources catalog data remains demo-only. |
 
 Keep the existing dependency direction: **API/workers → services → persistence and AI adapters**. Fetch only authorized, active workspace evidence before calling Groq; bound it by tokens using selected/recent notes and existing keyword search. No embeddings are required: `chunks.embedding` is nullable. Leave the schema's future vector capacity intact.
 

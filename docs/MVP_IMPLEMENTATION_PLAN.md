@@ -1,6 +1,6 @@
 # Flare MVP implementation plan
 
-Agreed scope, 2026-09-07; implementation status updated 2026-09-09. This plan governs MVP scope; broader model-routing and storage options in earlier research are future work.
+Agreed scope, 2026-09-07; implementation status updated 2026-09-13. This plan governs MVP scope; broader model-routing and storage options in earlier research are future work.
 
 Related technical research and architecture:
 
@@ -11,11 +11,14 @@ Related technical research and architecture:
 
 ## Current status
 
-- Blocks 1–3: implemented and merged (authentication, pure 20B extraction, durable jobs).
-- Block 4 and Yandex verification: merged into main.
-- Block 5: implemented for review: explicit Analyze, bounded current Note selection,
+- Blocks 1–4: implemented and merged (authentication, 20B extraction, durable jobs,
+  persisted evidence-backed Flares, and Yandex-compatible migrations).
+- Email verification and the GitHub App connection flow are merged. GitHub activity
+  ingestion is not implemented and the real GitHub handshake still needs live smoke.
+- Block 5 is merged: explicit Analyze, bounded current source selection,
   immutable job sources, idempotent runs, status API, frontend polling and Compose worker.
-  Note saving does not enqueue work. Live Groq acceptance requires a local worker key.
+  New Notes and text imports also enqueue durable analysis automatically. Live Groq
+  acceptance requires a local worker key.
 - Voice and quota work remain outside this change.
 
 See [Block 4 implementation](../backend/docs/flare-generation.md).
@@ -84,7 +87,10 @@ Validate citations against the exact evidence supplied to the model, including w
 
 ## Phase 5 — Analyze flow
 
-**Explicit Analyze is the MVP trigger.** Context accumulates until the user presses Analyze; a worker then analyzes relevant project context and new Flares appear. Do not run expensive analysis after every note.
+**Explicit Analyze remains the workspace-level MVP trigger.** Context accumulates
+until the user presses Analyze; a worker then analyzes a bounded workspace snapshot
+and new Flares appear. New Notes and bounded text imports also enqueue their own
+immutable source chunks for background extraction; HTTP requests never call Groq.
 
 Bound evidence by token budget using authorized project context without vector retrieval. Record the input versions used for a run. Frontend must show pending, completed, failed and quota-deferred outcomes through the existing data-provider layer.
 
@@ -154,7 +160,7 @@ Acceptance checks must cover authentication/roles, cross-workspace reads and wri
 
 - Exact configurable user/workspace quotas, Analyze context/token budgets and the organization's available free limits.
 - Temporary audio staging location, maximum upload size/duration and expiry/cleanup behavior after terminal failure or crash.
-- Representative Flare quality evaluation on real project data; job-status API and polling/delivery contract.
+- Representative Flare quality evaluation on real project data.
 - Groq data-retention settings: application-side audio deletion does not control provider retention; see [AI research](AI_MODELS.md).
 
 Settled for MVP: 20B only, explicit Analyze, Postgres worker preferred, no embeddings, no automatic V3 fallback and no permanent audio retention.

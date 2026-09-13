@@ -160,6 +160,8 @@ Yandex в CI эмулирует подготовку пользователей 
 
 [План реализации MVP](docs/MVP_IMPLEMENTATION_PLAN.md),
 [исследование AI-моделей](docs/AI_MODELS.md),
+[текущая архитектура](docs/ARCHITECTURE.md),
+[release checklist](docs/RELEASE_CHECKLIST.md),
 [проект БД](backend/docs/database.md),
 [Yandex Managed PostgreSQL](backend/docs/yandex-managed-postgresql.md),
 [слои бэкенда](backend/docs/architecture.md),

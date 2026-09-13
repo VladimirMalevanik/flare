@@ -130,7 +130,8 @@ editing не реализован. TLS/reverse-proxy deployment проверяе
 ## Изолированный AI-анализ (Block 2)
 
 Добавлен async-анализ уже авторизованных `Evidence[]` через Groq 20B.
-Он не подключён к API, сохранению Notes или БД. Контракт, ограничения, ошибки
+Он подключён к пользовательскому `POST /analyze` только через durable job и
+отдельный worker; API-процесс не вызывает Groq. Контракт, ограничения, ошибки
 и ручной smoke: [docs/text-analysis.md](docs/text-analysis.md).
 
 ## Durable jobs
@@ -139,7 +140,8 @@ editing не реализован. TLS/reverse-proxy deployment проверяе
 immutable chunks. API возвращает сохранённый источник сразу; worker обрабатывает
 очередь отдельно и требует только свою DB-роль и `GROQ_API_KEY`. Явный Analyze
 остаётся для отдельного ограниченного прогона. Схема, роли, настройка, команда
-запуска и проверки: [docs/analysis-jobs.md](docs/analysis-jobs.md).
+запуска и проверки: [docs/analysis-jobs.md](docs/analysis-jobs.md) и
+[docs/analyze.md](docs/analyze.md).
 
 ### Block 4: persisted Flares
 
@@ -148,13 +150,13 @@ The same worker alternates extraction/generation attempts. Authenticated
 `GET /flares` and `GET /flares/{id}` expose typed, evidence-backed records.
 New sources now enqueue analysis through the ingestion path; generation still
 only starts after completed analysis.
-
-## GitHub connection
-
-`/integrations/github` uses the authenticated, verified server session. Its state
-is single-use and stored as a hash; OAuth verifies the user can access the chosen
-installation, then GitHub App access is limited to selecting metadata for a
-repository. The application stores connection metadata, never GitHub OAuth or
-installation tokens. Repository-content ingestion is intentionally not part of
-this connection flow yet.
 See [generation configuration, security and checks](docs/flare-generation.md).
+
+## GitHub App connection
+
+Migration `0009` and `/integrations/github` use the authenticated, verified server
+session to implement single-use hashed state, GitHub user/installation verification,
+one repository selection per workspace, persistent connection metadata, and
+disconnect. Provider access tokens are ephemeral. Commits, pull requests, issues,
+Vault ingestion, and Analyze evidence remain unimplemented. The real GitHub browser
+handshake still requires a live smoke.

@@ -23,4 +23,9 @@ connection до вызова провайдера. API не вызывает м�
 любого поддерживаемого входного типа через `/items` и текстовый импорт через
 `/imports` запускают durable очередь. Явный `/analyze` создаёт отдельный
 ограниченный прогон с серверным выбором контекста. Подробности:
-[Flare generation](flare-generation.md).
+[Analyze](analyze.md) и [Flare generation](flare-generation.md).
+
+GitHub App integration находится в тех же границах: `api/github.py` вызывает
+`GitHubConnectionService`, provider-клиент находится в `integrations/github.py`,
+а workspace-scoped state и connection metadata сохраняются через models. Это
+connection flow без commits/PR/issues ingestion.
