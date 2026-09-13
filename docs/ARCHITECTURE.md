@@ -4,18 +4,23 @@ This document describes the repository at migration head `0013`.
 
 Status labels used throughout:
 
-- **Current implementation** — present in `main` and covered by repository tests.
-- **Approved release decision** — agreed deployment direction that may still need operational setup.
-- **TBD / unresolved** — not implemented or not selected; do not infer a production choice.
+- **Implemented** — present in `main` and covered by repository tests.
+- **Approved release direction** — agreed direction that still needs operational setup.
+- **TBD / deferred** — not implemented, not selected, or explicitly postponed; do
+  not infer a completed decision.
 
 ## 1. Product and system boundary
 
-**Current implementation.** Flare is a workspace-scoped knowledge application. A
+**Implemented.** Flare is a workspace-scoped knowledge application. A
 user registers, verifies an email address when verification is enabled, captures
 Notes, imports bounded CSV/TXT/Markdown text, searches the Vault, and reads
 generated Flares with links to their supporting evidence. New captures enqueue
 analysis automatically; explicit Analyze remains available for a bounded workspace
 snapshot.
+
+Settings provides an email support entry. The server reads the optional
+`SUPPORT_EMAIL` value at request time and passes a validated public address to the
+client. An absent or malformed value produces no `mailto:` link.
 
 The repository owns the Next.js frontend, FastAPI API, PostgreSQL schema and
 PostgreSQL-backed analysis worker. PostgreSQL is the durable source of truth.
@@ -23,14 +28,16 @@ Groq performs text analysis and Flare generation. SMTP delivers production
 verification mail. GitHub supplies installation, account, and repository metadata
 for the connection flow.
 
-**TBD / unresolved.** URL fetching, binary file ingestion, durable voice transcription,
+**TBD / deferred.** URL fetching, binary file ingestion, durable voice transcription,
 GitHub activity ingestion, automated synchronization, workspace switching,
 invitations, password reset, quota accounting, and scheduled analysis are outside
-the current end-to-end product boundary.
+the current end-to-end product boundary. The current Analyze selection is bounded
+and oriented toward recent Notes; full durable project-memory semantics are not
+implemented or guaranteed.
 
 ## 2. Repository map
 
-**Current implementation.**
+**Implemented.**
 
 | Path | Responsibility |
 | --- | --- |
@@ -48,10 +55,12 @@ the current end-to-end product boundary.
 | `backend/db/` | Self-managed and Yandex-compatible role provisioning |
 | `.github/workflows/checks.yml` | Frontend and two-provider backend CI matrix |
 | `compose.yaml` | Local PostgreSQL, migration, API, frontend, and opt-in AI worker topology |
+| `docs/AWS_POSTGRESQL_READINESS.md` | AWS managed PostgreSQL compatibility audit and acceptance evidence |
+| `backend/scripts/release_smoke.py` | Non-destructive deployed HTTP smoke for release candidates |
 
 ## 3. Runtime components
 
-**Current implementation.**
+**Implemented.**
 
 | Component | Runtime role | Credentials and state |
 | --- | --- | --- |
@@ -66,7 +75,7 @@ the current end-to-end product boundary.
 
 ## 4. Runtime architecture
 
-**Current implementation** is shown with solid arrows. The database placement in
+**Implemented** behavior is shown with solid arrows. The database placement in
 production follows the approved decision below.
 
 ```mermaid
@@ -83,7 +92,7 @@ flowchart LR
 
 ## 5. Core Note → Analyze → Flare data flow
 
-**Current implementation.**
+**Implemented.**
 
 1. `POST /items` accepts Note, URL, file-metadata, or audio-metadata records from a
    verified owner or editor. `POST /imports` accepts bounded UTF-8 CSV, TXT, or
@@ -116,7 +125,7 @@ or transcribe external content.
 
 ## 6. AI pipeline
 
-**Current implementation.** The worker uses the native Groq SDK through interfaces
+**Implemented.** The worker uses the native Groq SDK through interfaces
 in `backend/app/ai_engine/`. Text extraction and Flare generation use
 `openai/gpt-oss-20b` with low reasoning effort. Configuration validation rejects
 other text model profiles. Requests have byte, source, completion-token, transport,
@@ -128,16 +137,19 @@ and quotes must match the supplied immutable chunks. Persisted metadata uses an
 allowlist; raw prompts, reasoning, private Note bodies, provider error bodies, and
 credentials are not persisted as job errors.
 
-**Approved release decision.** The 20B profile is the default text path. The project
+**Approved release direction.** The 20B profile is the default text path. The project
 model policy reserves 120B for explicit reasoning escalation.
 
-**TBD / unresolved.** No 120B routing or escalation is implemented. A quality set,
+**TBD / deferred.** No 120B routing or escalation is implemented. A quality set,
 quota accounting, production Groq reachability, and live representative acceptance
-still need release evidence.
+still need release evidence. Explicit Analyze examines at most 200 recent Note
+documents and then fits a bounded set of chunks using recency and keyword signals.
+It does not summarize or retrieve full project history. Redesigning that behavior is
+deferred product and architecture work.
 
 ## 7. Durable jobs
 
-**Current implementation.** PostgreSQL is the queue. `analysis_jobs` and
+**Implemented.** PostgreSQL is the queue. `analysis_jobs` and
 `flare_generation_runs` store status, bounded attempts, availability, lease owner,
 lease token, lease expiry, safe error code, and timestamps. Claims are atomic.
 Expired leases make interrupted work recoverable. Transient failures use scheduled
@@ -151,7 +163,7 @@ worker cannot browse tenant tables directly.
 
 ## 8. Authentication and email verification
 
-**Current implementation.** Registration creates an `auth_users` row, one
+**Implemented.** Registration creates an `auth_users` row, one
 workspace, owner membership, and an opaque session. Passwords use Argon2id. The
 database stores a SHA-256 digest of the random session token. Cookies are HttpOnly,
 SameSite=Lax, host-only, and become `Secure` with the `__Host-` name in production.
@@ -163,13 +175,13 @@ neutral response. An unverified session can access identity, logout, verificatio
 and resend endpoints; Notes, Vault data, Analyze, Flares, and GitHub integration
 require a verified user. Migration `0008` marks pre-existing users verified.
 
-**TBD / unresolved.** The production SMTP provider, sender identity, deliverability
+**TBD / deferred.** The production SMTP provider, sender identity, deliverability
 monitoring, bounce handling, password reset, rate limiting, and account recovery
 process are not selected or implemented.
 
 ## 9. Workspace authorization and RLS
 
-**Current implementation.** The authenticated session determines the user and
+**Implemented.** The authenticated session determines the user and
 initial workspace; the browser cannot submit trusted identity headers. Each
 workspace transaction sets `app.workspace_id` and `app.user_id` locally, verifies
 membership, and requires owner/editor for writes. Viewer access is read-only.
@@ -186,7 +198,7 @@ or the worker.
 
 ## 10. Database logical model
 
-**Current implementation.**
+**Implemented.**
 
 | Area | Tables | Relationship |
 | --- | --- | --- |
@@ -206,7 +218,7 @@ evidence is deleted or no longer ready are hidden by the read query.
 
 ## 11. Frontend architecture
 
-**Current implementation.** Next.js App Router layouts bootstrap the authenticated
+**Implemented.** Next.js App Router layouts bootstrap the authenticated
 session on the server. Client feature modules use one `FlareDataProvider` contract.
 `ApiDataProvider` owns HTTP calls, text imports, and strict DTO mapping; `MockDataProvider` owns the
 explicit development demo. API mode never falls back to demo Flares or Notes.
@@ -215,6 +227,11 @@ The browser calls same-origin `/api`; Next.js rewrites it to `API_INTERNAL_URL`.
 Auth uses cookies with `credentials: include`. State-changing calls are checked by
 the API's exact-Origin guard. `WorkspaceProvider` coordinates capture, theme,
 density, and data refresh. `/` and `/dashboard` redirect to `/insights`.
+
+The Settings route is dynamically rendered and reads `SUPPORT_EMAIL` on the server.
+Only a validated address reaches the browser. Unlike `NEXT_PUBLIC_*` settings, this
+value can change when the deployment runtime restarts without rebuilding the
+frontend image. The final address remains TBD.
 
 ## 12. Source integrations
 
@@ -252,7 +269,7 @@ have not been live verified.
 
 ## 13. Local development topology
 
-**Current implementation.** The default `compose.yaml` topology runs PostgreSQL, a
+**Implemented.** The default `compose.yaml` topology runs PostgreSQL, a
 one-shot migration container, FastAPI on `127.0.0.1:8000`, and Next.js on
 `127.0.0.1:3000`. PostgreSQL is exposed only on `127.0.0.1:5432`. The frontend waits
 for backend readiness and backend waits for migration completion. The `ai` profile
@@ -266,9 +283,9 @@ PostgreSQL data.
 
 ## 14. Approved production topology
 
-**Approved release decision.** Production uses one application VPS for the Next.js
-frontend, FastAPI API, and worker. PostgreSQL is a separately managed production
-service. Groq remains external.
+**Approved release direction.** Production uses one application server supplied by
+Vova for the Next.js frontend, FastAPI API, and one worker initially. PostgreSQL is
+a separate AWS-managed service. Groq remains external.
 
 ```mermaid
 flowchart TB
@@ -280,19 +297,22 @@ flowchart TB
     end
     Edge --> Frontend
     Frontend --> API
-    API --> ManagedDB[(Managed PostgreSQL)]
+    API --> ManagedDB[(AWS managed PostgreSQL)]
     Worker --> ManagedDB
     Worker --> Groq[External Groq]
     API --> SMTP[External SMTP]
     API --> GitHub[GitHub APIs]
 ```
 
-**TBD / unresolved.** VPS provider, VPS country, exact VPS size, reverse proxy,
-domain structure, SMTP provider, and deployment automation have not been selected.
+**TBD / deferred.** The exact AWS PostgreSQL service and network topology, VPS
+provider, VPS country, exact VPS size, reverse proxy, domain structure, SMTP
+provider, and deployment automation have not been selected. See the
+[AWS readiness audit](AWS_POSTGRESQL_READINESS.md); it records compatibility and
+required evidence without choosing RDS or Aurora.
 
 ## 15. Secrets and process boundaries
 
-**Current implementation.** API, worker, and migration dotenv roles are separate.
+**Implemented.** API, worker, and migration dotenv roles are separate.
 The API may receive `DATABASE_URL`, SMTP credentials, and GitHub App credentials.
 The worker may receive `WORKER_DATABASE_URL` and `GROQ_API_KEY`. The migration
 process alone may receive `MIGRATION_DATABASE_URL`. The dotenv loader removes
@@ -301,11 +321,12 @@ secrets that do not belong to the selected process role.
 No backend secret belongs in a `NEXT_PUBLIC_*` variable or browser response. GitHub
 private keys, OAuth client secrets, SMTP URLs, database passwords, session tokens,
 verification tokens, and the Groq key must come from deployment secret injection.
-Only example placeholders are tracked.
+Only example placeholders are tracked. `SUPPORT_EMAIL` is public contact data rather
+than a secret, but the server validates it before exposing it in Settings.
 
 ## 16. Migration model
 
-**Current implementation.** Alembic has one linear head:
+**Implemented.** Alembic has one linear head:
 
 ```text
 0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0008 → 0009 → 0010 → 0011 → 0012 → 0013
@@ -315,9 +336,13 @@ Only example placeholders are tracked.
 connection state and metadata. `0010` expands analysis source types, `0011` adds
 bounded queue maintenance, `0012` adds activity events and source types, and `0013`
 adds import batches and import-safe chunk constraints. Application readiness
-requires `0013`. CI tests both self-managed and
-Yandex-compatible upgrades, historical upgrade steps, repeat `upgrade head`, role
+requires `0013`. CI tests both self-managed and Yandex-compatible upgrades,
+historical upgrade steps, repeat `upgrade head`, role
 ownership, RLS, preserved data, and worker isolation.
+
+AWS production compatibility has not been proven by those matrices. The chosen AWS
+service must pass a disposable migration, role, pgvector, TLS, RLS, readiness,
+backup/restore, and connection-budget rehearsal before production.
 
 Several migrations intentionally refuse automatic downgrade where data or security
 review is required. Production migration credentials must never be reused by API or
@@ -325,7 +350,7 @@ worker processes.
 
 ## 17. Failure boundaries
 
-**Current implementation.**
+**Implemented.**
 
 | Failure | Boundary and behavior |
 | --- | --- |
@@ -340,13 +365,13 @@ worker processes.
 | Note deleted during processing | Final capability checks reject or hide results tied to invalid evidence |
 | Frontend cannot reach API | API adapter shows an explicit error and does not substitute demo product data |
 
-**TBD / unresolved.** Production monitoring, alerting, log aggregation, database
+**TBD / deferred.** Production monitoring, alerting, log aggregation, database
 backup/restore drills, SMTP delivery operations, and deployment rollback automation
 need owners and tooling.
 
 ## 18. Ownership and responsibility zones
 
-**Current implementation.**
+**Implemented.**
 
 | Zone | Owns | Must not own |
 | --- | --- | --- |
@@ -359,7 +384,7 @@ need owners and tooling.
 
 ## 19. Change-impact guide
 
-**Current implementation.**
+**Implemented.**
 
 | Change | Inspect and validate |
 | --- | --- |
@@ -376,17 +401,22 @@ need owners and tooling.
 | Database schema | new Alembic revision, `CURRENT_SCHEMA_REVISION`, migration scripts, both CI providers |
 | Deployment config | role-specific env examples, Compose, health/readiness, release checklist |
 
-## 20. Known unresolved architecture decisions
+## 20. Known unresolved and deferred decisions
 
-**TBD / unresolved.**
+**TBD / deferred.**
 
 - VPS provider, country, and exact size.
 - Reverse proxy and public domain layout.
 - SMTP provider and production sender/domain configuration.
+- Final email support address supplied with the production domain.
 - Exact deployment, secret injection, observability, and rollback automation.
-- Managed PostgreSQL vendor and production connection/pooling parameters.
+- Exact AWS PostgreSQL service, engine/extension versions, network topology,
+  authentication method, and production connection/pooling parameters.
 - Production backup retention and restore-drill schedule.
-- Shared Groq quota accounting and per-workspace/user limits.
+- Analyze quota contract and enforcement. See the
+  [decision note](ANALYZE_QUOTA_DECISION.md); no count or charging rule is approved.
+- Full durable project-memory behavior. Current Analyze context is a bounded,
+  recent-Note selection and must not be represented as complete project history.
 - Whether and how to implement evaluated 120B reasoning escalation.
 - Voice upload/staging, server media inspection, cleanup, and transcript provenance.
 - GitHub ingestion scope, synchronization schedule, normalization, and release timing.

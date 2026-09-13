@@ -79,7 +79,7 @@ docker compose --profile ai up --build
 - backend health: http://localhost:8000/health
 - database readiness: http://localhost:8000/ready
 
-### PostgreSQL в Yandex Cloud без Docker
+### PostgreSQL в Yandex Cloud без Docker (тестовая совместимость)
 
 Frontend и backend можно запускать локально, а базу хранить в Yandex Managed
 Service for PostgreSQL. Нужны PostgreSQL 17, пользователи `flare_owner`,
@@ -90,6 +90,10 @@ Service for PostgreSQL. Нужны PostgreSQL 17, пользователи `flar
 `FLARE_DOTENV_PATH`. Пошаговая настройка, проверка реального managed-кластера и
 откат описаны в
 [инструкции по Yandex Managed PostgreSQL](backend/docs/yandex-managed-postgresql.md).
+Production-направление изменено на AWS-managed PostgreSQL; точный сервис и сеть
+ещё не выбраны. Совместимость, обязательная репетиция и открытые решения описаны
+в [AWS PostgreSQL readiness audit](docs/AWS_POSTGRESQL_READINESS.md). Yandex-ветка
+миграций и CI остаётся регрессионным покрытием.
 
 Docker Compose запускает первый сквозной сценарий с настоящей БД: заметка,
 созданная через Capture, отправляется в FastAPI, атомарно сохраняется в
@@ -109,6 +113,10 @@ Items, Vault, Analyze и Flares закрыты. Локальный Compose яв�
 проверку. Для ручной проверки установите `EMAIL_VERIFICATION_REQUIRED=true`:
 backend напечатает localhost-ссылку, не передавая SMTP или его секреты во
 frontend/worker.
+
+Email поддержки задаётся необязательным `SUPPORT_EMAIL` в runtime frontend.
+Settings показывает `mailto:` только для корректного адреса; до утверждения
+финального доменного адреса переменную нужно оставить пустой.
 
 Compose по умолчанию использует `FLARE_ENV=development` и
 `FLARE_DEV_MODE=false`. Браузер обращается к `/api` на своём origin; Next.js
@@ -149,6 +157,7 @@ pytest -q backend/tests
 npm --prefix frontend ci
 npm --prefix frontend run lint
 npm --prefix frontend run build
+BASE_URL=http://localhost:3000 python3 backend/scripts/release_smoke.py
 ```
 
 GitHub Actions выполняет обе группы проверок. Backend job поднимает PostgreSQL
@@ -161,7 +170,10 @@ Yandex в CI эмулирует подготовку пользователей 
 [План реализации MVP](docs/MVP_IMPLEMENTATION_PLAN.md),
 [исследование AI-моделей](docs/AI_MODELS.md),
 [текущая архитектура](docs/ARCHITECTURE.md),
+[готовность AWS PostgreSQL](docs/AWS_POSTGRESQL_READINESS.md),
+[решение по квотам Analyze](docs/ANALYZE_QUOTA_DECISION.md),
 [release checklist](docs/RELEASE_CHECKLIST.md),
+[release tests](docs/RELEASE_TESTS.md),
 [проект БД](backend/docs/database.md),
 [Yandex Managed PostgreSQL](backend/docs/yandex-managed-postgresql.md),
 [слои бэкенда](backend/docs/architecture.md),
