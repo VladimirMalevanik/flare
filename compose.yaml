@@ -131,6 +131,7 @@ services:
       API_INTERNAL_URL: http://backend:8000
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api}
       NEXT_PUBLIC_DATA_PROVIDER: ${NEXT_PUBLIC_DATA_PROVIDER:-api}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
