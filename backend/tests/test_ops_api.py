@@ -30,6 +30,7 @@ def test_ops_endpoints_require_workspace_owner_and_return_health(api_environment
     workspace_id = uuid4()
     owner_user = f"api-test|{uuid4()}"
     viewer_user = f"api-test|{uuid4()}"
+    non_member_workspace_id = uuid4()
 
     with api_environment.client(workspace_id=workspace_id, user_id=owner_user) as owner_client:
         _create_note(owner_client, title="Owner note", content="Owner has rights")
@@ -48,7 +49,13 @@ def test_ops_endpoints_require_workspace_owner_and_return_health(api_environment
         assert viewer_client.get("/ops/queue").status_code == 403
         assert viewer_client.post("/ops/queue/maintenance").status_code == 403
 
-    with api_environment.client(workspace_id=workspace_id, user_id=viewer_user) as non_member:
+    with api_environment.client(
+        workspace_id=non_member_workspace_id, user_id=viewer_user
+    ) as non_member:
+        api_environment.execute_admin(
+            "DELETE FROM public.workspace_members WHERE workspace_id = %s AND user_id = %s",
+            (non_member_workspace_id, viewer_user),
+        )
         assert non_member.get("/ops/queue").status_code == 403
 
 
