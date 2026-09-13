@@ -1,4 +1,4 @@
-"""Prepare or verify the 0007 -> 0008 existing-user verification backfill."""
+"""Prepare or verify the existing-user backfill applied by migration 0008."""
 
 import argparse
 import os
@@ -40,7 +40,10 @@ def main() -> None:
         revision = connection.execute(
             "SELECT version_num FROM public.alembic_version"
         ).fetchone()
-        assert revision == ("0008",), revision
+        # CI upgrades through the current repository head after preparing the
+        # pre-0008 fixture. Keep this assertion aligned with the linear chain so
+        # the check also detects a stale or branched migration result.
+        assert revision == ("0009",), revision
         verified = connection.execute(
             "SELECT email_verified_at IS NOT NULL FROM public.auth_users WHERE id=%s",
             (USER_ID,),
@@ -50,7 +53,7 @@ def main() -> None:
         connection.execute(
             "DELETE FROM public.workspaces WHERE id=%s", (WORKSPACE_ID,)
         )
-        print("PASS: 0007 -> 0008 existing-user backfill")
+        print("PASS: 0007 -> 0009; 0008 existing-user backfill preserved")
 
 
 if __name__ == "__main__":
