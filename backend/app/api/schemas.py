@@ -156,14 +156,16 @@ class ImportResponse(BaseModel):
 
 
 class QueueSummary(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     pending: int
     processing: int
     completed: int
     failed: int
     due: int
-    stale_processing: int
-    oldest_pending_seconds: float | None
-    oldest_processing_seconds: float | None
+    stale_processing: int = Field(serialization_alias="staleProcessing")
+    oldest_pending_seconds: float | None = Field(serialization_alias="oldestPendingSeconds")
+    oldest_processing_seconds: float | None = Field(serialization_alias="oldestProcessingSeconds")
 
 
 class QueueHealthResponse(BaseModel):
@@ -203,14 +205,14 @@ class QueueBucketSummary(BaseModel):
 class QueueMaintenanceResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    dry_run: bool
+    dry_run: bool = Field(serialization_alias="dryRun")
     applied: bool
     before: QueueHealthResponse
     after: QueueHealthResponse
-    recovered_stale_analysis_jobs: int
-    recovered_stale_flare_runs: int
-    analysis_jobs: QueueBucketSummary
-    flare_generation_runs: QueueBucketSummary
+    recovered_stale_analysis_jobs: int = Field(serialization_alias="recoveredStaleAnalysisJobs")
+    recovered_stale_flare_runs: int = Field(serialization_alias="recoveredStaleFlareRuns")
+    analysis_jobs: QueueBucketSummary = Field(serialization_alias="analysisJobs")
+    flare_generation_runs: QueueBucketSummary = Field(serialization_alias="flareGenerationRuns")
 
 
 class AnalyticsEventRequest(BaseModel):
