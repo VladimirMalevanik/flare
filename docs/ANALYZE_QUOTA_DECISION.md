@@ -78,4 +78,3 @@ add explicit controller/UI tests.
 4. Do configuration/provider failures consume, reserve, refund, or never charge?
 5. How do free and paid plans differ, and what upgrade or support action is shown?
 6. What usage/audit data may owners and operators see, and how long is it retained?
-
