@@ -2,7 +2,10 @@
 
 ## Решение для MVP
 
-PostgreSQL — основная БД; pgvector добавляет хранение embeddings и поиск похожих фрагментов. Файлы лежат в приватном object storage, а БД связывает их с командами, версиями и результатами ИИ. Это сокращает число сервисов на старте. Отдельную векторную БД можно оценить позже по объёму, задержке и стоимости запросов.
+PostgreSQL — основная БД, очередь durable jobs и граница workspace isolation.
+pgvector установлен, а `chunks.embedding` сохраняет будущую vector capacity, но
+текущий Analyze flow использует bounded recent Notes и keyword signals без
+embeddings. Durable file/object storage в текущем runtime не подключён.
 
 Источники: [pgvector](https://github.com/pgvector/pgvector), [PostgreSQL RLS](https://www.postgresql.org/docs/17/ddl-rowsecurity.html), [Alembic](https://alembic.sqlalchemy.org/en/latest/tutorial.html), [psycopg](https://www.psycopg.org/psycopg3/docs/basic/usage.html).
 
@@ -11,34 +14,57 @@ PostgreSQL — основная БД; pgvector добавляет хранени
 | Таблица | Назначение |
 | --- | --- |
 | `workspaces` | Стартап/команда; граница доступа ко всем материалам |
-| `workspace_members` | Внешний идентификатор пользователя и роль в команде |
+| `workspace_members` | Пользователь и роль owner/editor/viewer в команде |
+| `auth_users`, `auth_sessions` | Пользователи и отзываемые opaque sessions |
+| `auth_email_verifications` | Одноразовые digest-токены подтверждения email |
 | `documents` | Постоянная карточка материала и указатель на актуальную версию |
 | `document_versions` | Снимок исходника: хеш, ключ файла, версия парсера, состояние обработки |
 | `chunks` | Текст фрагмента, порядок, страница/раздел/таймкод в `locator`, embedding и имя модели |
+| `analysis_jobs`, `analysis_job_sources` | Durable extraction job и pinned immutable sources |
+| `analysis_runs` | Public idempotent Analyze status |
+| `flare_generation_runs` | Durable Flare generation stage |
 | `insights` | Текст вывода, модель и версия промпта для воспроизводимости |
 | `insight_sources` | Связь инсайта с конкретными фрагментами и сохранённая цитата |
+| `github_connection_states` | Workspace/user-bound одноразовый GitHub state |
+| `github_connections` | GitHub installation и один выбранный repository на workspace |
 
-`user_id` приходит из будущей системы авторизации; пароли пользователей в этой схеме не хранятся. `metadata`/`locator` в JSONB подходят для дополнительных атрибутов, но принадлежность команде и ключевые связи остаются обычными колонками с ограничениями.
+`auth_users` хранит Argon2id password hash. Случайные session и email-verification
+tokens в БД представлены только SHA-256 digest. `metadata`/`locator` в JSONB
+подходят для дополнительных атрибутов, но принадлежность workspace и ключевые
+связи остаются обычными колонками с ограничениями.
 
 ## Как проходит документ
 
-1. API проверяет пользователя и команду, создаёт `documents` и версию в состоянии `pending`.
-2. Worker переводит её в `processing`, извлекает текст и создаёт chunks. Оригинал хранится под отдельным неизменяемым ключом файла для каждой версии.
-3. Worker записывает embeddings. Перед публикацией он проверяет, что все нужные фрагменты обработаны одной выбранной моделью.
-4. В одной транзакции версия получает `ready`, а `documents.current_version_id` переключается на неё.
-5. При ошибке новая версия получает `failed`; предыдущая готовая версия остаётся доступна в поиске.
+1. API проверяет session, verified-user boundary, membership и write role.
+2. Для текущего Note-only path одна транзакция создаёт `documents`, ready
+   `document_versions`, immutable `chunks` и переключает `current_version_id`.
+3. `POST /analyze` отдельно выбирает ready Note chunks и атомарно сохраняет
+   `analysis_runs`, `analysis_jobs` и `analysis_job_sources`.
+4. Worker обрабатывает pinned chunks и записывает результат, не удерживая DB
+   connection во время Groq call.
+5. Успешная extraction stage создаёт `flare_generation_runs`; validated Flares и
+   exact evidence сохраняются в `insights`/`insight_sources` одной транзакцией.
 
-Уникальные номера версии и фрагмента помогают исключать дубли. Хеш исходника сохраняется для проверки повторных загрузок; полноценные идемпотентные worker-задачи, очередь и повторные попытки ещё предстоит реализовать. БД защищает готовые версии и фрагменты от обычной перезаписи; извлечение текста и проверка полноты embeddings — ответственность worker.
+Опубликованные версии и chunks защищены от обычной перезаписи. Job claim использует
+lease owner/token/expiry; bounded retry scheduling восстанавливает работу после
+worker crash. Analyze idempotency key исключает duplicate logical runs.
 
 ## Поиск и источники
 
-Embeddings — числовые представления текста. Запрос пользователя преобразуется той же моделью, что и документы. Поиск отбирает только текущие `ready`-версии активных документов своей команды, затем ранжирует их по близости к запросу. Начинаем с точного поиска без HNSW; дополнительный индекс стоит добавлять после замеров.
+Vault выполняет текстовый поиск текущих ready-версий активных документов. Analyze
+просматривает до 200 recent Notes и выбирает bounded chunks через deterministic
+signals; vector retrieval не используется.
 
 В начальной схеме `vector(1536)` — временная размерность, а не выбранный поставщик модели. Перед первой реальной индексацией нужно выбрать модель и размерность, обновить схему при необходимости. Равная размерность не делает разные модели совместимыми: запрос обязан фильтровать `embedding_model`. Миграция модели потребует пересчёта embeddings; не смешивайте их в одном поиске.
 
-ИИ получает текст и ID найденных chunks. Сервер принимает citations только из этого набора, проверяет связь с workspace и сохраняет `insights` + `insight_sources` в одной транзакции. FK защищают принадлежность, но не доказывают, что вывод верен или цитата соответствует тексту: эту проверку реализует приложение. При отсутствии достаточных источников продукт должен честно сообщать об этом.
+ИИ получает текст и ID pinned chunks. Сервер принимает citations только из этого
+набора, проверяет exact quote, workspace и current source state, затем сохраняет
+`insights` + `insight_sources` в одной транзакции. Valid empty output разрешён.
 
-Инсайт хранит ссылки на конкретные chunks. Обновление документа создаёт новые записи, поэтому старую цитату можно открыть в прежней версии. При `deleted_at` документ немедленно исключается из поиска; старые инсайты остаются. Физическое удаление исходников, текста, векторов и связанных цитат требует отдельного процесса очистки и согласованного срока хранения. Такой процесс здесь ещё не реализован.
+Инсайт хранит ссылки на конкретные chunks. При `deleted_at` документ исключается из
+Vault и новые Analyze runs; Flare read query скрывает весь Flare, если supporting
+document удалён или version перестала быть ready. Физическая retention/cleanup
+policy для soft-deleted history пока не реализована.
 
 ## Изоляция команд
 
@@ -77,6 +103,14 @@ API подключается только ролью `flare_app`, без SUPERUS
 
 ## Границы первого этапа
 
-Схема предполагает общий доступ участников ко всем материалам своего workspace. Права на отдельный документ, чат, биллинг, коннекторы, очереди и граф знаний в неё пока не включены. Для первого теста достаточно заметок и PDF; конкретные форматы и лимиты нужно выбрать вместе с командой.
+Схема предполагает общий доступ участников ко всем материалам своего workspace.
+Права на отдельный документ, workspace switching/invitations, чат, биллинг и граф
+знаний не реализованы. GitHub connection metadata включены; GitHub activity
+ingestion, durable file/URL/audio ingestion и quota accounting не включены.
 
-Изменения опубликованной схемы оформляйте новыми миграциями. `db/schema.sql` принадлежит миграции `0001` и после её публикации не переписывается. Миграция `0002` добавляет тип `audio`, JSONB-метаданные документов и поля `title`, `summary`, `kind`, `detail_title`, нужные frontend-контракту. Миграция `0003` даёт runtime-роли только `SELECT` на `alembic_version`, чтобы readiness мог требовать точную текущую ревизию; прав на изменение версии у приложения нет. Начальная миграция не предлагает автоматического отката с удалением данных.
+Изменения опубликованной схемы оформляйте новыми миграциями. `db/schema.sql`
+принадлежит `0001` и после публикации не переписывается. Текущая linear chain:
+`0001` → `0002` → `0003` → `0004` → `0005` → `0006` → `0007` → `0008`
+→ `0009`. `0008` добавляет email verification; `0009` — GitHub connection tables.
+Readiness требует точную `0009`. Некоторые downgrade intentionally запрещены и
+требуют reviewed restore plan.

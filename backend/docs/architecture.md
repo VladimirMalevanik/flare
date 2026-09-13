@@ -16,9 +16,16 @@
 models, storage и AI-интерфейсы. Реализации конкретных AI- и storage-провайдеров
 не должны проникать в API или доменные модели.
 
-Block 4 добавляет отдельную `flare_generation_runs`: completed TextAnalysis и
+Текущий Analyze flow выбирает bounded recent Note chunks и атомарно создаёт
+`analysis_runs`, `analysis_jobs` и pinned `analysis_job_sources`. Worker выполняет
+TextAnalysis, затем отдельную `flare_generation_runs`: completed TextAnalysis и
 pinned evidence родительского job → FlareDetector → атомарные записи в
 `insights`/`insight_sources` → read-only `/flares`. Обе стадии освобождают DB
 connection до вызова провайдера. API не вызывает модель; сохранение Note не
-ставит job. Выбор контекста и Analyze относятся к Block 5 и ещё не реализованы.
-Подробности: [Flare generation](flare-generation.md).
+ставит job. Подробности: [Analyze](analyze.md) и
+[Flare generation](flare-generation.md).
+
+GitHub App integration находится в тех же границах: `api/github.py` вызывает
+`GitHubConnectionService`, provider-клиент находится в `integrations/github.py`,
+а workspace-scoped state и connection metadata сохраняются через models. Это
+connection flow без commits/PR/issues ingestion.

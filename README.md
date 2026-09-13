@@ -105,8 +105,11 @@ Compose по умолчанию использует `FLARE_ENV=development` и
 проксирует запросы в FastAPI. Для production задайте `FLARE_ENV=production`,
 точный HTTPS origin в `CORS_ORIGINS` и настройте TLS перед Next.js. Подробности
 сессий, конфигурации и ограничений — в [backend/README.md](backend/README.md).
-Sources пока использует демонстрационные данные. Flares загружаются из БД;
-кнопка Analyze запускает обработку Notes через worker. Файлы, URL и аудио
+Sources использует реальный GitHub App flow для авторизации, выбора одного
+репозитория, сохранения подключения и отключения. Коммиты, pull requests и issues
+пока не загружаются в Vault и не участвуют в Analyze; остальные карточки Sources
+остаются демонстрационными или planned. Flares загружаются из БД, а кнопка Analyze
+запускает обработку Notes через worker. Файлы, URL и durable audio ingestion
 остаются следующими этапами.
 
 Проверить сохранение можно через интерфейс: создайте Note, откройте Vault и
@@ -136,6 +139,8 @@ Yandex в CI эмулирует подготовку пользователей 
 
 [План реализации MVP](docs/MVP_IMPLEMENTATION_PLAN.md),
 [исследование AI-моделей](docs/AI_MODELS.md),
+[текущая архитектура](docs/ARCHITECTURE.md),
+[release checklist](docs/RELEASE_CHECKLIST.md),
 [проект БД](backend/docs/database.md),
 [Yandex Managed PostgreSQL](backend/docs/yandex-managed-postgresql.md),
 [слои бэкенда](backend/docs/architecture.md),

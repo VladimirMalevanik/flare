@@ -13,8 +13,8 @@ src/mocks      seed data
 
 UI components never import mock arrays. They call the singleton `dataProvider`, typed by `FlareDataProvider`. `MockDataProvider` merges immutable seed content with browser-only user items from localStorage. Its storage calls are guarded against SSR and parsing failure. It stores file metadata and audio-derived text only — never blobs or binary.
 
-The existing `flare-user-items-v1` storage key is retained. Captures trigger a shared revision so lists and counts refresh without a page reload. Source configuration and preferences remain local demo state. In API mode, profile and workspace identity come from the authenticated backend session.
+The existing `flare-user-items-v1` storage key is retained. Captures trigger a shared revision so lists and counts refresh without a page reload. Non-GitHub source cards and preferences remain local demo state. In API mode, GitHub connection/repository state and profile/workspace identity come from the authenticated backend.
 
 One token system in `globals.css` handles light and dark appearance. System mode follows the operating-system preference. A shared native dialog provides expanded capture and detail/configuration overlays. `/` and the legacy `/dashboard` route redirect to `/insights`.
 
-`ApiDataProvider` owns the HTTP boundary and validates item DTOs before they reach the UI. `NEXT_PUBLIC_DATA_PROVIDER` selects it at build time. In API mode, item reads, note creation, and deletion use FastAPI and Flares read authenticated `/flares` endpoints. Only unimplemented Sources operations delegate to `MockDataProvider`; Flare errors never fall back to demo records.
+`ApiDataProvider` owns the HTTP boundary and validates DTOs before they reach the UI. `NEXT_PUBLIC_DATA_PROVIDER` selects it at build time. In API mode, item reads, Note creation/deletion, Analyze status, Flares, and GitHub connection operations use FastAPI. The provider delegates the base Sources catalog and non-GitHub saves to `MockDataProvider`; Flare, Note, Analyze, and GitHub errors never become demo product data.

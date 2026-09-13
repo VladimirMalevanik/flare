@@ -30,6 +30,11 @@ Logical operations expected by the interface:
 - `getInsight(id) → Insight | null`
 - `listSources() → Source[]`
 - `saveSource(source) → Source`
+- `getGitHubConnection() → GitHubConnection`
+- `startGitHubConnection() → authorizationUrl`
+- `listGitHubRepositories() → GitHubRepository[]`
+- `selectGitHubRepository(repositoryId) → GitHubConnection`
+- `disconnectGitHub() → void`
 
 Optional Item display fields remain `category`, `sourceLabel`, `author`, and
 `fileType`. The internal names `Insight`, `listInsights`, and `getInsight` remain;
@@ -37,8 +42,10 @@ the public Flare types are Reminder, Warning and Recommendation. Legacy Discover
 records are not converted into Recommendations.
 
 The REST adapter uses `GET /items`, `GET /items/:id`, `POST /items`, and
-`DELETE /items/:id`. Only Note ingestion is implemented. Sources configuration
-still uses the mock fallback; Flares never do.
+`DELETE /items/:id`. Only Note ingestion is implemented. Sources uses the catalog
+fallback for non-GitHub cards, while GitHub connection state, repository listing,
+selection, and disconnect use `/integrations/github`. GitHub activity ingestion is
+not implemented. Flares never use a mock fallback in API mode.
 
 ## Flares (Block 4)
 

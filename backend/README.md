@@ -121,19 +121,29 @@ editing не реализован. TLS/reverse-proxy deployment проверяе
 ## Изолированный AI-анализ (Block 2)
 
 Добавлен async-анализ уже авторизованных `Evidence[]` через Groq 20B.
-Он не подключён к API, сохранению Notes или БД. Контракт, ограничения, ошибки
+Он подключён к пользовательскому `POST /analyze` только через durable job и
+отдельный worker; API-процесс не вызывает Groq. Контракт, ограничения, ошибки
 и ручной smoke: [docs/text-analysis.md](docs/text-analysis.md).
 
 ## Durable jobs (Block 3)
 
-Добавлен внутренний enqueue и отдельный PostgreSQL worker для анализа immutable
-chunks. API сохранения Notes не запускает анализ. Схема 0005, роли, настройка,
-команда запуска и проверки: [docs/analysis-jobs.md](docs/analysis-jobs.md).
+Добавлены PostgreSQL queue capabilities и отдельный worker для анализа immutable
+chunks. `POST /analyze` создаёт idempotent public run и job; API сохранения Notes
+не запускает анализ. Схемы 0005/0007, роли, настройка, команда запуска и проверки:
+[docs/analysis-jobs.md](docs/analysis-jobs.md) и [docs/analyze.md](docs/analyze.md).
 
 ### Block 4: persisted Flares
 
 Migration 0006 adds a separate durable generation stage after completed analysis.
 The same worker alternates extraction/generation attempts. Authenticated
 `GET /flares` and `GET /flares/{id}` expose typed, evidence-backed records.
-No Analyze trigger or automatic Note processing is added.
+Explicit Analyze is implemented; automatic Note processing is not.
 See [generation configuration, security and checks](docs/flare-generation.md).
+
+## GitHub App connection
+
+Migration `0009` and `/integrations/github` implement single-use authorization
+state, GitHub user/installation verification, one repository selection per
+workspace, persistent connection metadata, and disconnect. Provider access tokens
+are ephemeral. Commits, pull requests, issues, Vault ingestion, and Analyze evidence
+remain unimplemented. The real GitHub browser handshake still requires a live smoke.
