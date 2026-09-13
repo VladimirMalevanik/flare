@@ -104,12 +104,13 @@ def queue_health(
 
 @router.post("/queue/maintenance", response_model=QueueMaintenanceResponse)
 def queue_maintenance(
-    request: QueueMaintenanceRequest,
     user: Annotated[AuthenticatedUser, Depends(_owner_required)],
     op_service: Annotated[QueueService, Depends(service)],
     analytics: Annotated[AnalyticsService, Depends(_analytics_service)],
+    request: QueueMaintenanceRequest | None = None,
 ) -> QueueMaintenanceResponse:
     del user
+    request = request or QueueMaintenanceRequest()
     try:
         result = _to_maintenance_schema(
             op_service.queue_maintenance(

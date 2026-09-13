@@ -105,6 +105,10 @@ class ApiEnvironment:
                 (ids,),
             )
             connection.execute(
+                "DELETE FROM public.activity_events WHERE workspace_id = ANY(%s)",
+                (ids,),
+            )
+            connection.execute(
                 "UPDATE public.documents SET current_version_id = NULL "
                 "WHERE workspace_id = ANY(%s)",
                 (ids,),

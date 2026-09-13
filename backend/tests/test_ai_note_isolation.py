@@ -3,6 +3,7 @@ import os
 from uuid import uuid4
 
 import pytest
+import psycopg
 from fastapi.testclient import TestClient
 
 from app.config import Settings
@@ -28,4 +29,9 @@ def test_missing_or_invalid_ai_config_never_calls_provider_for_notes(auth, monke
         created = client.post('/items', json={'type': 'note', 'content': 'No AI required.'})
         assert created.status_code == 201
         assert client.get('/items/' + created.json()['id']).json()['content'] == 'No AI required.'
+        with psycopg.connect(os.environ['TEST_DATABASE_URL']) as connection:
+            assert connection.execute(
+                "SELECT count(*) FROM analysis_jobs WHERE requested_by_user_id = %s",
+                (client.get('/auth/me').json()['user']['id'],),
+            ).fetchone() == (0,)
         assert client.delete('/items/' + created.json()['id']).status_code == 204
