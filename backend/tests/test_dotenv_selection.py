@@ -7,6 +7,21 @@ import pytest
 import app.environment as environment
 
 
+@pytest.fixture(autouse=True)
+def restore_process_environment():
+    names = environment._PROCESS_SECRETS | {
+        "FLARE_DATABASE_PROVIDER",
+        "FLARE_PROCESS_ROLE",
+    }
+    original = {name: environment.os.environ.get(name) for name in names}
+    yield
+    for name, value in original.items():
+        if value is None:
+            environment.os.environ.pop(name, None)
+        else:
+            environment.os.environ[name] = value
+
+
 def test_explicit_dotenv_is_authoritative(monkeypatch, tmp_path: Path):
     selected = tmp_path / "api.env"
     selected.write_text(
@@ -101,3 +116,40 @@ def test_worker_process_scrubs_email_delivery_configuration(monkeypatch):
     assert "SMTP_URL" not in environment.os.environ
     assert "APP_PUBLIC_URL" not in environment.os.environ
     assert "EMAIL_FROM" not in environment.os.environ
+
+
+def test_worker_process_scrubs_ambient_github_private_key(monkeypatch, tmp_path: Path):
+    selected = tmp_path / "worker.env"
+    selected.write_text(
+        "FLARE_PROCESS_ROLE=worker\nWORKER_DATABASE_URL=postgresql://worker\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FLARE_DOTENV_PATH", str(selected))
+    monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY", "must-not-reach-worker")
+    monkeypatch.setenv("GITHUB_CLIENT_SECRET", "must-not-reach-worker")
+    if "DATABASE_URL" in environment.os.environ:
+        monkeypatch.setenv("DATABASE_URL", environment.os.environ["DATABASE_URL"])
+
+    environment.load_project_dotenv(allowed_roles={"api", "worker"})
+
+    assert "GITHUB_APP_PRIVATE_KEY" not in environment.os.environ
+    assert "GITHUB_CLIENT_SECRET" not in environment.os.environ
+
+
+def test_default_discovery_uses_explicit_process_role_for_secret_separation(monkeypatch):
+    monkeypatch.delenv("FLARE_DOTENV_PATH", raising=False)
+    monkeypatch.setenv("FLARE_PROCESS_ROLE", "worker")
+    monkeypatch.setenv("WORKER_DATABASE_URL", "postgresql://worker")
+    monkeypatch.setenv("GROQ_API_KEY", "worker-only")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://api")
+    monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY", "api-only")
+    monkeypatch.setenv("GITHUB_CLIENT_SECRET", "api-only")
+    monkeypatch.setattr(environment, "load_dotenv", lambda: None)
+
+    environment.load_project_dotenv(allowed_roles={"api", "worker"})
+
+    assert environment.os.environ["WORKER_DATABASE_URL"] == "postgresql://worker"
+    assert environment.os.environ["GROQ_API_KEY"] == "worker-only"
+    assert "DATABASE_URL" not in environment.os.environ
+    assert "GITHUB_APP_PRIVATE_KEY" not in environment.os.environ
+    assert "GITHUB_CLIENT_SECRET" not in environment.os.environ

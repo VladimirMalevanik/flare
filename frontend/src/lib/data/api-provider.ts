@@ -8,6 +8,8 @@ import type {
   ItemType,
   ListItemOptions,
   Source,
+  GitHubConnection,
+  GitHubRepository,
 } from "./types";
 
 type ApiDataProviderOptions = {
@@ -159,6 +161,42 @@ function mapAnalysisRun(value: unknown): AnalysisRun {
     flareIds: dto.flareIds as string[], error: dto.error as string | null };
 }
 
+function mapGitHubRepository(value: unknown): GitHubRepository {
+  const dto = asRecord(value);
+  if (!Number.isInteger(dto.id) || (dto.id as number) <= 0 || typeof dto.private !== "boolean") {
+    throw new FlareApiError("The server returned an invalid GitHub repository.");
+  }
+  return {
+    id: dto.id as number,
+    owner: stringField(dto, "owner"),
+    name: stringField(dto, "name"),
+    fullName: stringField(dto, "fullName"),
+    private: dto.private,
+    htmlUrl: stringField(dto, "htmlUrl"),
+  };
+}
+
+function mapGitHubConnection(value: unknown): GitHubConnection {
+  const dto = asRecord(value);
+  const status = stringField(dto, "status");
+  if (!["disconnected", "pending", "connected"].includes(status)) {
+    throw new FlareApiError("The server returned an invalid GitHub connection status.");
+  }
+  if (dto.accountLogin !== null && dto.accountLogin !== undefined && typeof dto.accountLogin !== "string") {
+    throw new FlareApiError("The server returned an invalid GitHub account.");
+  }
+  const repository = dto.repository === null || dto.repository === undefined
+    ? null : mapGitHubRepository(dto.repository);
+  if ((status === "connected") !== (repository !== null)) {
+    throw new FlareApiError("The server returned an incomplete GitHub connection.");
+  }
+  return {
+    status: status as GitHubConnection["status"],
+    accountLogin: dto.accountLogin as string | null | undefined,
+    repository,
+  };
+}
+
 export class ApiDataProvider implements FlareDataProvider {
   private readonly baseUrl: string;
   private readonly fallback: FlareDataProvider;
@@ -214,12 +252,66 @@ export class ApiDataProvider implements FlareDataProvider {
     return mapAnalysisRun(await this.request(`/analysis-runs/${encodeURIComponent(id)}`, { signal }));
   }
 
-  listSources(): Promise<Source[]> {
-    return this.fallback.listSources();
+  async listSources(): Promise<Source[]> {
+    const sources = await this.fallback.listSources();
+    let connection: GitHubConnection;
+    try {
+      connection = await this.getGitHubConnection();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "GitHub connection could not be loaded.";
+      return sources.map((source) => source.id === "github" ? {
+        ...source, status: "error", scope: "One repository", channels: [],
+        description: "GitHub authorization is unavailable.", updated: "Connection error", error: message,
+      } : source);
+    }
+    return sources.map((source) => {
+      if (source.id !== "github") return source;
+      if (connection.status === "connected" && connection.repository) {
+        return { ...source, status: "connected", scope: connection.repository.fullName,
+          description: "Authorized read-only. Repository activity ingestion comes in the next phase.",
+          channels: [], updated: `Connected as ${connection.accountLogin ?? "GitHub account"}`,
+          accountLogin: connection.accountLogin ?? undefined, repository: connection.repository };
+      }
+      if (connection.status === "pending") {
+        return { ...source, status: "syncing", scope: "Choose one repository", channels: [],
+          description: "GitHub is authorized. Select the repository Flare should connect.",
+          updated: `Authorized as ${connection.accountLogin ?? "GitHub account"}`,
+          accountLogin: connection.accountLogin ?? undefined };
+      }
+      return { ...source, status: "disconnected", scope: "One repository", channels: [],
+        description: "Authorize the Flare GitHub App, then choose one repository.", updated: "Not connected" };
+    });
   }
 
   saveSource(source: Source): Promise<Source> {
     return this.fallback.saveSource(source);
+  }
+
+  async getGitHubConnection(): Promise<GitHubConnection> {
+    return mapGitHubConnection(await this.request("/integrations/github"));
+  }
+
+  async startGitHubConnection(): Promise<string> {
+    const body = asRecord(await this.request("/integrations/github/start", {
+      method: "POST", body: "{}",
+    }));
+    return stringField(body, "authorizationUrl");
+  }
+
+  async listGitHubRepositories(): Promise<GitHubRepository[]> {
+    const body = await this.request("/integrations/github/repositories");
+    if (!Array.isArray(body)) throw new FlareApiError("The server returned an invalid repository list.");
+    return body.map(mapGitHubRepository);
+  }
+
+  async selectGitHubRepository(repositoryId: number): Promise<GitHubConnection> {
+    return mapGitHubConnection(await this.request("/integrations/github/repository", {
+      method: "POST", body: JSON.stringify({ repositoryId }),
+    }));
+  }
+
+  async disconnectGitHub(): Promise<void> {
+    await this.request("/integrations/github", { method: "DELETE" });
   }
 
   async listItems(options: ListItemOptions = {}): Promise<Item[]> {

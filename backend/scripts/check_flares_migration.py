@@ -124,6 +124,24 @@ def main(*, verify_analysis_runs=False):
                     assert owners == [(executor,)]
                     assert not conn.execute("SELECT has_table_privilege('flare_worker','analysis_runs','SELECT')").fetchone()[0]
                 print(f'PASS ({args.provider}): 0006 -> 0007; all existing data preserved; repeat upgrade; capability ownership; worker isolation')
+                tables += ('analysis_runs',)
+                with psycopg.connect(dsn) as conn:
+                    preserved = snapshot(conn)
+                run(migrate + ['head'], env=env)
+                run(migrate + ['head'], env=env)
+                with psycopg.connect(dsn) as conn:
+                    assert snapshot(conn) == preserved
+                    assert conn.execute('SELECT version_num FROM alembic_version').fetchone() == ('0009',)
+                    assert conn.execute('SELECT count(*) FROM github_connection_states').fetchone() == (0,)
+                    assert conn.execute('SELECT count(*) FROM github_connections').fetchone() == (0,)
+                    protected = conn.execute("""SELECT count(*) FROM pg_class
+                        WHERE relname IN ('github_connection_states','github_connections')
+                        AND relrowsecurity AND relforcerowsecurity""").fetchone()
+                    assert protected == (2,)
+                    assert not conn.execute(
+                        "SELECT has_table_privilege('flare_worker','github_connections','SELECT')"
+                    ).fetchone()[0]
+                print(f'PASS ({args.provider}): 0007 -> 0009; all existing data preserved; repeat upgrade; email backfill; GitHub RLS; worker isolation')
             print(f'PASS ({args.provider}): 0005 -> 0006; eleven tables preserved; historical ordinals preserved; repeat startup; legacy identity/RLS; old-parent enqueue; atomic handoff')
         finally:
             run([binary('pg_ctl'), '-D', data, '-m', 'fast', '-w', 'stop'])

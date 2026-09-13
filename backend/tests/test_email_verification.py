@@ -8,7 +8,7 @@ import psycopg
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import Settings
+from app.config import GitHubSettings, Settings
 from app.main import create_app
 from app.services.auth_service import (
     AuthService,
@@ -182,8 +182,17 @@ def email_client(auth):
         email_verification_resend_seconds=1,
         app_public_url="http://localhost:3000",
     )
+    application = create_app(configured, email_sender=sender)
+    application.state.github_settings = GitHubSettings(
+        app_id=123,
+        app_slug="flare-test",
+        private_key="-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
+        frontend_return_url="http://testserver/sources",
+        client_id="Iv1.test",
+        client_secret="client-secret",
+    )
     with TestClient(
-        create_app(configured, email_sender=sender),
+        application,
         headers={"Origin": "http://testserver"},
     ) as client:
         yield client, sender
@@ -216,6 +225,7 @@ def test_http_limited_session_and_machine_readable_login_error(email_client):
             headers={"Idempotency-Key": str(uuid4())},
         ),
         client.get(f"/analysis-runs/{uuid4()}"),
+        client.post("/integrations/github/start", json={}),
     ]
     assert all(item.status_code == 403 for item in denied)
     assert all(

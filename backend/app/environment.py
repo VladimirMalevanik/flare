@@ -15,6 +15,8 @@ _ROLE_SECRETS = {
         "APP_PUBLIC_URL",
         "SMTP_URL",
         "EMAIL_FROM",
+        "GITHUB_APP_PRIVATE_KEY",
+        "GITHUB_CLIENT_SECRET",
     },
     "worker": {"WORKER_DATABASE_URL", "GROQ_API_KEY"},
     "migration": {"MIGRATION_DATABASE_URL"},
@@ -34,6 +36,8 @@ _PROCESS_SECRETS = {
     "APP_PUBLIC_URL",
     "SMTP_URL",
     "EMAIL_FROM",
+    "GITHUB_APP_PRIVATE_KEY",
+    "GITHUB_CLIENT_SECRET",
 }
 
 

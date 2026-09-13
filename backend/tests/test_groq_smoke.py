@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import sysconfig
 
 import pytest
 
@@ -16,8 +17,8 @@ def test_direct_smoke_without_editable_install_or_pythonpath(tmp_path, key_sourc
     # -I -S omits cwd, PYTHONPATH and editable-install .pth hooks. Add dependencies
     # only, proving the script itself makes this checkout's app importable.
     harness = r'''
-import importlib.util, json, runpy, sys, sysconfig
-sys.path.append(sysconfig.get_paths()['purelib'])
+import importlib.util, json, os, runpy, sys
+sys.path.append(os.environ['FLARE_TEST_PURELIB'])
 assert importlib.util.find_spec('app') is None
 import httpx
 calls = []
@@ -44,6 +45,11 @@ runpy.run_path(sys.argv[0], run_name='__main__')
 assert len(calls) == 1
 '''
     env = {k: v for k, v in os.environ.items() if not k.startswith(('GROQ_', 'LLM_'))}
+    # ``-S`` deliberately hides a virtual environment's site-packages and can
+    # make sysconfig resolve the base interpreter instead. Pass the dependency
+    # directory chosen by the test runner explicitly, while still excluding the
+    # checkout and editable-install hooks from the isolated child process.
+    env['FLARE_TEST_PURELIB'] = sysconfig.get_paths()['purelib']
     working = tmp_path / 'backend'
     (working / 'scripts').mkdir(parents=True)
     (working / 'scripts' / SCRIPT.name).write_text(SCRIPT.read_text())

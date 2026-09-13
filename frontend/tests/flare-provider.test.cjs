@@ -66,3 +66,30 @@ test('detail fetch is independent of the first list page and empty lists stay em
   assert.deepEqual(await api.getInsight('outside-first-page'),dto);
   assert.deepEqual(calls,['/api/flares','/api/flares/outside-first-page']);
 });
+
+test('GitHub source state and actions stay behind the API provider boundary', async () => {
+  const seed = [{id:'github',name:'GitHub',scope:'Project activity',description:'Planned',channels:[],status:'coming-soon',updated:'Soon'}];
+  const fallback = {listSources:async()=>seed};
+  const calls=[];
+  global.fetch=async(url,options={}) => {
+    calls.push([url,options.method ?? 'GET',options.body]);
+    if (url==='/api/integrations/github') return options.method==='DELETE'
+      ? new Response(null,{status:204})
+      : new Response(JSON.stringify({status:'connected',accountLogin:'acme',repository:{id:101,owner:'acme',name:'flare',fullName:'acme/flare',private:true,htmlUrl:'https://github.com/acme/flare'}}));
+    if (url.endsWith('/start')) return new Response(JSON.stringify({authorizationUrl:'https://github.com/apps/flare/installations/new?state=safe'}));
+    if (url.endsWith('/repositories')) return new Response(JSON.stringify([{id:101,owner:'acme',name:'flare',fullName:'acme/flare',private:true,htmlUrl:'https://github.com/acme/flare'}]));
+    if (url.endsWith('/repository')) return new Response(JSON.stringify({status:'connected',accountLogin:'acme',repository:{id:101,owner:'acme',name:'flare',fullName:'acme/flare',private:true,htmlUrl:'https://github.com/acme/flare'}}));
+    assert.fail(`Unexpected URL ${url}`);
+  };
+  const api=new ApiDataProvider({baseUrl:'/api',fallback});
+  const sources=await api.listSources();
+  assert.equal(sources[0].status,'connected'); assert.equal(sources[0].repository.fullName,'acme/flare');
+  assert.match(await api.startGitHubConnection(),/^https:\/\/github\.com\/apps\//);
+  assert.equal((await api.listGitHubRepositories())[0].id,101);
+  await api.selectGitHubRepository(101); await api.disconnectGitHub();
+  assert.deepEqual(calls.map(call=>call[0]),[
+    '/api/integrations/github','/api/integrations/github/start','/api/integrations/github/repositories',
+    '/api/integrations/github/repository','/api/integrations/github',
+  ]);
+  assert.equal(calls[3][2],'{"repositoryId":101}');
+});
