@@ -93,3 +93,25 @@ test('GitHub source state and actions stay behind the API provider boundary', as
   ]);
   assert.equal(calls[3][2],'{"repositoryId":101}');
 });
+
+test('text import sends the actual file text and maps the canonical imported item', async () => {
+  const calls=[];
+  const imported={id:'import-1',format:'csv',fileName:'customers.csv',item:{
+    id:'item-1',type:'file',title:'customers',content:'name,stage\nAda,beta\n',
+    fileName:'customers.csv',fileSize:20,fileType:'text/csv',status:'ready',
+    createdAt:'2026-09-09T00:00:00Z',extractedFacts:[],relatedItemIds:[]
+  },rowCount:1,chunkCount:1,analysisJobsQueued:1};
+  global.fetch=async (url, options) => {
+    calls.push([url, JSON.parse(options.body)]);
+    return new Response(JSON.stringify(imported));
+  };
+  const result=await provider().importTextFile({
+    format:'csv',fileName:'customers.csv',fileType:'text/csv',fileSize:20,
+    content:'name,stage\nAda,beta\n'
+  });
+  assert.deepEqual(result,imported);
+  assert.deepEqual(calls,[['/api/imports',{
+    format:'csv',fileName:'customers.csv',fileType:'text/csv',fileSize:20,
+    content:'name,stage\nAda,beta\n'
+  }]]);
+});

@@ -8,6 +8,7 @@ import {
   dataErrorMessage,
   dataProvider,
   type CreateItemInput,
+  type ImportFormat,
 } from "@/lib/data";
 import { readLocal, writeLocal } from "@/lib/storage/preferences";
 import { useVoiceCapture } from "./use-voice-capture";
@@ -15,6 +16,7 @@ import { useVoiceCapture } from "./use-voice-capture";
 const ORB_POSITION_KEY = "flare-orb-position-v1";
 const ORB_EDGE_PADDING = 12;
 const PANEL_EDGE_MARGIN = 16;
+const MAX_IMPORT_BYTES = 200_000;
 type OrbPosition = { x: number; y: number };
 type PointerStart = {
   pointerId: number;
@@ -24,6 +26,14 @@ type PointerStart = {
   orbY: number;
   moved: boolean;
 };
+
+function importFormatForFile(file: File): ImportFormat | null {
+  const name = file.name.trim().toLowerCase();
+  if (name.endsWith(".csv")) return "csv";
+  if (name.endsWith(".txt")) return "txt";
+  if (name.endsWith(".md") || name.endsWith(".markdown")) return "md";
+  return null;
+}
 
 function elapsed(seconds: number) {
   return `${Math.floor(seconds / 60)
@@ -81,12 +91,15 @@ export function Capture() {
   const orbSize =
     captureOrbSize === "small" ? 36 : captureOrbSize === "large" ? 52 : 44;
   const [hovered, setHovered] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
+  const [dragging, setDragging] = useState(false);
   const [orbDragging, setOrbDragging] = useState(false);
   const [orbPosition, setOrbPosition] = useState<OrbPosition | null>(null);
   const island = useRef<HTMLDivElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const pointerStart = useRef<PointerStart | null>(null);
   const suppressClick = useRef(false);
   const voice = useVoiceCapture();
@@ -122,9 +135,38 @@ export function Capture() {
   const close = useCallback(() => {
     if (busy) return;
     voice.cancel();
+    setDragging(false);
     setHovered(false);
     closeCapture();
   }, [busy, closeCapture, voice]);
+
+  useEffect(() => {
+    if (!captureOpen) return;
+    void dataProvider.trackEvent({
+      eventType: "capture_started",
+      targetType: "capture",
+    });
+  }, [captureOpen]);
+
+  const attach = (next: File | undefined) => {
+    if (!next || voiceIsland || busy) return;
+    const format = importFormatForFile(next);
+    if (!format) {
+      setError("Flare can import CSV, TXT, and Markdown files.");
+      return;
+    }
+    if (next.size > MAX_IMPORT_BYTES) {
+      setError("This import is too large. Choose a file up to 200 KB.");
+      return;
+    }
+    setError("");
+    setFile(next);
+    void dataProvider.trackEvent({
+      eventType: "capture_file_attached",
+      targetType: "import",
+      metadata: { format, fileSize: next.size, fileType: next.type || null },
+    });
+  };
 
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
@@ -211,20 +253,50 @@ export function Capture() {
   };
 
   const submit = async () => {
-    if (busy || voice.recording || voiceIsland || !draft.trim()) return;
+    if (busy || voice.recording || voiceIsland || (!draft.trim() && !file)) return;
     setBusy(true);
     setError("");
     try {
-      const content = draft.trim();
-      const input: CreateItemInput = {
-        type: "note",
-        title: content.split("\n")[0].slice(0, 100),
-        content,
-      };
-      const item = await dataProvider.createItem(input);
+      const item = file
+        ? await (async () => {
+            const format = importFormatForFile(file);
+            if (!format) throw new Error("Flare can import CSV, TXT, and Markdown files.");
+            // File.text() strips a UTF-8 BOM while File.size still counts it.
+            // Preserve the transport bytes so the server can validate the byte
+            // size, deduplicate the exact upload, then intentionally strip the
+            // BOM before parsing and storage.
+            const content = new TextDecoder("utf-8", {
+              fatal: true,
+              ignoreBOM: true,
+            }).decode(await file.arrayBuffer());
+            if (!content.trim()) throw new Error("The import file is empty.");
+            const imported = await dataProvider.importTextFile({
+              format,
+              fileName: file.name,
+              fileType: file.type || undefined,
+              fileSize: file.size,
+              content,
+            });
+            return imported.item;
+          })()
+        : await (async () => {
+            const content = draft.trim();
+            const input: CreateItemInput = {
+              type: "note",
+              title: content.split("\n")[0].slice(0, 100),
+              content,
+            };
+            return dataProvider.createItem(input);
+          })();
       refresh();
       setSaved(item.id);
       setDraft("");
+      setFile(null);
+      void dataProvider.trackEvent({
+        eventType: "capture_submitted",
+        targetType: file ? "import" : "note",
+        targetId: item.id,
+      });
       closeCapture();
     } catch (caught) {
       setError(dataErrorMessage(caught, "Capture failed. Try again."));
@@ -249,7 +321,7 @@ export function Capture() {
     <>
       <div
         ref={island}
-        className={`flare-capture orb-size-${captureOrbSize} flare-capture--${stage} ${orbDragging ? "is-orb-dragging" : ""}`}
+        className={`flare-capture orb-size-${captureOrbSize} flare-capture--${stage} ${dragging ? "is-dragging" : ""} ${orbDragging ? "is-orb-dragging" : ""}`}
         data-capture-state={stage}
         style={
           displayPosition
@@ -310,7 +382,10 @@ export function Capture() {
                 <button
                   className="voice-stop"
                   aria-label="Stop recording"
-                  onClick={voice.stop}
+                  onClick={() => {
+                    void dataProvider.trackEvent({ eventType: "capture_voice_stopped", targetType: "capture" });
+                    voice.stop();
+                  }}
                 >
                   <span />
                 </button>
@@ -334,27 +409,30 @@ export function Capture() {
           >
             <div
               className="capture-dropzone"
-              onDragOver={(event) => { event.preventDefault(); }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
               onDrop={(event) => {
-                if (event.dataTransfer.files.length) {
-                  event.preventDefault();
-                  setError("File capture is coming soon. Paste text to save a Note.");
-                }
+                event.preventDefault();
+                setDragging(false);
+                attach(event.dataTransfer.files[0]);
               }}
             >
               <textarea
                 autoFocus
                 aria-label="Capture content"
-                placeholder="Type or paste a Note…"
+                placeholder="Type a note or import a text file…"
                 rows={3}
                 value={draft}
                 disabled={busy}
                 onChange={(event) => setDraft(event.target.value)}
                 onPaste={(event) => {
                   const pastedFile = event.clipboardData.files[0];
-                  if (pastedFile && !event.clipboardData.getData("text/plain")) {
+                  if (pastedFile) {
                     event.preventDefault();
-                    setError("File capture is coming soon. Paste text to save a Note.");
+                    attach(pastedFile);
                   }
                 }}
                 onKeyDown={(event) => {
@@ -367,6 +445,25 @@ export function Capture() {
                   }
                 }}
               />
+              {file && (
+                <div className="attachment">
+                  <Icon name="file" />
+                  <span>{file.name} · {(file.size / 1024).toFixed(1)} KB</span>
+                  <button
+                    className="icon-button"
+                    aria-label="Remove attachment"
+                    disabled={busy}
+                    onClick={() => setFile(null)}
+                  >
+                    <Icon name="close" />
+                  </button>
+                </div>
+              )}
+              {file && (
+                <p className="capture-hint">
+                  {importFormatForFile(file)?.toUpperCase()} import · text is saved to this workspace
+                </p>
+              )}
             </div>
             {voice.recording && (
               <div className="capture-hint" role="status">
@@ -387,29 +484,32 @@ export function Capture() {
             <footer className="capture-actions">
               <button
                 className="icon-button"
-                aria-label="File capture — Coming soon"
-                title="File capture — Coming soon"
-                disabled
+                aria-label="Add file"
+                disabled={busy || voiceIsland}
+                onClick={() => fileInput.current?.click()}
               >
                 <Icon name="file" />
               </button>
               <button
                 className="icon-button"
                 aria-label="Start recording"
-                disabled={busy || !!voice.recording}
-                onClick={() => void voice.start()}
+                disabled={busy || !!voice.recording || !!file}
+                onClick={() => {
+                  void dataProvider.trackEvent({ eventType: "capture_voice_started", targetType: "capture" });
+                  void voice.start();
+                }}
               >
                 <Icon name="audio" />
               </button>
               <span className="capture-drop-hint">
-                Files coming soon
+                {dragging ? "Drop CSV, TXT, or Markdown" : "Import CSV, TXT, or Markdown"}
               </span>
               <button
                 className="button primary"
-                disabled={busy || !!voice.recording || !draft.trim()}
+                disabled={busy || !!voice.recording || (!draft.trim() && !file)}
                 onClick={() => void submit()}
               >
-                {busy ? "Saving…" : "Capture"}
+                {busy ? "Saving…" : file ? "Import" : "Capture"}
                 <span className="shortcut">⌘↵</span>
               </button>
               <button
@@ -424,6 +524,18 @@ export function Capture() {
           </section>
         )}
       </div>
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".csv,.txt,.md,.markdown,text/csv,text/plain,text/markdown"
+        className="sr-only"
+        tabIndex={-1}
+        aria-label="Capture file"
+        onChange={(event) => {
+          attach(event.target.files?.[0]);
+          event.target.value = "";
+        }}
+      />
       {saved && (
         <div className="toast" role="status">
           Captured in Vault{" "}

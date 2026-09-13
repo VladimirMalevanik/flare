@@ -1,8 +1,9 @@
 # Block 3: durable analysis jobs
 
-Internal flow only; Item HTTP routes and Note saving do not enqueue work.
-The Block 2 analyzer remains a pure `Evidence[]` component. Block 4 adds a separate [Flare generation stage](flare-generation.md) after
-completion; extraction still persists only TextAnalysis on its job.
+`POST /items` now creates documents for all supported input types and immediately
+enqueues durable analysis jobs for the new chunks. The Block 2 analyzer remains a
+pure `Evidence[]` component. Block 4 adds a separate [Flare generation stage](flare-generation.md)
+after completion; extraction still persists only `TextAnalysis` on its job.
 
 ## Schema and dedupe
 
@@ -61,7 +62,7 @@ remain outside runtime environments. Tenant tables remain FORCE RLS; their
 existing workspace policy is intersected with new executor requester/membership
 restrictions. Worker-supplied workspace/user GUCs are never used to choose
 evidence: the validation helper derives context from the claimed job and verifies
-its active account, owner/editor membership, ready chunk versions, Note document
+its active account, owner/editor membership, ready chunk versions, supported source
 type and absence of soft deletion.
 
 Every capability uses its own connection context:
@@ -139,9 +140,10 @@ python -m app.workers.analysis_worker          # SIGINT/SIGTERM finish current j
 python -m app.workers.analysis_worker --once   # at most one job; may call Groq
 ```
 
-The internal enqueue seam is `AnalysisJobService(queue, ai, worker_settings).enqueue(
-identity, tuple_of_chunk_uuids)`. The trusted caller owns authentication and source
-selection; database authorization is repeated. Nothing calls it from HTTP yet.
+Trusted ingestion services call `public.enqueue_analysis_job` inside the same
+transaction that creates immutable chunks: `ItemService` handles `/items`, and
+`ImportService` handles `/imports`. Authentication and source selection remain
+server-owned; database authorization is repeated by the function.
 
 ## Checks and limits
 
@@ -161,11 +163,13 @@ and a non-root OS user, and compares seven populated tables across 0004 → 0005
 Tests use fake analyzers, including a separate process and a blocked analyzer
 while checking `pg_stat_activity`; they never require a live Groq call.
 
-Limits: one sequential attempt per worker process; no heartbeat, retention cleanup,
-public retry or deployment orchestration. Expired-lease recovery requires a running
-worker. A crash after a provider response but before commit can repeat a provider
-request; lease fencing guarantees one committed result, not exactly-once external
-execution. Revocation during an in-flight request cannot unsend evidence, but blocks
+Limits: one sequential attempt per worker process; no automatic heartbeat,
+scheduled maintenance, public retry or deployment orchestration. Workspace owners
+can inspect the queue and run bounded retention/stale-lease maintenance through
+`/ops/queue`, but a production scheduler/alert destination still has to invoke it.
+A crash after a provider response but before commit can repeat a provider request;
+lease fencing guarantees one committed result, not exactly-once external execution.
+Revocation during an in-flight request cannot unsend evidence, but blocks
 persistence. Server-owned DB identities and worker credentials remain trusted.
 
 References: [PostgreSQL locking](https://www.postgresql.org/docs/17/explicit-locking.html),

@@ -3,15 +3,18 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from hashlib import sha256
+import secrets
 from uuid import UUID
 
 import psycopg
 from psycopg import Connection
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
+from pwdlib import PasswordHash
 
 
-CURRENT_SCHEMA_REVISION = "0009"
+CURRENT_SCHEMA_REVISION = "0013"
 TENANT_TABLES = (
     "workspaces",
     "workspace_members",
@@ -26,6 +29,8 @@ TENANT_TABLES = (
     "analysis_runs",
     "github_connection_states",
     "github_connections",
+    "activity_events",
+    "import_batches",
 )
 
 
@@ -99,6 +104,8 @@ def _connection_is_ready(connection: Connection) -> bool:
                UNION ALL SELECT 1 FROM public.analysis_runs
                UNION ALL SELECT 1 FROM public.github_connection_states
                UNION ALL SELECT 1 FROM public.github_connections
+               UNION ALL SELECT 1 FROM public.activity_events
+               UNION ALL SELECT 1 FROM public.import_batches
            )"""
     ).fetchone()
     if customer_rows_are_hidden != (True,):
@@ -200,3 +207,24 @@ class Database:
                         "SELECT public.provision_workspace(%s, %s)",
                         (identity.workspace_id, workspace_name),
                     )
+                # Development identity is deliberately not a login credential:
+                # the random password is discarded after its hash is stored.
+                connection.execute(
+                    """INSERT INTO public.auth_users
+                           (id, email, password_hash, name, initial_workspace_id, disabled)
+                       VALUES (%s, %s, %s, %s, %s, false)
+                       ON CONFLICT (id) DO UPDATE SET disabled = false""",
+                    (
+                        identity.user_id,
+                        self._development_user_email(identity.user_id),
+                        PasswordHash.recommended().hash(secrets.token_urlsafe(32)),
+                        "Development user",
+                        identity.workspace_id,
+                    ),
+                )
+
+    @staticmethod
+    def _development_user_email(user_id: str) -> str:
+        """Generate a valid, deterministic address without exposing the dev id."""
+        fingerprint = sha256(user_id.encode("utf-8")).hexdigest()
+        return f"dev-{fingerprint}@flare.invalid"

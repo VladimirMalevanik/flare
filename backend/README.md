@@ -1,7 +1,8 @@
 # Flare backend
 
 FastAPI, PostgreSQL и workspace RLS. Поддерживаются регистрация, вход,
-серверные сессии и сохранение текстовых заметок.
+серверные сессии, сохранение источников, импорт CSV/TXT/Markdown, очередь
+анализа и подключение GitHub App.
 
 ## Запуск
 
@@ -45,16 +46,24 @@ PostgreSQL пользователи `flare_owner`, `flare_app`, `flare_worker` �
 | `GET /auth/me` | `{user: {id, email, name, emailVerified}, workspace: {id, name, role}}` |
 | `POST /auth/verify-email` | `{token}` → одноразовое подтверждение email |
 | `POST /auth/resend-verification` | `{email}` → нейтральный 202 без раскрытия аккаунта |
-| `POST /items` | `{type: "note", content, title?}` → документ, готовая версия и chunk |
+| `POST /items` | `{type: "note" | "url" | "file" | "audio", ...}` → документ, готовая версия, chunk и задача анализа |
 | `GET /items` | Поиск: `query`, `type`, `limit` |
 | `GET /items/{id}` | Активная заметка своего workspace |
 | `DELETE /items/{id}` | Soft delete; опубликованная версия и chunk сохраняются |
+| `POST /imports` | `{format: "csv" | "txt" | "md", fileName, fileSize, content}` → документ, import batch и задачи анализа |
+| `GET /imports/{id}` | Статус и canonical item одного текстового импорта |
+| `POST /analytics/events` | Разрешённое действие продукта → `202`, без содержимого источника |
+| `GET /analytics/events` | Сводка частоты действий workspace за 1–720 часов |
+| `GET /ops/queue` | Только owner: состояние jobs, flare runs и признаки зависания |
+| `POST /ops/queue/maintenance` | Только owner: dry-run/очистка старых задач и возврат просроченных leases |
+| `POST /integrations/github/start` | Запускает GitHub App installation flow; callback, выбор repo и disconnect живут под тем же префиксом |
 
 Пароль при регистрации: 8–128 символов; имя: 1–100. Email обрезается по краям
 и приводится к нижнему регистру. Ошибки: 401 — нет действующей сессии/неверный
 вход; 403 — Origin, membership или роль; 404 — чужой/отсутствующий item;
 409 — регистрация не завершена (включая занятый email); 422 — неверный payload.
-Ответы auth/items имеют `Cache-Control: no-store`; ошибки валидации не отражают пароль.
+Ответы auth/items/imports/analytics/ops/integrations имеют `Cache-Control: no-store`;
+ошибки валидации не отражают пароль.
 
 ## Сессии и авторизация
 
@@ -124,16 +133,28 @@ editing не реализован. TLS/reverse-proxy deployment проверяе
 Он не подключён к API, сохранению Notes или БД. Контракт, ограничения, ошибки
 и ручной smoke: [docs/text-analysis.md](docs/text-analysis.md).
 
-## Durable jobs (Block 3)
+## Durable jobs
 
-Добавлен внутренний enqueue и отдельный PostgreSQL worker для анализа immutable
-chunks. API сохранения Notes не запускает анализ. Схема 0005, роли, настройка,
-команда запуска и проверки: [docs/analysis-jobs.md](docs/analysis-jobs.md).
+Новая заметка или текстовый импорт в той же транзакции добавляет durable job для
+immutable chunks. API возвращает сохранённый источник сразу; worker обрабатывает
+очередь отдельно и требует только свою DB-роль и `GROQ_API_KEY`. Явный Analyze
+остаётся для отдельного ограниченного прогона. Схема, роли, настройка, команда
+запуска и проверки: [docs/analysis-jobs.md](docs/analysis-jobs.md).
 
 ### Block 4: persisted Flares
 
 Migration 0006 adds a separate durable generation stage after completed analysis.
 The same worker alternates extraction/generation attempts. Authenticated
 `GET /flares` and `GET /flares/{id}` expose typed, evidence-backed records.
-No Analyze trigger or automatic Note processing is added.
+New sources now enqueue analysis through the ingestion path; generation still
+only starts after completed analysis.
+
+## GitHub connection
+
+`/integrations/github` uses the authenticated, verified server session. Its state
+is single-use and stored as a hash; OAuth verifies the user can access the chosen
+installation, then GitHub App access is limited to selecting metadata for a
+repository. The application stores connection metadata, never GitHub OAuth or
+installation tokens. Repository-content ingestion is intentionally not part of
+this connection flow yet.
 See [generation configuration, security and checks](docs/flare-generation.md).

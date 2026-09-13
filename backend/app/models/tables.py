@@ -6,6 +6,7 @@ from typing import Any
 from uuid import UUID
 
 from psycopg import Connection
+from psycopg.types.json import Jsonb
 
 
 @dataclass(frozen=True)
@@ -32,7 +33,7 @@ class ItemRepository:
                v.state,
                d.created_at,
                COALESCE((
-                   SELECT string_agg(c.content, E'\\n\\n' ORDER BY c.ordinal)
+                   SELECT string_agg(c.content, '' ORDER BY c.ordinal)
                    FROM public.chunks c
                    WHERE c.workspace_id = d.workspace_id
                      AND c.document_version_id = v.id
@@ -52,13 +53,16 @@ class ItemRepository:
         item_id: UUID,
         workspace_id: UUID,
         title: str,
+        item_type: str,
+        source_url: str | None,
+        metadata: dict[str, Any],
     ) -> datetime:
         row = self._connection.execute(
             """INSERT INTO public.documents
-                   (id, workspace_id, title, source_type, metadata)
-               VALUES (%s, %s, %s, 'note', '{}'::jsonb)
+                   (id, workspace_id, title, source_type, source_url, metadata)
+               VALUES (%s, %s, %s, %s, %s, %s)
                RETURNING created_at""",
-            (item_id, workspace_id, title),
+            (item_id, workspace_id, title, item_type, source_url, Jsonb(metadata)),
         ).fetchone()
         return row["created_at"]
 
@@ -69,13 +73,14 @@ class ItemRepository:
         workspace_id: UUID,
         document_id: UUID,
         content_hash: str,
+        parser_version: str,
     ) -> None:
         self._connection.execute(
             """INSERT INTO public.document_versions
                    (id, workspace_id, document_id, version_number, content_hash,
                     parser_version, state)
-               VALUES (%s, %s, %s, 1, %s, 'manual-note-v1', 'processing')""",
-            (version_id, workspace_id, document_id, content_hash),
+               VALUES (%s, %s, %s, 1, %s, %s, 'processing')""",
+            (version_id, workspace_id, document_id, content_hash, parser_version),
         )
 
     def insert_chunk(
@@ -85,13 +90,15 @@ class ItemRepository:
         workspace_id: UUID,
         version_id: UUID,
         content: str,
+        locator: dict[str, object],
+        ordinal: int = 0,
     ) -> None:
         self._connection.execute(
             """INSERT INTO public.chunks
                    (id, workspace_id, document_version_id, ordinal, content,
                     locator)
-               VALUES (%s, %s, %s, 0, %s, '{"kind":"note"}'::jsonb)""",
-            (chunk_id, workspace_id, version_id, content),
+               VALUES (%s, %s, %s, %s, %s, %s::jsonb)""",
+            (chunk_id, workspace_id, version_id, ordinal, content, Jsonb(locator)),
         )
 
     def publish_version(self, *, document_id: UUID, version_id: UUID) -> None:

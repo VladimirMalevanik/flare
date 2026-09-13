@@ -9,10 +9,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
+from app.api.analytics import router as analytics_router
 from app.api.auth import router as auth_router
 from app.api.flares import router as flares_router
 from app.api.analysis import router as analysis_router
 from app.api.github import router as github_router
+from app.api.imports import router as imports_router
+from app.api import ops
 from app.config import Settings, settings
 from app.models.database import Database, WorkspaceIdentity
 from app.services.email import EmailSender
@@ -78,7 +81,10 @@ def create_app(
             if request.headers.get("origin") not in configured.cors_origins:
                 return JSONResponse({"detail": "Request origin is not allowed"}, status_code=403)
         response = await call_next(request)
-        if request.url.path.startswith(("/auth", "/items", "/flares", "/analyze", "/analysis-runs", "/integrations")):
+        if request.url.path.startswith((
+            "/auth", "/items", "/imports", "/flares", "/analyze", "/analysis-runs",
+            "/integrations", "/ops", "/analytics",
+        )):
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -91,9 +97,12 @@ def create_app(
         ]}, status_code=422)
 
     application.include_router(auth_router)
+    application.include_router(imports_router)
     application.include_router(flares_router)
     application.include_router(analysis_router)
     application.include_router(github_router)
+    application.include_router(ops.router)
+    application.include_router(analytics_router)
     application.include_router(router)
     return application
 

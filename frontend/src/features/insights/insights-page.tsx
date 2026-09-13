@@ -106,6 +106,12 @@ export function InsightsPage() {
           .querySelector(".evidence-panel")
           ?.scrollIntoView({ block: "start" }),
       );
+    void dataProvider.trackEvent({
+      eventType: "flare_viewed",
+      targetType: "flare",
+      targetId: id,
+      metadata: { source: "insights_feed" },
+    });
   };
   return (
     <div className={`insights-layout ${active ? "with-evidence" : ""}`}>
@@ -169,10 +175,30 @@ export function InsightsPage() {
             {!itemCount && (
               <>
                 <div className="form-actions">
-                  <button className="button primary" onClick={() => openCapture()}>
+                  <button
+                    className="button primary"
+                    onClick={() => {
+                      void dataProvider.trackEvent({
+                        eventType: "capture_started",
+                        targetType: "capture",
+                        metadata: { source: "insights_no_flares" },
+                      });
+                      openCapture();
+                    }}
+                  >
                     Add context
                   </button>
-                  <Link className="button" href="/sources">
+                  <Link
+                    className="button"
+                    href="/sources"
+                    onClick={() => {
+                      void dataProvider.trackEvent({
+                        eventType: "flare_viewed",
+                        targetType: "screen",
+                        metadata: { screen: "sources_from_insights" },
+                      });
+                    }}
+                  >
                     Import from Obsidian
                   </Link>
                 </div>

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 
 from app.api.schemas import CreateItemRequest, HealthResponse, ItemResponse
 from app.config import Settings
-from app.api.auth import current_user
+from app.api.auth import verified_user
 from app.services.auth_service import AuthenticatedUser
 from app.models.database import (
     Database,
@@ -17,8 +17,7 @@ from app.models.database import (
     database_is_ready,
 )
 from app.services.item_service import ItemNotFoundError, ItemService
-
-from app.api.auth import verified_user
+from app.services.analytics_service import AnalyticsService
 
 router = APIRouter()
 
@@ -32,6 +31,13 @@ def _database(request: Request) -> Database:
     if database is None:
         raise HTTPException(status_code=503, detail="Database is not configured")
     return database
+
+
+def _analytics_service(
+    user: Annotated[AuthenticatedUser, Depends(verified_user)],
+    database: Annotated[Database, Depends(_database)],
+) -> AnalyticsService:
+    return AnalyticsService(database, user.identity)
 
 
 def _item_service(
@@ -60,6 +66,14 @@ def _raise_http_error(error: Exception) -> None:
     if isinstance(error, WritePermissionRequiredError):
         raise HTTPException(status_code=403, detail="Workspace write permission is required") from None
     raise error
+
+
+def _track_event_safely(analytics: AnalyticsService, **event: object) -> None:
+    """Telemetry must never make a saved, read, or deleted item unavailable."""
+    try:
+        analytics.track_event(**event)
+    except Exception:
+        return
 
 
 @router.get("/health", response_model=HealthResponse, tags=["health"])
@@ -93,11 +107,35 @@ def ready(request: Request) -> HealthResponse:
 def create_item(
     payload: CreateItemRequest,
     service: Annotated[ItemService, Depends(_item_service)],
+    analytics: Annotated[AnalyticsService, Depends(_analytics_service)],
 ) -> ItemResponse:
+    content = payload.effective_content()
+    if not content:
+        raise HTTPException(status_code=422, detail="content is required for this item type")
+    if payload.type == "url" and not payload.source_url:
+        raise HTTPException(status_code=422, detail="sourceUrl is required for url items")
+    if payload.type == "file" and not payload.file_name:
+        raise HTTPException(status_code=422, detail="fileName is required for file items")
     try:
-        return ItemResponse.from_record(
-            service.create_note(title=payload.title, content=payload.content)
+        item = ItemResponse.from_record(
+            service.create_item(
+                item_type=payload.type,
+                title=payload.title,
+                content=content,
+                source_url=payload.source_url,
+                file_name=payload.file_name,
+                file_size=payload.file_size,
+                file_type=payload.file_type,
+            )
         )
+        _track_event_safely(
+            analytics,
+            event_type="item_created",
+            target_type="item",
+            target_id=str(item.id),
+            metadata={"item_type": payload.type},
+        )
+        return item
     except (MembershipRequiredError, WritePermissionRequiredError) as error:
         _raise_http_error(error)
 
@@ -139,9 +177,17 @@ def list_items(
 def get_item(
     item_id: UUID,
     service: Annotated[ItemService, Depends(_item_service)],
+    analytics: Annotated[AnalyticsService, Depends(_analytics_service)],
 ) -> ItemResponse:
     try:
-        return ItemResponse.from_record(service.get_item(item_id))
+        item = ItemResponse.from_record(service.get_item(item_id))
+        _track_event_safely(
+            analytics,
+            event_type="item_viewed",
+            target_type="item",
+            target_id=str(item.id),
+        )
+        return item
     except (ItemNotFoundError, MembershipRequiredError) as error:
         _raise_http_error(error)
 
@@ -154,9 +200,16 @@ def get_item(
 def delete_item(
     item_id: UUID,
     service: Annotated[ItemService, Depends(_item_service)],
+    analytics: Annotated[AnalyticsService, Depends(_analytics_service)],
 ) -> Response:
     try:
         service.delete_item(item_id)
+        _track_event_safely(
+            analytics,
+            event_type="item_deleted",
+            target_type="item",
+            target_id=str(item_id),
+        )
     except (ItemNotFoundError, MembershipRequiredError, WritePermissionRequiredError) as error:
         _raise_http_error(error)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

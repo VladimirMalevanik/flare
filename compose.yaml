@@ -72,14 +72,18 @@ services:
         condition: service_healthy
     restart: "no"
 
-  configure-worker:
+  # AI processing is opt-in locally because it needs a real Groq key. It has
+  # its own least-privilege database role and never receives DATABASE_URL.
+  worker-configure:
     image: pgvector/pgvector:pg17
-    entrypoint: ["psql", "-h", "db", "-U", "postgres", "-d", "flare", "-v", "ON_ERROR_STOP=1", "-f", "/configure-worker.sql"]
+    profiles: ["ai"]
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD:?Copy .env.example to .env}
-      WORKER_PASSWORD: ${WORKER_PASSWORD:?Set WORKER_PASSWORD for the worker role}
+      WORKER_PASSWORD: ${WORKER_PASSWORD:?Set a local worker password in .env}
+    command:
+      ["sh", "-ec", "psql -h db -U postgres -d flare -v ON_ERROR_STOP=1 -f /scripts/configure-worker.sql"]
     volumes:
-      - ./backend/db/configure-worker.sql:/configure-worker.sql:ro
+      - ./backend/db/configure-worker.sql:/scripts/configure-worker.sql:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -87,24 +91,34 @@ services:
 
   worker:
     build: ./backend
+    profiles: ["ai"]
     command: ["python", "-m", "app.workers.analysis_worker"]
     environment:
       FLARE_PROCESS_ROLE: worker
-      WORKER_DATABASE_URL: postgresql://flare_worker:${WORKER_PASSWORD:?Set WORKER_PASSWORD for the worker role}@db:5432/flare
-      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      WORKER_DATABASE_URL: postgresql://flare_worker:${WORKER_PASSWORD:?Set a local worker password in .env}@db:5432/flare
+      GROQ_API_KEY: ${GROQ_API_KEY:?Set GROQ_API_KEY before starting the ai profile}
+      GROQ_BASE_URL: ${GROQ_BASE_URL:-https://api.groq.com}
       LLM_DEFAULT_MODEL: ${LLM_DEFAULT_MODEL:-openai/gpt-oss-20b}
       LLM_DEFAULT_REASONING_EFFORT: ${LLM_DEFAULT_REASONING_EFFORT:-low}
       LLM_MAX_SOURCES: ${LLM_MAX_SOURCES:-5}
       LLM_MAX_INPUT_BYTES: ${LLM_MAX_INPUT_BYTES:-4000}
       LLM_MAX_COMPLETION_TOKENS: ${LLM_MAX_COMPLETION_TOKENS:-2000}
+      LLM_CONNECT_TIMEOUT_SECONDS: ${LLM_CONNECT_TIMEOUT_SECONDS:-5}
+      LLM_REQUEST_TIMEOUT_SECONDS: ${LLM_REQUEST_TIMEOUT_SECONDS:-30}
+      LLM_DEADLINE_SECONDS: ${LLM_DEADLINE_SECONDS:-40}
+      ANALYSIS_MAX_ATTEMPTS: ${ANALYSIS_MAX_ATTEMPTS:-3}
+      ANALYSIS_LEASE_SECONDS: ${ANALYSIS_LEASE_SECONDS:-120}
+      ANALYSIS_POLL_SECONDS: ${ANALYSIS_POLL_SECONDS:-1}
+      ANALYSIS_BACKOFF_SECONDS: ${ANALYSIS_BACKOFF_SECONDS:-5}
+      ANALYSIS_MAX_BACKOFF_SECONDS: ${ANALYSIS_MAX_BACKOFF_SECONDS:-300}
       FLARE_MAX_COMPLETION_TOKENS: ${FLARE_MAX_COMPLETION_TOKENS:-1024}
       FLARE_MAX_REQUEST_BYTES: ${FLARE_MAX_REQUEST_BYTES:-32000}
     depends_on:
-      configure-worker:
+      worker-configure:
         condition: service_completed_successfully
       db:
         condition: service_healthy
-    restart: on-failure
+    restart: unless-stopped
 
   frontend:
     build:
