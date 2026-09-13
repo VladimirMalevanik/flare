@@ -76,7 +76,7 @@ def get_flare(
             analytics,
             event_type="flare_viewed",
             target_type="flare",
-            target_id=str(flare.id),
+            target_id=str(flare["id"]),
         )
         return flare
     except FlareNotFound:

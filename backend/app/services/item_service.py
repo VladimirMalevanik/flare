@@ -15,9 +15,16 @@ class ItemNotFoundError(Exception):
 
 
 class ItemService:
-    def __init__(self, database: Database, identity: WorkspaceIdentity):
+    def __init__(
+        self,
+        database: Database,
+        identity: WorkspaceIdentity,
+        *,
+        enqueue_analysis: bool = True,
+    ):
         self._database = database
         self._identity = identity
+        self._enqueue_analysis = enqueue_analysis
 
     def create_note(self, *, title: str | None, content: str) -> ItemRecord:
         return self.create_item(
@@ -82,7 +89,8 @@ class ItemService:
                 ),
             )
             repository.publish_version(document_id=item_id, version_id=version_id)
-            self._enqueue_item_analysis(connection, (chunk_id,))
+            if self._enqueue_analysis:
+                self._enqueue_item_analysis(connection, (chunk_id,))
             item = repository.get_active(item_id)
             if item is None:
                 raise RuntimeError("Created item could not be read back")
@@ -135,10 +143,15 @@ class ItemService:
         return locator
 
     def _enqueue_item_analysis(self, connection, chunks: tuple[UUID, ...]) -> None:
-        """Enqueue analysis in the same SQL transaction as the new snapshot."""
-        ai = load_ai_settings()
-        worker = load_worker_settings()
-        worker.validate(ai)
+        """Enqueue valid work without making capture depend on AI configuration."""
+        try:
+            ai = load_ai_settings()
+            worker = load_worker_settings()
+            worker.validate(ai)
+        except ValueError:
+            # Capture remains durable when the separately operated AI worker is
+            # absent or misconfigured. No provider is constructed in this path.
+            return
         connection.execute(
             "SELECT public.enqueue_analysis_job(%s, %s, %s)",
             (list(chunks), pipeline_revision(ai), worker.max_attempts),

@@ -9,11 +9,15 @@ from test_items_api import ApiEnvironment, _create_note
 
 
 @pytest.fixture
-def api_environment() -> ApiEnvironment:
-    return ApiEnvironment(
+def api_environment():
+    environment = ApiEnvironment(
         runtime_url=os.environ.get("DATABASE_URL", ""),
         admin_url=os.environ.get("TEST_DATABASE_URL", ""),
     )
+    try:
+        yield environment
+    finally:
+        environment.cleanup()
 
 
 @pytest.mark.integration
@@ -52,6 +56,7 @@ def test_analytics_summary_collects_item_and_capture_events(api_environment, win
 @pytest.mark.integration
 def test_analytics_endpoints_reject_users_outside_workspace(api_environment):
     workspace_id, owner_id = uuid.uuid4(), f"api-test|{uuid.uuid4()}"
+    outsider_workspace_id = uuid.uuid4()
     outsider_id = f"api-test|{uuid.uuid4()}"
     if not api_environment.runtime_url or not api_environment.admin_url:
         pytest.skip("DATABASE_URL and TEST_DATABASE_URL are required for analytics API tests")
@@ -59,7 +64,13 @@ def test_analytics_endpoints_reject_users_outside_workspace(api_environment):
     with api_environment.client(workspace_id=workspace_id, user_id=owner_id) as owner_client:
         _create_note(owner_client, title="Only for owner", content="No one else can read this workspace")
 
-    with api_environment.client(workspace_id=workspace_id, user_id=outsider_id) as outsider_client:
+    with api_environment.client(
+        workspace_id=outsider_workspace_id, user_id=outsider_id
+    ) as outsider_client:
+        api_environment.execute_admin(
+            "DELETE FROM public.workspace_members WHERE workspace_id = %s AND user_id = %s",
+            (outsider_workspace_id, outsider_id),
+        )
         assert outsider_client.post(
             "/analytics/events",
             json={"eventType": "capture_submitted"},
