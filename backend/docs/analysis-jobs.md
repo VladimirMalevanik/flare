@@ -1,7 +1,8 @@
 # Block 3: durable analysis jobs
 
-`POST /items` now creates documents for all supported input types and immediately
-enqueues durable analysis jobs for the new chunks. The Block 2 analyzer remains a
+`POST /items` now creates documents for all supported input types and enqueues
+durable analysis jobs for the new chunks when AI/worker configuration is valid.
+Invalid configuration never rolls back ordinary item capture. The Block 2 analyzer remains a
 pure `Evidence[]` component. Block 4 adds a separate [Flare generation stage](flare-generation.md)
 after completion; extraction still persists only `TextAnalysis` on its job.
 

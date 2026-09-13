@@ -81,7 +81,7 @@ flowchart LR
     Migrator[Migration process] -->|migration owner| DB
 ```
 
-## 5. Core capture to analysis to Flare data flow
+## 5. Core Note → Analyze → Flare data flow
 
 **Current implementation.**
 
@@ -108,9 +108,11 @@ flowchart LR
 8. The frontend polls `GET /analysis-runs/{id}` and reloads `GET /flares` when the
    run completes. Evidence links open the matching Note in Vault.
 
-The request never calls Groq. A valid empty Flare result is a successful completed
-run. URL, file-metadata, and audio-metadata records do not fetch, upload, or
-transcribe external content.
+The request never calls Groq. If AI or worker configuration is invalid, ordinary
+item capture remains committed without a job; operations must correct configuration
+before expecting automatic processing. A valid empty Flare result is a successful
+completed run. URL, file-metadata, and audio-metadata records do not fetch, upload,
+or transcribe external content.
 
 ## 6. AI pipeline
 
@@ -329,6 +331,7 @@ worker processes.
 | --- | --- |
 | PostgreSQL unavailable or wrong role/head | `/ready` fails; API/worker startup or operations fail closed |
 | Groq unavailable or rate limited | Note data remains committed; job retries within bounded attempts or ends with a safe code |
+| Invalid AI/worker configuration during item capture | Source data remains committed and no automatic item job is created; fix configuration before processing |
 | Invalid AI output or fabricated evidence | Entire stage fails; no partial Flare set is published |
 | Worker exits mid-job | Lease expiry permits a later claim; idempotent database functions prevent duplicate terminal state |
 | API restarts | Sessions, Notes, run state, and jobs remain in PostgreSQL |
