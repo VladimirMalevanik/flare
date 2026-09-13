@@ -86,7 +86,9 @@ def jobs(admin_url):
         user = auth.current(token)
         identity = WorkspaceIdentity(user.workspace_id, user.user_id)
         users.append(identity)
-        ItemService(db, identity).create_note(title='Decision', content='We decided to use PostgreSQL.')
+        ItemService(db, identity, enqueue_analysis=False).create_note(
+            title='Decision', content='We decided to use PostgreSQL.'
+        )
         with db.workspace_transaction(identity) as conn:
             chunks.append(conn.execute('SELECT id FROM public.chunks').fetchone()['id'])
     worker_url = os.getenv('WORKER_DATABASE_URL')
@@ -471,7 +473,9 @@ def test_dedupe_uses_sorted_snapshot_ids_and_results_stay_isolated(jobs):
     from app.workers.config import WorkerSettings
     from app.config import AISettings
     queue, worker, users, chunks = jobs
-    ItemService(queue.database, users[0]).create_note(title='Second', content='Second immutable source.')
+    ItemService(queue.database, users[0], enqueue_analysis=False).create_note(
+        title='Second', content='Second immutable source.'
+    )
     with queue.database.workspace_transaction(users[0]) as conn:
         selected = tuple(row['id'] for row in conn.execute('SELECT id FROM chunks ORDER BY id').fetchall())
     service = AnalysisJobService(queue, AISettings(), WorkerSettings())

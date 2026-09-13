@@ -83,7 +83,9 @@ def test_idempotency_concurrency_and_snapshot(jobs, admin_url):
     assert len({r['id'] for r in responses}) == 1
     run_id = responses[0]['id']
     before = snapshot(admin_url, run_id)
-    ItemService(jobs[0].database, jobs[2][0]).create_note(title='New', content='New goal: release next week.')
+    ItemService(jobs[0].database, jobs[2][0], enqueue_analysis=False).create_note(
+        title='New', content='New goal: release next week.'
+    )
     with psycopg.connect(admin_url) as c:
         c.execute('UPDATE documents SET deleted_at=now() WHERE workspace_id=%s', (jobs[2][0].workspace_id,))
     assert start(jobs, key)['id'] == run_id
@@ -99,7 +101,7 @@ def test_idempotency_concurrency_and_snapshot(jobs, admin_url):
 
 def test_selection_bounds_determinism_and_isolation(jobs, admin_url):
     ai = replace(AISettings(), max_sources=2)
-    notes = ItemService(jobs[0].database, jobs[2][0])
+    notes = ItemService(jobs[0].database, jobs[2][0], enqueue_analysis=False)
     notes.create_note(title='Huge', content='x' * 5000)
     notes.create_note(title='Goal', content='Our goal is the MVP release. Deadline next week.')
     note = notes.create_note(title='Latest', content='Current project state: analysis is incomplete.')
@@ -155,6 +157,18 @@ def test_register_notes_analyze_worker_flares_e2e(jobs, admin_url, empty):
         jobs[2].append(WorkspaceIdentity(UUID(me['workspace']['id']),me['user']['id']))
         for text in (TEXT, 'The deadline is this week.', 'We decided to finish the MVP before adding integrations.'):
             assert c.post('/items',json={'type':'note','content':text}).status_code == 201
+        # This case exercises the explicit Analyze orchestration. Automatic
+        # per-capture jobs have separate API coverage and must not determine
+        # which global worker claim advances the run below.
+        with psycopg.connect(admin_url) as db:
+            db.execute(
+                '''DELETE FROM analysis_jobs j
+                   WHERE j.workspace_id=%s
+                     AND NOT EXISTS (
+                         SELECT 1 FROM analysis_runs r WHERE r.analysis_job_id=j.id
+                     )''',
+                (jobs[2][-1].workspace_id,),
+            )
         key=uuid4(); response=post(c,key)
         assert response.status_code == 202, response.text
         run=response.json()
@@ -218,7 +232,7 @@ def test_cookie_required_even_in_development_mode(jobs):
 
 
 def test_recent_200_and_current_version_snapshot(jobs, admin_url):
-    notes = ItemService(jobs[0].database, jobs[2][0])
+    notes = ItemService(jobs[0].database, jobs[2][0], enqueue_analysis=False)
     for number in range(201):
         notes.create_note(title=f'Note {number}', content=f'Project update {number}.')
     run = start(jobs)

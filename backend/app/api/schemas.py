@@ -176,15 +176,23 @@ class QueueHealthResponse(BaseModel):
 
 
 class QueueMaintenanceRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    dry_run: bool = True
-    recover_stale: bool = True
-    max_rows: int = Field(default=2_000, ge=1, le=50_000)
-    analysis_completed_retention_days: int = Field(default=30, ge=1, le=3650)
-    analysis_failed_retention_days: int = Field(default=14, ge=1, le=3650)
-    flare_completed_retention_days: int = Field(default=30, ge=1, le=3650)
-    flare_failed_retention_days: int = Field(default=14, ge=1, le=3650)
+    dry_run: bool = Field(default=True, alias="dryRun")
+    recover_stale: bool = Field(default=True, alias="recoverStale")
+    max_rows: int = Field(default=2_000, ge=1, le=50_000, alias="maxRows")
+    analysis_completed_retention_days: int = Field(
+        default=30, ge=1, le=3650, alias="analysisCompletedRetentionDays"
+    )
+    analysis_failed_retention_days: int = Field(
+        default=14, ge=1, le=3650, alias="analysisFailedRetentionDays"
+    )
+    flare_completed_retention_days: int = Field(
+        default=30, ge=1, le=3650, alias="flareCompletedRetentionDays"
+    )
+    flare_failed_retention_days: int = Field(
+        default=14, ge=1, le=3650, alias="flareFailedRetentionDays"
+    )
 
 
 class QueueBucketSummary(BaseModel):

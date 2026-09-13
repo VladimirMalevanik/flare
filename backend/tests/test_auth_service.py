@@ -27,7 +27,7 @@ def auth():
     with psycopg.connect(admin) as conn:
         ids = conn.execute("SELECT id,initial_workspace_id FROM auth_users WHERE email LIKE '%@auth-test.invalid'").fetchall()
         cleanup.workspace_ids.update(row[1] for row in ids)
-        conn.execute("DELETE FROM auth_users WHERE email LIKE '%@auth-test.invalid'")
+        cleanup.user_ids.update(row[0] for row in ids)
     cleanup.cleanup()
 
 
