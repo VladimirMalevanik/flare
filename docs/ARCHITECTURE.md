@@ -1,6 +1,6 @@
 # Flare Architecture
 
-This document describes the repository at migration head `0009`.
+This document describes the repository at migration head `0013`.
 
 Status labels used throughout:
 
@@ -12,8 +12,10 @@ Status labels used throughout:
 
 **Current implementation.** Flare is a workspace-scoped knowledge application. A
 user registers, verifies an email address when verification is enabled, captures
-Notes, searches the Vault, explicitly starts Analyze, and reads generated Flares
-with links to their supporting Note evidence.
+Notes, imports bounded CSV/TXT/Markdown text, searches the Vault, and reads
+generated Flares with links to their supporting evidence. New captures enqueue
+analysis automatically; explicit Analyze remains available for a bounded workspace
+snapshot.
 
 The repository owns the Next.js frontend, FastAPI API, PostgreSQL schema and
 PostgreSQL-backed analysis worker. PostgreSQL is the durable source of truth.
@@ -21,7 +23,7 @@ Groq performs text analysis and Flare generation. SMTP delivers production
 verification mail. GitHub supplies installation, account, and repository metadata
 for the connection flow.
 
-**TBD / unresolved.** URL and file ingestion, durable voice transcription,
+**TBD / unresolved.** URL fetching, binary file ingestion, durable voice transcription,
 GitHub activity ingestion, automated synchronization, workspace switching,
 invitations, password reset, quota accounting, and scheduled analysis are outside
 the current end-to-end product boundary.
@@ -38,14 +40,14 @@ the current end-to-end product boundary.
 | `frontend/src/lib/data/` | Typed frontend provider boundary and API/mock adapters |
 | `frontend/src/mocks/` | Explicit development demo data |
 | `backend/app/api/` | FastAPI HTTP routes and request/response contracts |
-| `backend/app/services/` | Auth, Note, GitHub, analysis, and Flare use cases |
+| `backend/app/services/` | Auth, capture/import, analytics, operations, GitHub, analysis, and Flare use cases |
 | `backend/app/models/` | PostgreSQL transactions, repositories, and job capabilities |
 | `backend/app/ai_engine/` | Provider-independent AI contracts, validation, prompts, and Groq adapters |
 | `backend/app/workers/` | Durable worker process and polling loop |
 | `backend/migrations/` | Linear Alembic schema history |
 | `backend/db/` | Self-managed and Yandex-compatible role provisioning |
 | `.github/workflows/checks.yml` | Frontend and two-provider backend CI matrix |
-| `compose.yaml` | Local PostgreSQL, migration, API, worker, and frontend topology |
+| `compose.yaml` | Local PostgreSQL, migration, API, frontend, and opt-in AI worker topology |
 
 ## 3. Runtime components
 
@@ -54,10 +56,10 @@ the current end-to-end product boundary.
 | Component | Runtime role | Credentials and state |
 | --- | --- | --- |
 | Next.js frontend | Pages, server auth bootstrap, same-origin `/api` proxy, browser UI | No database, Groq, SMTP, or GitHub secrets |
-| FastAPI API | Sessions, email verification, Notes, Analyze, Flares, GitHub connection flow | `flare_app` database role; SMTP and GitHub App credentials |
+| FastAPI API | Sessions, verification, capture/import, analytics, queue operations, Analyze, Flares, and GitHub | `flare_app` database role; SMTP and GitHub App credentials |
 | Analysis worker | Claims extraction and Flare-generation jobs and calls Groq | `flare_worker` database role and `GROQ_API_KEY` |
 | Migration process | Applies Alembic migrations and owns privileged schema changes | Migration owner credentials only |
-| PostgreSQL 17 + pgvector | Durable users, workspaces, Notes, jobs, Flares, and integration metadata | Separate runtime, worker, and migration roles |
+| PostgreSQL 17 + pgvector | Durable users, workspaces, sources, imports, events, jobs, Flares, and integration metadata | Separate runtime, worker, and migration roles |
 | Groq | External text analysis and Flare generation | Called only by the worker |
 | SMTP server | External verification-email delivery | Called only by the API |
 | GitHub App APIs | External authorization, installation, and repository listing | Called only by the API |
@@ -79,16 +81,21 @@ flowchart LR
     Migrator[Migration process] -->|migration owner| DB
 ```
 
-## 5. Core Note to Analyze to Flare data flow
+## 5. Core capture to analysis to Flare data flow
 
 **Current implementation.**
 
-1. `POST /items` accepts a Note from a verified owner or editor.
+1. `POST /items` accepts Note, URL, file-metadata, or audio-metadata records from a
+   verified owner or editor. `POST /imports` accepts bounded UTF-8 CSV, TXT, or
+   Markdown source text.
 2. One transaction writes `documents`, a ready `document_versions` row, and its
    immutable `chunks`; `documents.current_version_id` points at the published
    version.
-3. `POST /analyze` accepts an empty JSON object plus an `Idempotency-Key` UUID.
-4. The API selects bounded, recent, ready Note chunks inside the caller's
+3. Item creation and text import enqueue analysis in the same transaction as the
+   published source snapshot. Imports use content-hash idempotency per workspace and
+   split text into bounded chunks and jobs.
+4. `POST /analyze` remains an explicit orchestration path. It accepts an empty JSON
+   object plus an `Idempotency-Key` UUID and selects bounded, recent, ready chunks inside the caller's
    workspace. It creates `analysis_runs`, `analysis_jobs`, and pinned
    `analysis_job_sources` atomically.
 5. The API returns pending or processing state without calling Groq.
@@ -101,8 +108,9 @@ flowchart LR
 8. The frontend polls `GET /analysis-runs/{id}` and reloads `GET /flares` when the
    run completes. Evidence links open the matching Note in Vault.
 
-Saving a Note never starts analysis automatically. A valid empty Flare result is a
-successful completed run.
+The request never calls Groq. A valid empty Flare result is a successful completed
+run. URL, file-metadata, and audio-metadata records do not fetch, upload, or
+transcribe external content.
 
 ## 6. AI pipeline
 
@@ -167,7 +175,7 @@ membership, and requires owner/editor for writes. Viewer access is read-only.
 Tenant tables have enabled and forced PostgreSQL row-level security. Composite keys
 and foreign keys prevent cross-workspace relationships. The API connects as the
 restricted `flare_app` role without `SUPERUSER`, `BYPASSRLS`, role membership, or
-schema ownership. Readiness fails if the schema revision is not `0009`, required
+schema ownership. Readiness fails if the schema revision is not `0013`, required
 tenant tables lack forced RLS, or tenant rows are visible without context.
 
 Auth tables are intentionally outside tenant RLS because session lookup happens
@@ -186,6 +194,8 @@ or the worker.
 | Analysis | `analysis_jobs`, `analysis_job_sources`, `analysis_runs` | Durable extraction job, pinned sources, and public idempotent run |
 | Flares | `flare_generation_runs`, `insights`, `insight_sources` | Durable generation stage, typed Flare, and exact evidence quote |
 | GitHub | `github_connection_states`, `github_connections` | One-time state and one selected repository per workspace |
+| Imports | `import_batches` | Idempotent bounded text-import status and canonical document link |
+| Analytics | `activity_events` | Bounded allowlisted product events without source bodies |
 
 The initial schema retains nullable pgvector capacity, but the current Analyze flow
 uses bounded recency and keyword signals rather than vector retrieval. Published
@@ -196,7 +206,7 @@ evidence is deleted or no longer ready are hidden by the read query.
 
 **Current implementation.** Next.js App Router layouts bootstrap the authenticated
 session on the server. Client feature modules use one `FlareDataProvider` contract.
-`ApiDataProvider` owns HTTP calls and strict DTO mapping; `MockDataProvider` owns the
+`ApiDataProvider` owns HTTP calls, text imports, and strict DTO mapping; `MockDataProvider` owns the
 explicit development demo. API mode never falls back to demo Flares or Notes.
 
 The browser calls same-origin `/api`; Next.js rewrites it to `API_INTERNAL_URL`.
@@ -210,6 +220,10 @@ density, and data refresh. `/` and `/dashboard` redirect to `/insights`.
 
 - **Notes:** durable capture, Vault read/search, soft deletion, Analyze input, and
   Flare evidence.
+- **Text imports:** bounded UTF-8 CSV, TXT, and Markdown ingestion with exact source
+  text, locators, per-workspace hash idempotency, and durable analysis jobs.
+- **Operational visibility:** allowlisted workspace analytics and owner-only queue
+  health/maintenance endpoints. Maintenance defaults to dry-run.
 - **GitHub connection:** GitHub App install/user authorization, workspace- and
   user-bound single-use state, installation ownership verification, repository
   listing, selection of one repository, durable connection metadata, and disconnect.
@@ -230,17 +244,18 @@ have not been live verified.
 
 - GitHub commits, pull requests, and issues ingestion; Vault normalization; Analyze
   inclusion; and evidence provenance.
-- URL, file, and durable audio ingestion.
+- URL fetching, binary file ingestion, and durable audio ingestion.
 - Telegram, Gmail, app reviews, Notion, Linear, and other catalog entries shown as
   coming soon or demo metadata.
 
 ## 13. Local development topology
 
-**Current implementation.** `compose.yaml` runs PostgreSQL, a one-shot migration
-container, a one-shot worker-role configuration container, FastAPI on
-`127.0.0.1:8000`, the worker, and Next.js on `127.0.0.1:3000`. PostgreSQL is exposed
-only on `127.0.0.1:5432`. The frontend waits for backend readiness; backend waits for
-migration completion; the worker waits for role configuration and database health.
+**Current implementation.** The default `compose.yaml` topology runs PostgreSQL, a
+one-shot migration container, FastAPI on `127.0.0.1:8000`, and Next.js on
+`127.0.0.1:3000`. PostgreSQL is exposed only on `127.0.0.1:5432`. The frontend waits
+for backend readiness and backend waits for migration completion. The `ai` profile
+adds one-shot worker-role configuration and the analysis worker; the worker waits
+for role configuration and database health and restarts unless stopped.
 
 Compose explicitly defaults to development, API data mode, and disabled email
 verification. Development identity is available only through an explicit
@@ -291,12 +306,14 @@ Only example placeholders are tracked.
 **Current implementation.** Alembic has one linear head:
 
 ```text
-0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0008 → 0009
+0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0008 → 0009 → 0010 → 0011 → 0012 → 0013
 ```
 
 `0008` adds email verification and backfills existing users. `0009` adds GitHub
-connection state and metadata after PR #12's migration collision was resolved.
-Application readiness requires `0009`. CI tests both self-managed and
+connection state and metadata. `0010` expands analysis source types, `0011` adds
+bounded queue maintenance, `0012` adds activity events and source types, and `0013`
+adds import batches and import-safe chunk constraints. Application readiness
+requires `0013`. CI tests both self-managed and
 Yandex-compatible upgrades, historical upgrade steps, repeat `upgrade head`, role
 ownership, RLS, preserved data, and worker isolation.
 
@@ -351,6 +368,8 @@ need owners and tooling.
 | Worker lifecycle | claim/load/finish capabilities, lease semantics, restricted role, restart/failure tests |
 | Flare schema or evidence | generation validator, `insights`/`insight_sources`, public DTO, evidence navigation tests |
 | GitHub connection | API/service/provider, `0009`, RLS, frontend Sources state, live GitHub smoke |
+| Text import | import API/service, `0010`–`0013`, chunk/job bounds, idempotency, frontend capture |
+| Analytics or queue operations | allowlists, owner checks, RLS, safe metadata, dry-run and retention behavior |
 | Database schema | new Alembic revision, `CURRENT_SCHEMA_REVISION`, migration scripts, both CI providers |
 | Deployment config | role-specific env examples, Compose, health/readiness, release checklist |
 

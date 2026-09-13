@@ -50,6 +50,26 @@ export interface CreateItemInput {
   fileType?: string;
   status?: ItemStatus;
 }
+
+export type ImportFormat = "csv" | "txt" | "md";
+
+export interface ImportTextFileInput {
+  format: ImportFormat;
+  fileName: string;
+  fileType?: string;
+  fileSize: number;
+  content: string;
+}
+
+export interface ImportResult {
+  id: string;
+  format: ImportFormat;
+  fileName: string;
+  item: Item;
+  rowCount: number | null;
+  chunkCount: number;
+  analysisJobsQueued: number;
+}
 export interface Source {
   id: string;
   name: string;

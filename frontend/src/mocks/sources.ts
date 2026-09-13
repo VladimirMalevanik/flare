@@ -1,16 +1,16 @@
 import type { Source } from "@/lib/data/types";
 export const seedSources: Source[] = [
   {
-    id: "manual-capture", name: "Manual capture", scope: "Notes only",
-    description: "Add project context directly from the Flare orb.", channels: ["Notes"], status: "ready", updated: "Ready to use",
+    id: "manual-capture", name: "Manual capture", scope: "Notes, links, and text imports",
+    description: "Add project context directly from the Flare orb, including CSV, TXT, and Markdown files.", channels: ["Notes", "Links", "CSV", "TXT", "Markdown"], status: "ready", updated: "Ready to use",
   },
   {
     id: "voice", name: "Voice", scope: "Voice memos",
-    description: "Microphone recording is available in Capture. Transcription and saving are coming soon.", channels: [], status: "coming-soon", updated: "Coming soon",
+    description: "Voice transcription and API persistence are planned after MVP.", channels: [], status: "coming-soon", updated: "Coming soon",
   },
   {
     id: "obsidian", name: "Obsidian import", scope: "One-time onboarding import",
-    description: "One-time Markdown import is planned after MVP.", channels: [], status: "coming-soon", updated: "Coming soon",
+    description: "Automatic vault sync is planned. Export Markdown and import it through Add context today.", channels: [], status: "coming-soon", updated: "Coming soon",
   },
   {
     id: "telegram", name: "Telegram", scope: "Project conversations",

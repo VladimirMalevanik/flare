@@ -1,4 +1,4 @@
-import type { FlareDataProvider } from "./provider";
+import type { AnalyticsEventInput, FlareDataProvider } from "./provider";
 import type {
   AnalysisRun,
   CreateItemInput,
@@ -10,6 +10,9 @@ import type {
   Source,
   GitHubConnection,
   GitHubRepository,
+  ImportFormat,
+  ImportResult,
+  ImportTextFileInput,
 } from "./types";
 
 type ApiDataProviderOptions = {
@@ -84,6 +87,40 @@ function mapItem(value: unknown): Item {
     ...(typeof dto.fileName === "string" ? { fileName: dto.fileName } : {}),
     ...(typeof dto.fileSize === "number" ? { fileSize: dto.fileSize } : {}),
     ...(typeof dto.fileType === "string" ? { fileType: dto.fileType } : {}),
+  };
+}
+
+function numberField(value: Record<string, unknown>, key: string): number {
+  if (typeof value[key] !== "number" || !Number.isFinite(value[key])) {
+    throw new FlareApiError(`The server response is missing ${key}.`);
+  }
+  return value[key];
+}
+
+function mapImportResult(value: unknown): ImportResult {
+  const dto = asRecord(value);
+  const format = stringField(dto, "format");
+  if (format !== "csv" && format !== "txt" && format !== "md") {
+    throw new FlareApiError("The server returned an unknown import format.");
+  }
+  const rowCount = dto.rowCount;
+  if (rowCount !== null && (!Number.isInteger(rowCount) || (rowCount as number) < 0)) {
+    throw new FlareApiError("The server returned an invalid import row count.");
+  }
+  const chunkCount = numberField(dto, "chunkCount");
+  const analysisJobsQueued = numberField(dto, "analysisJobsQueued");
+  if (!Number.isInteger(chunkCount) || chunkCount < 1 ||
+      !Number.isInteger(analysisJobsQueued) || analysisJobsQueued < 0) {
+    throw new FlareApiError("The server returned invalid import progress.");
+  }
+  return {
+    id: stringField(dto, "id"),
+    format: format as ImportFormat,
+    fileName: stringField(dto, "fileName"),
+    item: mapItem(dto.item),
+    rowCount: rowCount as number | null,
+    chunkCount,
+    analysisJobsQueued,
   };
 }
 
@@ -337,23 +374,40 @@ export class ApiDataProvider implements FlareDataProvider {
   }
 
   async createItem(input: CreateItemInput): Promise<Item> {
-    if (input.type !== "note") {
-      throw new FlareApiError(
-        "The connected API currently supports notes only. File, URL, and audio capture are coming next.",
-      );
+    const content = input.content?.trim();
+    if (!content && input.type === "note") {
+      throw new FlareApiError("Write something before capturing it.");
     }
-    const content = input.content?.trim() ?? "";
-    if (!content) throw new FlareApiError("Write something before capturing it.");
+    const body = {
+      type: input.type,
+      title: input.title?.trim(),
+      content,
+      sourceUrl: input.type === "url" ? input.sourceUrl?.trim() : undefined,
+      fileName: input.fileName?.trim(),
+      fileSize: input.fileSize,
+      fileType: input.fileType,
+    };
     return mapItem(
       await this.request("/items", {
         method: "POST",
-        body: JSON.stringify({
-          type: "note",
-          ...(input.title?.trim() ? { title: input.title.trim() } : {}),
-          content,
-        }),
+        body: JSON.stringify(Object.fromEntries(
+          Object.entries(body).filter(([, value]) => value !== undefined),
+        )),
       }),
     );
+  }
+
+  async importTextFile(input: ImportTextFileInput): Promise<ImportResult> {
+    return mapImportResult(await this.request("/imports", {
+      method: "POST",
+      body: JSON.stringify({
+        format: input.format,
+        fileName: input.fileName,
+        fileType: input.fileType,
+        fileSize: input.fileSize,
+        content: input.content,
+      }),
+    }));
   }
 
   async deleteItem(id: string): Promise<void> {
@@ -374,6 +428,22 @@ export class ApiDataProvider implements FlareDataProvider {
     } catch (error) {
       if (error instanceof FlareApiError && error.status === 404) return null;
       throw error;
+    }
+  }
+
+  async trackEvent(event: AnalyticsEventInput): Promise<void> {
+    try {
+      await this.request("/analytics/events", {
+        method: "POST",
+        body: JSON.stringify({
+          eventType: event.eventType,
+          targetType: event.targetType,
+          targetId: event.targetId,
+          metadata: event.metadata,
+        }),
+      });
+    } catch {
+      // Product telemetry must not block a user-facing action.
     }
   }
 

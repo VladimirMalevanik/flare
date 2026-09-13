@@ -27,6 +27,8 @@ embeddings. Durable file/object storage в текущем runtime не подк�
 | `insight_sources` | Связь инсайта с конкретными фрагментами и сохранённая цитата |
 | `github_connection_states` | Workspace/user-bound одноразовый GitHub state |
 | `github_connections` | GitHub installation и один выбранный repository на workspace |
+| `import_batches` | Idempotent status bounded CSV/TXT/Markdown imports |
+| `activity_events` | Allowlisted product/operations telemetry без текста источников |
 
 `auth_users` хранит Argon2id password hash. Случайные session и email-verification
 tokens в БД представлены только SHA-256 digest. `metadata`/`locator` в JSONB
@@ -36,9 +38,11 @@ tokens в БД представлены только SHA-256 digest. `metadata`/
 ## Как проходит документ
 
 1. API проверяет session, verified-user boundary, membership и write role.
-2. Для текущего Note-only path одна транзакция создаёт `documents`, ready
-   `document_versions`, immutable `chunks` и переключает `current_version_id`.
-3. `POST /analyze` отдельно выбирает ready Note chunks и атомарно сохраняет
+2. Для Note/item path одна транзакция создаёт `documents`, ready
+   `document_versions`, immutable `chunks`, переключает `current_version_id` и
+   ставит анализ в очередь. Text import также атомарно создаёт `import_batches`,
+   bounded chunks и bounded jobs; одинаковый content hash deduplicated в workspace.
+3. `POST /analyze` отдельно выбирает ready chunks и атомарно сохраняет
    `analysis_runs`, `analysis_jobs` и `analysis_job_sources`.
 4. Worker обрабатывает pinned chunks и записывает результат, не удерживая DB
    connection во время Groq call.
@@ -106,11 +110,12 @@ API подключается только ролью `flare_app`, без SUPERUS
 Схема предполагает общий доступ участников ко всем материалам своего workspace.
 Права на отдельный документ, workspace switching/invitations, чат, биллинг и граф
 знаний не реализованы. GitHub connection metadata включены; GitHub activity
-ingestion, durable file/URL/audio ingestion и quota accounting не включены.
+ingestion, URL fetching, binary file/audio ingestion и quota accounting не включены.
 
 Изменения опубликованной схемы оформляйте новыми миграциями. `db/schema.sql`
 принадлежит `0001` и после публикации не переписывается. Текущая linear chain:
 `0001` → `0002` → `0003` → `0004` → `0005` → `0006` → `0007` → `0008`
-→ `0009`. `0008` добавляет email verification; `0009` — GitHub connection tables.
-Readiness требует точную `0009`. Некоторые downgrade intentionally запрещены и
+→ `0009` → `0010` → `0011` → `0012` → `0013`. `0008` добавляет email verification;
+`0009` — GitHub connection tables; `0010`–`0013` — source types, queue maintenance,
+activity events и import batches. Readiness требует точную `0013`. Некоторые downgrade intentionally запрещены и
 требуют reviewed restore plan.

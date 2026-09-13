@@ -176,3 +176,37 @@ def test_github_migration_is_provider_agnostic_and_keeps_rls(monkeypatch, provid
     assert sql.count('ENABLE ROW LEVEL SECURITY') == 2
     assert sql.count('FORCE ROW LEVEL SECURITY') == 2
     assert "m.role IN ('owner', 'editor')" in sql
+
+
+@pytest.mark.parametrize('provider', ['self-managed', 'yandex'])
+def test_post_github_queue_analytics_and_import_migrations_keep_worker_isolated(monkeypatch, provider):
+    queue = load_migration('0011_queue_ops_maintenance.py')
+    analytics = load_migration('0012_activity_events_and_source_types.py')
+    imports = load_migration('0013_import_batches.py')
+    operations = []
+    for migration in (queue, analytics, imports):
+        operation = FakeOp()
+        monkeypatch.setattr(migration, 'op', operation)
+        monkeypatch.setenv('FLARE_DATABASE_PROVIDER', provider)
+        migration.upgrade()
+        operations.append('\n'.join(operation.statements))
+
+    queue_sql, analytics_sql, import_sql = operations
+    assert all('CREATE ROLE' not in sql for sql in operations)
+    assert 'queue_maintenance' in queue_sql
+    assert 'GRANT EXECUTE ON FUNCTION public.queue_maintenance' in queue_sql
+    assert 'GRANT DELETE ON public.analysis_jobs, public.flare_generation_runs TO ' in queue_sql
+    assert 'IF p_recover_stale AND NOT p_dry_run THEN' in queue_sql
+    assert 'FROM public.flare_generation_runs r' in queue_sql
+    if provider == 'self-managed':
+        assert 'OWNER TO flare_job_executor' in queue_sql
+    else:
+        assert 'OWNER TO flare_job_executor' not in queue_sql
+    assert 'activity_events' in analytics_sql
+    assert analytics_sql.count('FORCE ROW LEVEL SECURITY') == 1
+    assert 'CREATE POLICY activity_event_member_access' in analytics_sql
+    assert 'CREATE POLICY activity_event_actor_insert' in analytics_sql
+    assert "actor_id = nullif(current_setting('app.user_id', true), '')" in analytics_sql
+    assert 'import_batches' in import_sql
+    assert import_sql.count('FORCE ROW LEVEL SECURITY') == 1
+    assert "GRANT SELECT, INSERT, UPDATE ON public.import_batches TO flare_app" in import_sql

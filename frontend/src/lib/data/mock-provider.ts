@@ -6,8 +6,18 @@ import {
 import { seedSources } from "@/mocks/sources";
 import { readLocal, writeLocal } from "@/lib/storage/preferences";
 import type { Source } from "./types";
-import type { FlareDataProvider } from "./provider";
-import type { AnalysisRun, CreateItemInput, GitHubConnection, GitHubRepository, Insight, Item, ListItemOptions } from "./types";
+import type { AnalyticsEventInput, FlareDataProvider } from "./provider";
+import type {
+  AnalysisRun,
+  CreateItemInput,
+  GitHubConnection,
+  GitHubRepository,
+  ImportResult,
+  ImportTextFileInput,
+  Insight,
+  Item,
+  ListItemOptions,
+} from "./types";
 const STORAGE_KEY = "flare-user-items-v1";
 const DELETED_ITEMS_KEY = "flare-deleted-items-v1";
 const LEGACY_DEMO_SOURCE_IDS = new Set([
@@ -156,6 +166,27 @@ export class MockDataProvider implements FlareDataProvider {
     setUserItems([item, ...getUserItems()]);
     return item;
   }
+  async importTextFile(input: ImportTextFileInput): Promise<ImportResult> {
+    const item = await this.createItem({
+      type: "file",
+      title: input.fileName,
+      content: input.content,
+      fileName: input.fileName,
+      fileSize: input.fileSize,
+      fileType: input.fileType,
+    });
+    return {
+      id: `local-import-${crypto.randomUUID()}`,
+      format: input.format,
+      fileName: input.fileName,
+      item,
+      rowCount: input.format === "csv"
+        ? Math.max(0, input.content.split(/\r?\n/).filter(Boolean).length - 1)
+        : null,
+      chunkCount: 1,
+      analysisJobsQueued: 0,
+    };
+  }
   async deleteItem(id: string): Promise<void> {
     setUserItems(getUserItems().filter((item) => item.id !== id));
     const deleted = new Set(getDeletedItemIds());
@@ -169,6 +200,7 @@ export class MockDataProvider implements FlareDataProvider {
   async getInsight(id: string) {
     return clone(seedInsights).find((insight) => insight.id === id) ?? null;
   }
+  async trackEvent(_event: AnalyticsEventInput): Promise<void> {}
   async resetDemoData() {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(STORAGE_KEY);

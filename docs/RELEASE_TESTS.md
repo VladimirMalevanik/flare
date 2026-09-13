@@ -45,7 +45,8 @@ Severity meanings:
 - **Steps:** Capture a uniquely titled Note. Open Vault, search for it, open it, and
   refresh the page.
 - **Expected:** The Note appears once with the correct body and remains after refresh.
-  It is backed by a ready immutable version and chunk in the same workspace.
+  It is backed by a ready immutable version and chunk in the same workspace, and a
+  durable analysis job is queued without calling Groq in the request.
 
 ## RT-05 — Note soft deletion
 
@@ -152,7 +153,7 @@ Severity meanings:
 - **Precondition:** Production database is migrated and all three credential sets exist.
 - **Steps:** Call `/ready`. Connect separately as API, worker, and migration owner.
   Test tenant reads without context and direct worker table reads.
-- **Expected:** `/ready` succeeds only at migration `0009` with pgvector and forced
+- **Expected:** `/ready` succeeds only at migration `0013` with pgvector and forced
   RLS. API without context sees no tenant rows. Worker direct table reads fail while
   reviewed capabilities work. Runtime processes do not possess migration credentials.
 
@@ -164,6 +165,27 @@ Severity meanings:
   for worker completion → open Flare → open Evidence.
 - **Expected:** The full journey succeeds on the public HTTPS origin with durable
   state, correct evidence, no cross-workspace exposure, and no P0/P1 errors in logs.
+
+## RT-17 — Bounded text import and idempotency
+
+- **Severity:** P0
+- **Precondition:** A verified owner/editor is logged in; the AI worker may be stopped.
+- **Steps:** Import one small UTF-8 CSV or Markdown file, repeat the same content under
+  another name, refresh Vault, and request both batch results. Try a malformed CSV,
+  mismatched extension, binary-like text, and an over-limit body.
+- **Expected:** The first import creates one canonical document, bounded chunks, and
+  bounded durable jobs atomically. The duplicate resolves to that document. Invalid
+  inputs return safe validation errors and create no partial rows.
+
+## RT-18 — Queue operations and safe analytics
+
+- **Severity:** P1
+- **Precondition:** Owner and viewer memberships exist; one controlled stale lease exists.
+- **Steps:** Read queue health as owner and viewer. Run default maintenance, then apply
+  stale recovery with explicit bounds. Request the analytics summary.
+- **Expected:** Only the owner can inspect or mutate queue state. Default maintenance
+  is dry-run. Applied recovery affects only eligible workspace rows. Analytics contains
+  allowlisted event names and bounded metadata, never imported or captured source text.
 
 ## Deferred from this release suite
 

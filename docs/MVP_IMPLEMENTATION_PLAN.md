@@ -15,9 +15,10 @@ Related technical research and architecture:
   persisted evidence-backed Flares, and Yandex-compatible migrations).
 - Email verification and the GitHub App connection flow are merged. GitHub activity
   ingestion is not implemented and the real GitHub handshake still needs live smoke.
-- Block 5 is merged: explicit Analyze, bounded current Note selection,
+- Block 5 is merged: explicit Analyze, bounded current source selection,
   immutable job sources, idempotent runs, status API, frontend polling and Compose worker.
-  Note saving does not enqueue work. Live Groq acceptance requires a local worker key.
+  New Notes and text imports also enqueue durable analysis automatically. Live Groq
+  acceptance requires a local worker key.
 - Voice and quota work remain outside this change.
 
 See [Block 4 implementation](../backend/docs/flare-generation.md).
@@ -86,7 +87,10 @@ Validate citations against the exact evidence supplied to the model, including w
 
 ## Phase 5 — Analyze flow
 
-**Explicit Analyze is the MVP trigger.** Context accumulates until the user presses Analyze; a worker then analyzes relevant project context and new Flares appear. Do not run expensive analysis after every note.
+**Explicit Analyze remains the workspace-level MVP trigger.** Context accumulates
+until the user presses Analyze; a worker then analyzes a bounded workspace snapshot
+and new Flares appear. New Notes and bounded text imports also enqueue their own
+immutable source chunks for background extraction; HTTP requests never call Groq.
 
 Bound evidence by token budget using authorized project context without vector retrieval. Record the input versions used for a run. Frontend must show pending, completed, failed and quota-deferred outcomes through the existing data-provider layer.
 

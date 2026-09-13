@@ -43,7 +43,7 @@ def main() -> None:
         # CI upgrades through the current repository head after preparing the
         # pre-0008 fixture. Keep this assertion aligned with the linear chain so
         # the check also detects a stale or branched migration result.
-        assert revision == ("0009",), revision
+        assert revision == ("0013",), revision
         verified = connection.execute(
             "SELECT email_verified_at IS NOT NULL FROM public.auth_users WHERE id=%s",
             (USER_ID,),
@@ -53,7 +53,7 @@ def main() -> None:
         connection.execute(
             "DELETE FROM public.workspaces WHERE id=%s", (WORKSPACE_ID,)
         )
-        print("PASS: 0007 -> 0009; 0008 existing-user backfill preserved")
+        print("PASS: 0007 -> 0013; 0008 existing-user backfill preserved")
 
 
 if __name__ == "__main__":

@@ -13,6 +13,9 @@ The contract is defined in [API_CONTRACT.md](API_CONTRACT.md). Explicit developm
 
 Cupertino update: `/` and `/dashboard` redirect to `/insights`. `WorkspaceProvider` owns shared capture, theme, density, and a revision counter that refreshes item consumers after capture. Sources uses demo catalog records plus live GitHub connection state. Preference toggles never call external services.
 
-Block 4 shows statement, optional action, reason and exact evidence in the existing Flares layout. Filters are Reminder, Warning and Recommendation. Block 5 implements explicit Analyze/context selection; Note capture still does not trigger automatic generation.
+Flares show statement, optional action, reason and exact evidence in the existing
+layout. Filters are Reminder, Warning and Recommendation. New sources and text
+imports enqueue background analysis automatically; explicit Analyze still creates
+a separate bounded run when the user wants one.
 
 Provider regression checks: `node --test frontend/tests/flare-provider.test.cjs` from the repository root.

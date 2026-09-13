@@ -1,8 +1,9 @@
 # Block 4: real Flares
 
 The input is a completed `TextAnalysis` plus the parent's pinned, authorized
-chunks. This stage consumes the parent job snapshot. Block 5 adds explicit Analyze and
-bounded Note selection; saving a Note still does not enqueue analysis.
+chunks. This stage consumes the parent job snapshot. The ingestion path now
+automatically enqueues a job for each saved source; explicit Analyze remains for
+a separately selected, bounded context.
 See [Analyze flow](analyze.md).
 
 ## Two durable stages
@@ -155,8 +156,10 @@ Block 6B must decide how transcription fits the worker-owned Groq key. Do not ad
 a synchronous API-to-Whisper path by copying the key into the API environment.
 
 Provider calls remain at-least-once across crash-after-response-before-commit.
-There is no heartbeat, retention cleanup, production deployment verification or
-real-provider quality evaluation. Revocation cannot unsend an in-flight request.
+There is no automatic heartbeat, scheduled retention run, production deployment
+verification or real-provider quality evaluation. Owners can inspect and run
+bounded queue maintenance manually through `/ops/queue`; alert delivery still
+needs deployment automation. Revocation cannot unsend an in-flight request.
 The small completion budget may reject otherwise useful responses as incomplete.
 Semantic gates are intentionally conservative and may miss useful candidates.
 Browser acceptance remains pending because automatic tool approval was blocked;

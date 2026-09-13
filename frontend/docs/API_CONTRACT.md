@@ -25,6 +25,7 @@ Logical operations expected by the interface:
 - `listItems({ query?, type?, limit? }) → Item[]`
 - `getItem(id) → Item | null`
 - `createItem({ type, title?, content?, sourceUrl?, fileName?, fileSize?, status? }) → Item`
+- `importTextFile({ format: "csv" | "txt" | "md", fileName, fileType?, fileSize, content }) → ImportResult`
 - `deleteItem(id) → void`
 - `listInsights() → Insight[]`
 - `getInsight(id) → Insight | null`
@@ -41,11 +42,13 @@ Optional Item display fields remain `category`, `sourceLabel`, `author`, and
 the public Flare types are Reminder, Warning and Recommendation. Legacy Discovery
 records are not converted into Recommendations.
 
-The REST adapter uses `GET /items`, `GET /items/:id`, `POST /items`, and
-`DELETE /items/:id`. Only Note ingestion is implemented. Sources uses the catalog
-fallback for non-GitHub cards, while GitHub connection state, repository listing,
-selection, and disconnect use `/integrations/github`. GitHub activity ingestion is
-not implemented. Flares never use a mock fallback in API mode.
+The REST adapter uses `GET /items`, `GET /items/:id`, `POST /items`,
+`DELETE /items/:id`, and `POST /imports`. Text imports are bounded to CSV, TXT
+and Markdown and send text rather than a browser-local file path. The server
+stores the source as an ordinary Item, preserving its chunks for citations.
+Sources can connect a GitHub App installation and persist a selected repository;
+copying repository contents is not implemented yet. Flares never use a mock in
+API mode.
 
 ## Flares (Block 4)
 
@@ -59,7 +62,9 @@ not implemented. Flares never use a mock fallback in API mode.
   where the source is loaded through `GET /items/{itemId}`.
 - Any deleted supporting document hides the entire Flare. Untyped legacy insights
   are excluded. Internal run IDs, raw responses, errors and reasoning are absent.
-- Note saving does not enqueue analysis. Explicit Analyze selects and pins context.
+- Saving a source and importing text enqueue durable analysis automatically in the
+  same server-side transaction. Explicit Analyze still selects and pins a separate
+  bounded context.
 
 ## Analyze (Block 5)
 

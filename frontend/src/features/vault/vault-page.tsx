@@ -58,6 +58,17 @@ export function VaultPage() {
   }, [revision, params]);
   const matches = (i: Item, id: string) =>
     id === "all" || category(i) === id || i.type === id;
+  const openItem = (item: Item) => {
+    void dataProvider.trackEvent({
+      eventType: "item_viewed",
+      targetType: "item",
+      targetId: item.id,
+      metadata: {
+        sourceType: item.type,
+      },
+    });
+    setSelected(item);
+  };
   const deleteSelected = async () => {
     if (!selected || deleting) return;
     if (!window.confirm(`Delete “${selected.title}”?`)) return;
@@ -170,7 +181,7 @@ export function VaultPage() {
               <h2>
                 <button
                   className="title-button"
-                  onClick={() => setSelected(item)}
+                  onClick={() => openItem(item)}
                 >
                   {item.title}
                 </button>
@@ -185,7 +196,7 @@ export function VaultPage() {
               {item.type === "audio" && (
                 <button
                   className="audio-preview"
-                  onClick={() => setSelected(item)}
+                  onClick={() => openItem(item)}
                   aria-label={`Read transcript: ${item.title}`}
                 >
                   <Icon name="audio" />
@@ -218,10 +229,10 @@ export function VaultPage() {
               </div>
               <footer className="card-footer">
                 <span>{item.relatedItemIds.length} related items</span>
-                <button
-                  className="text-button"
-                  onClick={() => setSelected(item)}
-                >
+                  <button
+                    className="text-button"
+                    onClick={() => openItem(item)}
+                  >
                   Open {item.type === "audio" ? "transcript" : "item"}
                   <Icon name="arrow" />
                 </button>
@@ -295,7 +306,7 @@ export function VaultPage() {
                   <button
                     key={id}
                     className="related-item"
-                    onClick={() => setSelected(item)}
+                    onClick={() => openItem(item)}
                   >
                     <Icon name={itemIcon[item.type]} />
                     {item.title}
