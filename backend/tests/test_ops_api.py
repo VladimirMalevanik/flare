@@ -2,10 +2,12 @@
 
 from collections.abc import Iterator
 import os
+import secrets
 from uuid import uuid4
 
 import pytest
 from test_items_api import ApiEnvironment, _create_note
+from app.services.auth_service import token_digest
 
 
 def _required_urls_for_ops() -> tuple[str, str]:
@@ -73,6 +75,16 @@ def test_owner_health_includes_jobs_created_by_another_workspace_editor(api_envi
     owner_user = f"api-test|{uuid4()}"
     editor_user = f"api-test|{uuid4()}"
     with api_environment.client(workspace_id=workspace_id, user_id=owner_user) as owner_client:
+        # Schedule endpoints deliberately require a real, revocable session even
+        # when the app is running with the local development identity enabled.
+        owner_token = secrets.token_urlsafe(32)
+        api_environment.execute_admin(
+            """INSERT INTO public.auth_sessions(
+                   token_hash,user_id,workspace_id,expires_at)
+               VALUES(%s,%s,%s,now()+interval '1 hour')""",
+            (token_digest(owner_token), owner_user, workspace_id),
+        )
+        owner_client.cookies.set("flare_session", owner_token)
         api_environment.user_ids.add(editor_user)
         api_environment.execute_admin(
             """INSERT INTO public.auth_users(
