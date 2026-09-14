@@ -71,12 +71,9 @@ def _insert_newer_processing_documents(admin_url, workspace_id, count=200):
                  FROM unnest(%s::uuid[],%s::uuid[]) AS pending(version_id,document_id)""",
             (workspace_id, version_ids, document_ids),
         )
-        connection.execute(
-            """UPDATE public.documents d SET current_version_id=pending.version_id
-                 FROM unnest(%s::uuid[],%s::uuid[]) AS pending(version_id,document_id)
-                WHERE d.id=pending.document_id AND d.workspace_id=%s""",
-            (version_ids, document_ids, workspace_id),
-        )
+        # Processing versions deliberately remain unpublished. Their newer
+        # documents must not crowd eligible ready/current sources out of the
+        # scheduler's bounded candidate query.
 
 
 def test_manual_analysis_is_idempotent_and_second_key_cannot_bypass_daily_slot(jobs, admin_url):
@@ -149,6 +146,7 @@ def test_job_retention_cascade_cannot_reopen_the_local_day(jobs, admin_url):
     with client_for(jobs) as client:
         cleanup = client.post(
             "/ops/queue/maintenance",
+            headers={"Origin": "http://testserver"},
             json={
                 "dry_run": False,
                 "recover_stale": False,

@@ -411,6 +411,11 @@ def test_migration_enforces_daily_uniqueness_rls_and_execute_only_worker(monkeyp
     assert "CREATE FUNCTION public.analysis_cycle_maintenance" in sql
     assert "CREATE FUNCTION public.activity_event_maintenance" in sql
     assert "GRANT SELECT,INSERT,DELETE ON public.activity_events" in sql
+    assert "activity_events_workspace_actor_created_idx" in sql
+    activity_maintenance = sql.index("CREATE FUNCTION public.activity_event_maintenance")
+    assert sql.index("LIMIT p_max_rows", activity_maintenance) < sql.index(
+        "CREATE FUNCTION public.queue_operational_health", activity_maintenance
+    )
     assert "CREATE FUNCTION public.queue_operational_health" in sql
     assert "current_version.state='ready'" in sql
     assert "ORDER BY d.updated_at DESC,d.id DESC LIMIT 200" in sql

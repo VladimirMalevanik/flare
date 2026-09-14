@@ -10,6 +10,7 @@ from app.api.routes import _database
 from app.models.database import Database, MembershipRequiredError
 from app.services.auth_service import AuthenticatedUser
 from app.services.analytics_service import (
+    AnalyticsRateLimited,
     AnalyticsService,
     CLIENT_EVENTS,
     InvalidEventType,
@@ -45,6 +46,10 @@ def track_event(
         raise HTTPException(status_code=422, detail="Invalid event type") from None
     except MembershipRequiredError:
         raise HTTPException(status_code=403, detail="Workspace membership is required") from None
+    except AnalyticsRateLimited:
+        # Telemetry is best effort; exhausting its budget never breaks the
+        # product action and does not create a warning-amplification path.
+        return None
     except Exception:
         # Client telemetry is best effort. Keep the product action successful,
         # and do not put a database/provider error into structured logs.

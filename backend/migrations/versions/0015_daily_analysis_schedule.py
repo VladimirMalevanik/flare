@@ -142,6 +142,8 @@ def upgrade():
         GRANT SELECT,INSERT,UPDATE,DELETE ON public.analysis_cycles TO {owner};
         GRANT SELECT,INSERT,DELETE ON public.analysis_cycle_sources TO {owner};
         GRANT SELECT,INSERT,DELETE ON public.activity_events TO {owner};
+        CREATE INDEX activity_events_workspace_actor_created_idx
+            ON public.activity_events(workspace_id,actor_id,created_at DESC);
 
         CREATE POLICY schedule_member_access ON public.analysis_schedules TO flare_app
             USING (workspace_id = nullif(current_setting('app.workspace_id',true),'')::uuid
@@ -825,9 +827,13 @@ def upgrade():
                 RAISE EXCEPTION 'Invalid activity maintenance parameters'
                     USING ERRCODE='22023'; END IF;
 
-            SELECT count(*) INTO candidates FROM public.activity_events e
-                WHERE e.workspace_id=wid
-                  AND e.created_at<now_at-make_interval(days=>p_retention_days);
+            SELECT count(*)::integer INTO candidates FROM (
+                SELECT e.id FROM public.activity_events e
+                 WHERE e.workspace_id=wid
+                   AND e.created_at<now_at-make_interval(days=>p_retention_days)
+                 ORDER BY e.created_at,e.id
+                 LIMIT p_max_rows
+            ) bounded;
             IF NOT p_dry_run THEN
                 WITH expired AS (
                     SELECT e.id FROM public.activity_events e

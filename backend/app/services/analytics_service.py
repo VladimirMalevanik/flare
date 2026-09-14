@@ -260,6 +260,7 @@ class AnalyticsService:
                     workspace_id=self._identity.workspace_id,
                     actor_id=self._identity.user_id,
                     max_events_per_hour=MAX_CLIENT_EVENTS_PER_HOUR,
+                    client_event_types=tuple(sorted(CLIENT_EVENTS)),
                 ):
                     raise AnalyticsRateLimited
                 if (
@@ -320,6 +321,8 @@ def track_event_best_effort(analytics: AnalyticsService, **event: object) -> Non
     event_type = event.get("event_type")
     try:
         analytics.track_event(**event)
+    except AnalyticsRateLimited:
+        return
     except Exception:
         log_dropped_event(analytics, event_type)
 

@@ -83,7 +83,7 @@ class ActivityEventRepository:
             row = self._connection.execute(
                 """SELECT EXISTS(
                        SELECT 1 FROM public.insights
-                        WHERE workspace_id=%s AND id=%s
+                        WHERE workspace_id=%s AND id=%s AND flare_type IS NOT NULL
                    ) AS value""",
                 (workspace_id, target_id),
             ).fetchone()
@@ -97,6 +97,7 @@ class ActivityEventRepository:
         workspace_id: UUID,
         actor_id: str,
         max_events_per_hour: int,
+        client_event_types: tuple[str, ...],
     ) -> bool:
         # Serialize only this actor's small telemetry budget. The lock and
         # count share the insertion transaction, so concurrent browser tabs
@@ -108,10 +109,11 @@ class ActivityEventRepository:
         )
         row = self._connection.execute(
             """SELECT count(*)::int AS value
-                 FROM public.activity_events
+                FROM public.activity_events
                 WHERE workspace_id=%s AND actor_id=%s
-                  AND created_at>=clock_timestamp()-interval '1 hour'""",
-            (workspace_id, actor_id),
+                  AND created_at>=clock_timestamp()-interval '1 hour'
+                  AND event_type=ANY(%s)""",
+            (workspace_id, actor_id, list(client_event_types)),
         ).fetchone()
         return bool(row and row["value"] < max_events_per_hour)
 

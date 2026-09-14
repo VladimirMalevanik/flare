@@ -240,6 +240,20 @@ def test_browser_event_rate_limit_is_checked_inside_the_insert_transaction(monke
     assert database.write_flags == [False]
 
 
+def test_expected_browser_rate_limit_does_not_amplify_warning_logs(caplog):
+    class _LimitedAnalytics:
+        workspace_id = uuid4()
+
+        def track_event(self, **_event):
+            raise AnalyticsRateLimited
+
+    with caplog.at_level(logging.WARNING, logger="uvicorn.error"):
+        track_event_best_effort(
+            _LimitedAnalytics(), event_type="capture_started", target_type="capture"
+        )
+    assert caplog.records == []
+
+
 @pytest.mark.parametrize(
     "event",
     [

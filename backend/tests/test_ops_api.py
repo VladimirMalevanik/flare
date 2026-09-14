@@ -72,41 +72,38 @@ def test_owner_health_includes_jobs_created_by_another_workspace_editor(api_envi
     workspace_id = uuid4()
     owner_user = f"api-test|{uuid4()}"
     editor_user = f"api-test|{uuid4()}"
-    with api_environment.client(workspace_id=workspace_id, user_id=owner_user):
-        pass
-    api_environment.user_ids.add(editor_user)
-    api_environment.execute_admin(
-        """INSERT INTO public.auth_users(
-               id,email,password_hash,name,initial_workspace_id,disabled)
-           SELECT %s,%s,password_hash,'Workspace editor',%s,false
-             FROM public.auth_users WHERE id=%s""",
-        (editor_user, f"{uuid4()}@ops-test.invalid", workspace_id, owner_user),
-    )
-    api_environment.execute_admin(
-        "INSERT INTO public.workspace_members(workspace_id,user_id,role) VALUES(%s,%s,'editor')",
-        (workspace_id, editor_user),
-    )
-    parent_job = uuid4()
-    api_environment.execute_admin(
-        """INSERT INTO public.analysis_jobs(
-               id,workspace_id,requested_by_user_id,pipeline_revision,dedupe_key,max_attempts)
-           VALUES(%s,%s,%s,'ops-editor-v1',%s,3)""",
-        (parent_job, workspace_id, editor_user, "a" * 64),
-    )
-    api_environment.execute_admin(
-        """INSERT INTO public.flare_generation_runs(
-               workspace_id,analysis_job_id,generation_revision,max_attempts)
-           VALUES(%s,%s,'ops-editor-v1',3)""",
-        (workspace_id, parent_job),
-    )
-    api_environment.execute_admin(
-        """INSERT INTO public.analysis_schedules(
-               workspace_id,enabled,timezone,local_time,updated_by_user_id)
-           VALUES(%s,true,'UTC',TIME '19:00',%s)""",
-        (workspace_id, editor_user),
-    )
-
     with api_environment.client(workspace_id=workspace_id, user_id=owner_user) as owner_client:
+        api_environment.user_ids.add(editor_user)
+        api_environment.execute_admin(
+            """INSERT INTO public.auth_users(
+                   id,email,password_hash,name,initial_workspace_id,disabled)
+               SELECT %s,%s,password_hash,'Workspace editor',%s,false
+                 FROM public.auth_users WHERE id=%s""",
+            (editor_user, f"{uuid4()}@ops-test.invalid", workspace_id, owner_user),
+        )
+        api_environment.execute_admin(
+            "INSERT INTO public.workspace_members(workspace_id,user_id,role) VALUES(%s,%s,'editor')",
+            (workspace_id, editor_user),
+        )
+        parent_job = uuid4()
+        api_environment.execute_admin(
+            """INSERT INTO public.analysis_jobs(
+                   id,workspace_id,requested_by_user_id,pipeline_revision,dedupe_key,max_attempts)
+               VALUES(%s,%s,%s,'ops-editor-v1',%s,3)""",
+            (parent_job, workspace_id, editor_user, "a" * 64),
+        )
+        api_environment.execute_admin(
+            """INSERT INTO public.flare_generation_runs(
+                   workspace_id,analysis_job_id,generation_revision,max_attempts)
+               VALUES(%s,%s,'ops-editor-v1',3)""",
+            (workspace_id, parent_job),
+        )
+        api_environment.execute_admin(
+            """INSERT INTO public.analysis_schedules(
+                   workspace_id,enabled,timezone,local_time,updated_by_user_id)
+               VALUES(%s,true,'UTC',TIME '19:00',%s)""",
+            (workspace_id, editor_user),
+        )
         schedule = owner_client.get("/analysis-schedule")
         assert schedule.status_code == 200
         assert schedule.json()["enabled"] is True
