@@ -101,7 +101,7 @@ def test_application_scrubs_ambient_migration_credentials(monkeypatch):
     assert "MIGRATION_DATABASE_URL" not in environment.os.environ
 
 
-def test_worker_process_scrubs_email_delivery_configuration(monkeypatch):
+def test_worker_process_keeps_scheduled_email_delivery_configuration(monkeypatch):
     monkeypatch.delenv("FLARE_DOTENV_PATH", raising=False)
     monkeypatch.setenv("FLARE_PROCESS_ROLE", "worker")
     monkeypatch.setenv("DATABASE_URL", "postgresql://api")
@@ -118,9 +118,9 @@ def test_worker_process_scrubs_email_delivery_configuration(monkeypatch):
     assert environment.os.environ["WORKER_DATABASE_URL"] == "postgresql://worker"
     assert environment.os.environ["GROQ_API_KEY"] == "worker-key"
     assert "VOICE_GROQ_API_KEY" not in environment.os.environ
-    assert "SMTP_URL" not in environment.os.environ
-    assert "APP_PUBLIC_URL" not in environment.os.environ
-    assert "EMAIL_FROM" not in environment.os.environ
+    assert environment.os.environ["SMTP_URL"] == "smtps://secret@smtp.test"
+    assert environment.os.environ["APP_PUBLIC_URL"] == "https://flare.test"
+    assert environment.os.environ["EMAIL_FROM"] == "Flare <private@flare.test>"
 
 
 def test_worker_process_scrubs_ambient_github_private_key(monkeypatch, tmp_path: Path):

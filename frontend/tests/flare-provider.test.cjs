@@ -224,7 +224,7 @@ test('partial file rename does not resend placeholder content or binary size', a
 });
 
 test('daily schedule and status use strict live API contracts', async () => {
-  const schedule={enabled:true,timezone:'Europe/Moscow',localTime:'19:00',leadMinutes:30,
+  const schedule={enabled:true,emailNotificationsEnabled:true,timezone:'Europe/Moscow',localTime:'19:00',leadMinutes:30,
     nextRefreshAt:'2026-09-14T15:30:00Z',nextRunAt:'2026-09-14T16:00:00Z',updatedAt:'2026-09-14T10:00:00Z'};
   const daily={localDate:'2026-09-14',timezone:'Europe/Moscow',state:'scheduled',cycleId:'cycle-1',runId:null,
     mode:'scheduled',scheduledFor:'2026-09-14T16:00:00Z',refreshDueAt:'2026-09-14T15:30:00Z',
@@ -237,7 +237,7 @@ test('daily schedule and status use strict live API contracts', async () => {
   };
   const api=provider();
   assert.deepEqual(await api.getAnalysisSchedule(),schedule);
-  assert.deepEqual(await api.updateAnalysisSchedule({enabled:true,timezone:'Europe/Moscow',localTime:'19:00'}),schedule);
+  assert.deepEqual(await api.updateAnalysisSchedule({enabled:true,emailNotificationsEnabled:false,timezone:'Europe/Moscow',localTime:'19:00'}),schedule);
   assert.deepEqual(await api.getDailyAnalysisStatus(),daily);
   assert.deepEqual(calls.map(call=>call.slice(0,2)),[
     ['/api/analysis-schedule','GET'],['/api/analysis-schedule','PUT'],['/api/analysis/daily-status','GET']
@@ -263,7 +263,8 @@ test('mock schedule follows its wall-clock time and leaves manual analysis open 
   const mock=new MockDataProvider();
   const target=new Date(Date.now()+2*60*60*1000);
   const localTime=`${String(target.getUTCHours()).padStart(2,'0')}:${String(target.getUTCMinutes()).padStart(2,'0')}`;
-  const schedule=await mock.updateAnalysisSchedule({enabled:true,timezone:'UTC',localTime});
+  const schedule=await mock.updateAnalysisSchedule({enabled:true,emailNotificationsEnabled:false,timezone:'UTC',localTime});
+  assert.equal(schedule.emailNotificationsEnabled,false);
   const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'UTC',hour:'2-digit',minute:'2-digit',hourCycle:'h23'})
     .formatToParts(new Date(schedule.nextRunAt));
   const read=type=>parts.find(part=>part.type===type).value;

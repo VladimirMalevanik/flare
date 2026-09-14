@@ -107,6 +107,9 @@ services:
     environment:
       FLARE_PROCESS_ROLE: worker
       WORKER_DATABASE_URL: postgresql://flare_worker:${WORKER_PASSWORD:?Set a local worker password in .env}@db:5432/flare
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:3000}
+      SMTP_URL: ${SMTP_URL:-}
+      EMAIL_FROM: ${EMAIL_FROM:-Flare <no-reply@localhost>}
       GROQ_API_KEY: ${GROQ_API_KEY:?Set GROQ_API_KEY before starting the ai profile}
       GROQ_BASE_URL: ${GROQ_BASE_URL:-https://api.groq.com}
       LLM_DEFAULT_MODEL: ${LLM_DEFAULT_MODEL:-openai/gpt-oss-20b}

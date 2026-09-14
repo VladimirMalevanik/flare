@@ -39,13 +39,14 @@ function nodes(node) {
 function renderSettings(supportEmail) {
   const { SettingsPage } = load("../src/features/settings/settings-page.tsx", {
     "react/jsx-runtime": jsx,
+    "next/link": "a",
     react: {
       useState: (initial) => [initial, () => {}],
       useEffect: () => {},
       useMemo: (factory) => factory(),
     },
     "@/components/auth-session": { useSession: () => null },
-    "@/lib/auth/session": { authRequest: async () => ({ ok: true }) },
+    "@/lib/auth/session": { authRequest: async () => ({ ok: true }), apiBaseUrl: "/api" },
     "@/components/icons": { Icon: "icon" },
     "@/components/dialog": { Dialog: "dialog" },
     "@/components/workspace-context": {
@@ -72,6 +73,7 @@ function renderSettings(supportEmail) {
         async getAnalysisSchedule() {
           return {
             enabled: false,
+            emailNotificationsEnabled: true,
             timezone: "Europe/Moscow",
             localTime: "19:00",
             leadMinutes: 30,
@@ -98,12 +100,14 @@ test("support email configuration accepts a conservative address only", () => {
 
 test("Settings exposes a mail link only when support is configured", () => {
   const configured = renderSettings("help@flare.example");
-  const contact = configured.find((node) => node.props?.href === "mailto:help@flare.example");
+  const contact = configured.find((node) => node.props?.href === "mailto:help@flare.example?subject=Flare%20support%20request");
+  const feedback = configured.find((node) => node.props?.href === "mailto:help@flare.example?subject=Flare%20product%20feedback");
   assert.equal(contact?.type, "a");
   assert.equal(contact?.props.children, "Contact support");
+  assert.equal(feedback?.props.children, "Send feedback");
 
   const unconfigured = renderSettings(null);
   assert.equal(unconfigured.some((node) => String(node.props?.href).startsWith("mailto:")), false);
-  assert.ok(unconfigured.some((node) => node.props?.children === "Not configured"));
+  assert.equal(unconfigured.filter((node) => node.props?.children === "Not configured").length, 2);
   assert.ok(unconfigured.some((node) => node.props?.description === "The support address will be available after launch."));
 });

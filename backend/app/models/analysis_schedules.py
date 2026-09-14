@@ -16,6 +16,7 @@ class AnalysisScheduleRecord:
     local_time: time
     lead_minutes: int
     updated_at: datetime
+    email_notifications_enabled: bool = True
 
 
 class AnalysisScheduleRepository:
@@ -26,18 +27,36 @@ class AnalysisScheduleRepository:
     def get(self) -> AnalysisScheduleRecord | None:
         with self._database.workspace_transaction(self._identity) as connection:
             row = connection.execute(
-                """SELECT enabled,timezone,local_time,lead_minutes,updated_at
+                """SELECT enabled,timezone,local_time,lead_minutes,
+                          email_notifications_enabled,updated_at
                    FROM public.analysis_schedules WHERE workspace_id=%s""",
                 (self._identity.workspace_id,),
             ).fetchone()
             return AnalysisScheduleRecord(**row) if row else None
 
-    def put(self, *, enabled: bool, timezone_name: str, local_time: time) -> AnalysisScheduleRecord:
+    def put(
+        self,
+        *,
+        enabled: bool,
+        timezone_name: str,
+        local_time: time,
+        email_notifications_enabled: bool,
+    ) -> AnalysisScheduleRecord:
         with self._database.workspace_transaction(self._identity, write=True) as connection:
-            row = connection.execute(
+            connection.execute(
                 """SELECT enabled,timezone,local_time,lead_minutes,updated_at
                      FROM public.set_analysis_schedule(%s,%s,%s)""",
                 (enabled, timezone_name, local_time),
+            ).fetchone()
+            connection.execute(
+                "SELECT public.set_analysis_schedule_email_notifications(%s)",
+                (email_notifications_enabled,),
+            )
+            row = connection.execute(
+                """SELECT enabled,timezone,local_time,lead_minutes,
+                          email_notifications_enabled,updated_at
+                     FROM public.analysis_schedules WHERE workspace_id=%s""",
+                (self._identity.workspace_id,),
             ).fetchone()
             return AnalysisScheduleRecord(**row)
 

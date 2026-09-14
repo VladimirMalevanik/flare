@@ -100,17 +100,26 @@ class AnalysisScheduleService:
                 timezone=DEFAULT_TIMEZONE,
                 local_time=DEFAULT_LOCAL_TIME,
                 lead_minutes=LEAD_MINUTES,
+                email_notifications_enabled=True,
                 updated_at=self._clock(),
             )
         return self._schedule_response(record)
 
-    def put(self, *, enabled: bool, timezone_name: str, local_time_value: str) -> dict:
+    def put(
+        self,
+        *,
+        enabled: bool,
+        timezone_name: str,
+        local_time_value: str,
+        email_notifications_enabled: bool = True,
+    ) -> dict:
         validate_timezone(timezone_name)
         parsed = parse_local_time(local_time_value)
         record = self._repository.put(
             enabled=enabled,
             timezone_name=timezone_name,
             local_time=parsed,
+            email_notifications_enabled=email_notifications_enabled,
         )
         return self._schedule_response(record)
 
@@ -204,6 +213,7 @@ class AnalysisScheduleService:
             "timezone": record.timezone,
             "localTime": record.local_time.strftime("%H:%M"),
             "leadMinutes": LEAD_MINUTES,
+            "emailNotificationsEnabled": record.email_notifications_enabled,
             "nextRefreshAt": next_refresh_at,
             "nextRunAt": next_run_at,
             "updatedAt": record.updated_at,

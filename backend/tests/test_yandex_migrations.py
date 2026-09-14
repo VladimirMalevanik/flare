@@ -275,3 +275,34 @@ def test_daily_schedule_migration_uses_execute_only_worker_capabilities(monkeypa
     assert 'GRANT EXECUTE ON FUNCTION public.queue_operational_health()' in sql
     assert 'TO flare_worker' in sql
     assert 'GRANT SELECT ON public.analysis_cycles TO flare_worker' not in sql
+
+
+@pytest.mark.parametrize('provider,owner', [
+    ('self-managed', 'flare_job_executor'), ('yandex', 'flare_owner'),
+])
+def test_release_followup_migration_keeps_private_notifications_behind_capabilities(
+    monkeypatch, provider, owner
+):
+    migration = load_migration('0016_product_release_followups.py')
+    operation = FakeOp()
+    monkeypatch.setattr(migration, 'op', operation)
+    monkeypatch.setenv('FLARE_DATABASE_PROVIDER', provider)
+    migration.upgrade()
+    sql = '\n'.join(operation.statements)
+    assert 'CREATE ROLE' not in sql
+    assert 'email_notifications_enabled boolean NOT NULL DEFAULT true' in sql
+    assert 'CREATE TABLE public.scheduled_analysis_notifications' in sql
+    assert 'FORCE ROW LEVEL SECURITY' in sql
+    assert f'TO {owner}' in sql
+    assert "c.mode='scheduled'" in sql
+    assert 'cardinality(NEW.flare_ids) = 0' in sql
+    assert 'u.email_verified_at IS NOT NULL' in sql
+    assert f'GRANT SELECT (id,email,email_verified_at,disabled)\n            ON public.auth_users TO {owner}' in sql
+    assert 'GRANT SELECT ON public.scheduled_analysis_notifications TO flare_app' in sql
+    assert 'GRANT SELECT ON public.scheduled_analysis_notifications TO flare_worker' not in sql
+    for signature in (
+        'claim_scheduled_flare_notification(uuid,integer)',
+        'load_scheduled_flare_notification(uuid,uuid)',
+        'finish_scheduled_flare_notification(uuid,uuid,text,double precision)',
+    ):
+        assert f'GRANT EXECUTE ON FUNCTION public.{signature} TO flare_worker' in sql

@@ -136,6 +136,7 @@ export interface AnalysisRun {
 
 export interface AnalysisSchedule {
   enabled: boolean;
+  emailNotificationsEnabled: boolean;
   timezone: string;
   localTime: string;
   leadMinutes: number;

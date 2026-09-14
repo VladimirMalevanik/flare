@@ -36,6 +36,7 @@ export interface FlareDataProvider {
   getAnalysisSchedule(): Promise<AnalysisSchedule>;
   updateAnalysisSchedule(input: {
     enabled: boolean;
+    emailNotificationsEnabled: boolean;
     timezone: string;
     localTime: string;
   }): Promise<AnalysisSchedule>;

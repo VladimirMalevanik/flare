@@ -18,6 +18,7 @@ from app.api.analysis import router as analysis_router
 from app.api.analysis_schedule import router as analysis_schedule_router
 from app.api.github import router as github_router
 from app.api.imports import router as imports_router
+from app.api.export import router as export_router
 from app.api import ops
 from app.config import Settings, settings
 from app.models.database import Database, WorkspaceIdentity
@@ -97,6 +98,7 @@ def create_app(
             "/auth", "/items", "/imports", "/flares", "/analyze", "/analysis-runs",
             "/integrations", "/ops", "/analytics",
             "/analysis-schedule", "/analysis/daily-status",
+            "/export",
         )):
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -138,6 +140,7 @@ def create_app(
     application.include_router(analysis_router)
     application.include_router(analysis_schedule_router)
     application.include_router(github_router)
+    application.include_router(export_router)
     application.include_router(ops.router)
     application.include_router(analytics_router)
     application.include_router(router)

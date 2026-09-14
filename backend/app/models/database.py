@@ -14,7 +14,7 @@ from psycopg_pool import ConnectionPool
 from pwdlib import PasswordHash
 
 
-CURRENT_SCHEMA_REVISION = "0015"
+CURRENT_SCHEMA_REVISION = "0016"
 TENANT_TABLES = (
     "workspaces",
     "workspace_members",
@@ -35,6 +35,7 @@ TENANT_TABLES = (
     "analysis_daily_quotas",
     "analysis_cycles",
     "analysis_cycle_sources",
+    "scheduled_analysis_notifications",
 )
 
 
@@ -114,6 +115,7 @@ def _connection_is_ready(connection: Connection) -> bool:
                UNION ALL SELECT 1 FROM public.analysis_daily_quotas
                UNION ALL SELECT 1 FROM public.analysis_cycles
                UNION ALL SELECT 1 FROM public.analysis_cycle_sources
+               UNION ALL SELECT 1 FROM public.scheduled_analysis_notifications
            )"""
     ).fetchone()
     if customer_rows_are_hidden != (True,):

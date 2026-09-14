@@ -1,7 +1,8 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSession } from "@/components/auth-session";
-import { authRequest } from "@/lib/auth/session";
+import { apiBaseUrl, authRequest } from "@/lib/auth/session";
 import { Icon } from "@/components/icons";
 import { Dialog } from "@/components/dialog";
 import {
@@ -17,11 +18,9 @@ import {
 } from "@/lib/data";
 const defaults = {
   alerts: true,
-  digest: true,
   privateChannels: true,
   retention: "30",
   telegram: true,
-  emailDelivery: true,
 };
 export function SettingsPage({ supportEmail }: { supportEmail: string | null }) {
   const session = useSession();
@@ -50,6 +49,7 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
   const [billingOpen, setBillingOpen] = useState(false);
   const [analysisSchedule, setAnalysisSchedule] = useState<AnalysisSchedule | null>(null);
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleEmailNotifications, setScheduleEmailNotifications] = useState(true);
   const [scheduleTime, setScheduleTime] = useState("19:00");
   const [scheduleTimezone, setScheduleTimezone] = useState(profile.timezone);
   const [scheduleLoading, setScheduleLoading] = useState(true);
@@ -80,11 +80,9 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
       );
       setSettings({
         alerts: value.alerts ?? defaults.alerts,
-        digest: value.digest ?? defaults.digest,
         privateChannels: value.privateChannels ?? defaults.privateChannels,
         retention: value.retention ?? defaults.retention,
         telegram: value.telegram ?? defaults.telegram,
-        emailDelivery: value.emailDelivery ?? defaults.emailDelivery,
       });
     }, 0);
     return () => window.clearTimeout(timer);
@@ -96,6 +94,7 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
         if (!live) return;
         setAnalysisSchedule(value);
         setScheduleEnabled(value.enabled);
+        setScheduleEmailNotifications(value.emailNotificationsEnabled);
         setScheduleTime(value.localTime);
         setScheduleTimezone(value.timezone);
         setScheduleMessage("");
@@ -120,6 +119,7 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
     try {
       const saved = await dataProvider.updateAnalysisSchedule({
         enabled: scheduleEnabled,
+        emailNotificationsEnabled: scheduleEmailNotifications,
         timezone: scheduleTimezone,
         localTime: scheduleTime,
       });
@@ -348,8 +348,8 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
         </SettingRow>
       </SettingsSection>
       <SettingsSection
-        title="Notifications & Digest"
-        subtitle="Choose which updates you want to receive. Delivery is mocked."
+        title="In-app notifications"
+        subtitle="Choose which updates appear in your workspace."
         icon="insights"
       >
         <SettingRow
@@ -363,35 +363,6 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
             checked={settings.alerts}
             onChange={(e) => update("alerts", e.target.checked)}
           />
-        </SettingRow>
-        <SettingRow
-          title="Daily Flare digest"
-          description="A short daily summary at 08:30 in your selected timezone."
-        >
-          <input
-            className="switch"
-            type="checkbox"
-            aria-label="Daily digest"
-            checked={settings.digest}
-            onChange={(e) => update("digest", e.target.checked)}
-          />
-        </SettingRow>
-        <SettingRow
-          title="Delivery destinations"
-          description="Channels selected for your brief."
-        >
-          <div className="tags">
-            {(["emailDelivery"] as const).map((key) => (
-              <button
-                key={key}
-                className={`filter ${settings[key] ? "selected" : ""}`}
-                aria-pressed={settings[key]}
-                onClick={() => update(key, !settings[key])}
-              >
-                Email
-              </button>
-            ))}
-          </div>
         </SettingRow>
       </SettingsSection>
       <SettingsSection
@@ -442,6 +413,19 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
                   <option value={timezone} key={timezone}>{timezone}</option>
                 ))}
               </select>
+            </SettingRow>
+            <SettingRow
+              title="Email new scheduled Flares"
+              description="Send one email to your verified account address when a scheduled run creates at least one Flare."
+            >
+              <input
+                type="checkbox"
+                className="switch"
+                aria-label="Email new scheduled Flares"
+                checked={scheduleEmailNotifications}
+                disabled={scheduleSaving || session?.workspace.role === "viewer"}
+                onChange={(event) => setScheduleEmailNotifications(event.target.checked)}
+              />
             </SettingRow>
             {analysisSchedule?.enabled && (
               <div className="schedule-preview" aria-live="polite">
@@ -504,6 +488,35 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
             <option value="365">1 year</option>
           </select>
         </SettingRow>
+        <SettingRow
+          title="Export workspace data"
+          description="Download active workspace Notes and Flares as Markdown and JSON in a ZIP file."
+        >
+          {session?.workspace.role === "owner" ? (
+            <a className="button" href={`${apiBaseUrl}/export`} download>
+              Download ZIP
+            </a>
+          ) : (
+            <span className="muted">Owner only</span>
+          )}
+        </SettingRow>
+      </SettingsSection>
+      <SettingsSection
+        title="Import guides"
+        subtitle="Prepare exports from other tools for Flare's current file importer."
+        icon="file"
+      >
+        {(["notion", "obsidian", "evernote"] as const).map((source) => (
+          <SettingRow
+            key={source}
+            title={source[0].toUpperCase() + source.slice(1)}
+            description="Current imports accept one Markdown, text, or CSV file up to 200 KB."
+          >
+            <Link className="button" href={`/settings/import-guides/${source}`}>
+              View guide
+            </Link>
+          </SettingRow>
+        ))}
       </SettingsSection>
       <SettingsSection
         title="Workspace & Projects"
@@ -532,7 +545,7 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
         icon="insights"
       >
         <SettingRow
-          title="Email support"
+          title="Get help"
           description={
             supportEmail
               ? "Open your email app to contact the Flare support team."
@@ -540,8 +553,20 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
           }
         >
           {supportEmail ? (
-            <a className="button" href={`mailto:${supportEmail}`}>
+            <a className="button" href={`mailto:${supportEmail}?subject=${encodeURIComponent("Flare support request")}`}>
               Contact support
+            </a>
+          ) : (
+            <span className="muted">Not configured</span>
+          )}
+        </SettingRow>
+        <SettingRow
+          title="Send feedback"
+          description={supportEmail ? "Share product feedback with the Flare team." : "The feedback address will be available after launch."}
+        >
+          {supportEmail ? (
+            <a className="button" href={`mailto:${supportEmail}?subject=${encodeURIComponent("Flare product feedback")}`}>
+              Send feedback
             </a>
           ) : (
             <span className="muted">Not configured</span>

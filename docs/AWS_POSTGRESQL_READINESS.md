@@ -1,6 +1,6 @@
 # AWS Managed PostgreSQL Readiness
 
-This audit covers migration head `0015`. AWS-managed PostgreSQL is the approved
+This audit covers migration head `0016`. AWS-managed PostgreSQL is the approved
 production direction. The exact AWS service, version, network topology, and capacity
 are unresolved, so this document does not select RDS for PostgreSQL, Aurora
 PostgreSQL, a deployment region, or a connection proxy.
@@ -84,7 +84,7 @@ PostgreSQL, a deployment region, or a connection proxy.
 1. Record the selected AWS service, engine/extension versions, endpoint, parameter
    group, network path, and role bootstrap procedure without recording credentials.
 2. Run the disposable migration and security rehearsal described above.
-3. Capture `0015`, pgvector, TLS verification, role attributes, forced RLS, readiness,
+3. Capture `0016`, pgvector, TLS verification, role attributes, forced RLS, readiness,
    connection-budget, backup, restore, and failover evidence.
 4. Keep the result BLOCKED until every item is observed on the selected service.
 

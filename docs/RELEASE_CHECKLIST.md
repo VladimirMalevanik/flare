@@ -6,7 +6,7 @@ ticket. A checked item requires observed evidence from the target release candid
 or production environment.
 
 **Current release status: BLOCKED.** Vova has not yet supplied the application
-server, and the exact AWS PostgreSQL service/network, public domain, TLS edge, SMTP
+server, and the exact AWS PostgreSQL service/network, public domain topology, TLS edge, SMTP
 provider, deployment automation, production secrets, and final support email are
 TBD. Repository checks can be completed now; infrastructure and production E2E items
 must remain unchecked until observed.
@@ -19,7 +19,7 @@ must remain unchecked until observed.
 - [ ] Confirm every required PR is merged and no release PR is Draft or blocked.
 - [ ] Confirm required checks are green for the exact release SHA.
 - [ ] Confirm P0 count is zero and P1 release-blocker count is zero.
-- [ ] Confirm Alembic has one head and it is `0015`.
+- [ ] Confirm Alembic has one head and it is `0016`.
 - [ ] Run `git diff --check origin/main^..origin/main` and review the release diff.
 - [ ] Run the full self-managed backend suite against disposable PostgreSQL 17 with
   pgvector and the restricted API/worker roles.
@@ -38,14 +38,16 @@ must remain unchecked until observed.
 
 - [ ] **BLOCKED:** receive the approved single application server from Vova.
 - [ ] **TBD:** select VPS provider, country, and size.
-- [ ] **TBD:** select public domain structure and create DNS records.
+- [ ] Record the purchased public domain: `flare4u.tech`.
+- [ ] **TBD (infrastructure-owned):** select its root/www/app/api topology and create DNS records.
 - [ ] **TBD:** select reverse proxy and terminate HTTPS with a trusted certificate.
 - [ ] **TBD:** select and provision an AWS-managed PostgreSQL service with a supported
   PostgreSQL 17 release and pgvector.
 - [ ] **TBD:** select the AWS region, VPC/subnet path, security groups, public/private
   reachability, failover mode, and database endpoint policy.
 - [ ] Confirm the VPS can reach `https://api.groq.com` over HTTPS.
-- [ ] **TBD:** select and configure the SMTP provider and verified sender.
+- [ ] **TBD:** select and configure the SMTP provider and verified sender using
+  `docs/EMAIL_PROVIDER_DECISION.md` and `docs/EMAIL_SETUP.md`.
 - [ ] **TBD:** select deployment automation and secret-injection mechanism.
 - [ ] Create separate production env/secret sets for migration, API, and worker.
 - [ ] Define log collection, monitoring, alerting, and on-call ownership.
@@ -64,7 +66,7 @@ must remain unchecked until observed.
 - [ ] Take or confirm a restorable backup before migration.
 - [ ] Record the current `alembic_version` before deployment.
 - [ ] Apply `alembic -c backend/alembic.ini upgrade head` with the migration env.
-- [ ] Confirm the one applied version row is `0015`.
+- [ ] Confirm the one applied version row is `0016`.
 - [ ] Run the migration command again and confirm it is idempotent.
 - [ ] Confirm required tenant tables have enabled and forced RLS.
 - [ ] Confirm a `flare_app` transaction without workspace context sees no tenant rows.
@@ -129,6 +131,9 @@ must remain unchecked until observed.
   repository permissions.
 - [ ] Complete the live test cases in `docs/RELEASE_TESTS.md` for authorization,
   repository selection, refresh persistence, and disconnect.
+- [ ] Observe the owner flow in order: Connect GitHub → Install/Authorize → callback
+  → real repository list → select repository → refresh and confirm the selection
+  persists → disconnect → refresh and confirm it remains disconnected.
 - [ ] If those checks are not complete, exclude GitHub from the release scope or mark
   the release NO-GO; automated tests alone do not satisfy the recorded live gap.
 
@@ -141,12 +146,13 @@ must remain unchecked until observed.
 
 ### Support
 
-- [ ] **TBD:** Vladimir supplies the final domain-based support email.
+- [ ] Configure `support@flare4u.tech` through Cloudflare Email Routing to the
+  infrastructure owner's verified destination inbox; follow `docs/EMAIL_SETUP.md`.
 - [ ] Set `SUPPORT_EMAIL` only in the frontend runtime and restart the frontend; do
   not place it in `NEXT_PUBLIC_*` build arguments.
-- [ ] Open Settings and confirm **Contact support** points to the exact approved
-  address. With the variable absent or malformed, confirm Settings shows **Not
-  configured** and renders no `mailto:` link.
+- [ ] Open Settings and confirm **Contact support** and **Send feedback** point to
+  the exact approved address with distinct subjects. With the variable absent or
+  malformed, confirm Settings shows **Not configured** and renders no `mailto:` link.
 
 ## F. Authentication smoke
 
@@ -235,7 +241,7 @@ Release is **GO** only when all statements are true:
 - [ ] P0 count is zero.
 - [ ] P1 release-blocker count is zero.
 - [ ] The exact release SHA has green required CI.
-- [ ] The migration chain is valid and production is at `0015`.
+- [ ] The migration chain is valid and production is at `0016`.
 - [ ] PostgreSQL health, TLS, RLS, role separation, and backup are verified.
 - [ ] The exact selected AWS service passed the disposable migration and restore
   rehearsal; the connection budget is recorded.

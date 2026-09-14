@@ -19,7 +19,13 @@ _ROLE_SECRETS = {
         "GITHUB_CLIENT_SECRET",
         "VOICE_GROQ_API_KEY",
     },
-    "worker": {"WORKER_DATABASE_URL", "GROQ_API_KEY"},
+    "worker": {
+        "WORKER_DATABASE_URL",
+        "GROQ_API_KEY",
+        "APP_PUBLIC_URL",
+        "SMTP_URL",
+        "EMAIL_FROM",
+    },
     "migration": {"MIGRATION_DATABASE_URL"},
 }
 _PROCESS_SECRETS = {

@@ -1,5 +1,6 @@
 """PostgreSQL invariants for one daily workspace cycle and schedule permissions."""
 
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
@@ -8,9 +9,18 @@ import psycopg
 import pytest
 
 from test_analysis_jobs import executor_role, jobs, admin_url
+from test_analysis_jobs import FakeAnalyzer
+from test_flare_runs import Detector, TEXT as FLARE_TEXT
 from test_flares_api import client_for
+from app.config import AISettings
+from app.ai_engine.flare_config import FlareSettings
+from app.models.flare_runs import FlareRuns
+from app.models.scheduled_notifications import ScheduledNotificationJobs
 from app.models.analysis_schedules import WorkerAnalysisSchedules
+from app.services.analysis_jobs import AnalysisProcessor
+from app.services.flare_generation import FlareProcessor
 from app.services.item_service import ItemService
+from app.workers.config import WorkerSettings, pipeline_revision
 
 
 pytestmark = pytest.mark.integration
@@ -357,6 +367,94 @@ def test_scheduled_cycle_freezes_version_enqueues_and_emits_metric(jobs, admin_u
         assert connection.execute(
             "SELECT count(*) FROM public.analysis_cycles WHERE id=%s", (cycle[0],)
         ).fetchone() == (0,)
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_scheduled_completion_enqueues_email_only_for_new_flares(jobs, admin_url, empty):
+    note = ItemService(jobs[0].database, jobs[2][0]).create_note(
+        title="Scheduled notification evidence", content=FLARE_TEXT
+    )
+    with jobs[0].database.workspace_transaction(jobs[2][0]) as connection:
+        source = connection.execute(
+            """SELECT c.id FROM public.chunks c
+                 JOIN public.document_versions v ON v.id=c.document_version_id
+                WHERE v.document_id=%s""",
+            (note.id,),
+        ).fetchone()["id"]
+    worker, cycle = _materialize_scheduled_cycle(jobs, admin_url)
+    with psycopg.connect(admin_url) as connection:
+        connection.execute(
+            "UPDATE public.analysis_cycles SET refresh_due_at=now()-interval '1 second' WHERE id=%s",
+            (cycle[0],),
+        )
+    claim = worker.claim_refresh(uuid4(), 120)
+    assert claim is not None
+    assert worker.finish_refresh(claim, chunks=(source,)) == "ready"
+
+    ai, flare, settings = AISettings(), FlareSettings(), WorkerSettings()
+    with psycopg.connect(admin_url) as connection:
+        enqueue_at = connection.execute(
+            "UPDATE public.analysis_cycles SET scheduled_for=clock_timestamp() WHERE id=%s RETURNING scheduled_for",
+            (cycle[0],),
+        ).fetchone()[0]
+    assert worker.enqueue_due(
+        pipeline_revision=pipeline_revision(ai),
+        generation_revision=flare.revision(ai),
+        max_attempts=3,
+        now=enqueue_at + timedelta(seconds=1),
+    )[0]["status"] == "queued"
+    assert asyncio.run(AnalysisProcessor(jobs[1], FakeAnalyzer(), ai, settings).process_one()) == "completed"
+    with psycopg.connect(admin_url) as connection:
+        eligible = connection.execute(
+            """SELECT c.id
+                 FROM public.analysis_runs r
+                 JOIN public.analysis_cycles c ON c.analysis_run_id=r.id
+                 JOIN public.analysis_schedules s ON s.workspace_id=c.workspace_id
+                 JOIN public.auth_users u ON u.id=c.requested_by_user_id
+                 JOIN public.workspace_members m
+                   ON (m.workspace_id,m.user_id)=(c.workspace_id,c.requested_by_user_id)
+                WHERE c.id=%s AND c.mode='scheduled' AND s.email_notifications_enabled
+                  AND NOT u.disabled AND u.email_verified_at IS NOT NULL
+                  AND m.role IN ('owner','editor')""",
+            (cycle[0],),
+        ).fetchone()
+        assert eligible == (cycle[0],)
+    assert asyncio.run(FlareProcessor(
+        FlareRuns(jobs[1]._database_url), Detector(empty=empty), ai, flare, settings
+    ).process_one()) == "completed"
+
+    with psycopg.connect(admin_url) as connection:
+        completed = connection.execute(
+            """SELECT g.status,cardinality(g.flare_ids),c.mode,s.email_notifications_enabled,
+                      u.email_verified_at IS NOT NULL,m.role
+                 FROM public.flare_generation_runs g
+                 JOIN public.analysis_runs r ON r.analysis_job_id=g.analysis_job_id
+                 JOIN public.analysis_cycles c ON c.analysis_run_id=r.id
+                 JOIN public.analysis_schedules s ON s.workspace_id=c.workspace_id
+                 JOIN public.auth_users u ON u.id=c.requested_by_user_id
+                 JOIN public.workspace_members m
+                   ON (m.workspace_id,m.user_id)=(c.workspace_id,c.requested_by_user_id)
+                WHERE g.workspace_id=%s""",
+            (jobs[2][0].workspace_id,),
+        ).fetchone()
+        assert completed == ("completed", 0 if empty else 1, "scheduled", True, True, "owner")
+        count = connection.execute(
+            "SELECT count(*) FROM public.scheduled_analysis_notifications WHERE workspace_id=%s",
+            (jobs[2][0].workspace_id,),
+        ).fetchone()[0]
+    assert count == (0 if empty else 1)
+    if not empty:
+        notifications = ScheduledNotificationJobs(jobs[1]._database_url)
+        notification = notifications.claim(uuid4(), 120)
+        assert notification is not None
+        assert notification.workspace_id == jobs[2][0].workspace_id
+        payload = notifications.load(notification)
+        assert "error" not in payload, payload
+        assert payload["recipient"].endswith("@jobs-test.invalid")
+        assert payload["flares"] == [{
+            "id": str(notification.flare_ids[0]),
+            "title": "Finish the core flow",
+        }]
 
 
 def test_delete_after_snapshot_revokes_scheduled_evidence_before_enqueue(jobs, admin_url):
