@@ -15,7 +15,6 @@ from app.models.database import Database, MembershipRequiredError, WritePermissi
 from app.models.analysis_jobs import AnalysisJobs
 from app.models.analysis_runs import DailyLimitReached, NoEligibleContext
 from app.services.analysis_jobs import AnalysisJobService
-from app.services.analytics_service import AnalyticsService
 from app.services.auth_service import AuthenticatedUser
 from app.workers.config import load_worker_settings
 
@@ -79,15 +78,6 @@ def analyze(payload: EmptyRequest, response: Response,
     except (psycopg.Error, MembershipRequiredError, WritePermissionRequiredError) as error:
         failure(error)
     response.status_code = 200 if result['status'] in ('completed', 'failed') else 202
-    try:
-        AnalyticsService(jobs.queue.database, user.identity).track_event(
-            event_type="analysis_requested",
-            target_type="analysis_run",
-            target_id=result["id"],
-            metadata={"mode": "manual"},
-        )
-    except Exception:
-        pass
     logger.info(
         "analysis_request status=accepted workspace_id=%s run_id=%s",
         user.identity.workspace_id,

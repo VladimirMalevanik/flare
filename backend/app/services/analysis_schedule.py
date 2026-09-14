@@ -61,17 +61,25 @@ def next_schedule_window(
     now: datetime,
     timezone_name: str,
     local_time: time,
+    not_before: datetime | None = None,
 ) -> ScheduleWindow:
     if now.tzinfo is None:
         raise ValueError("now must be timezone-aware")
+    if not_before is not None and not_before.tzinfo is None:
+        raise ValueError("not_before must be timezone-aware")
     zone = validate_timezone(timezone_name)
     local_now = now.astimezone(zone)
-    run_at = _resolve_wall_time(local_now.date(), local_time, zone)
+    run_day = local_now.date()
+    run_at = _resolve_wall_time(run_day, local_time, zone)
     now_utc = now.astimezone(timezone.utc)
     run_utc = run_at.astimezone(timezone.utc)
-    if run_utc <= now_utc or run_utc - timedelta(minutes=LEAD_MINUTES) < now_utc:
-        run_at = _resolve_wall_time(local_now.date() + timedelta(days=1), local_time, zone)
-    run_utc = run_at.astimezone(timezone.utc)
+    if run_utc <= now_utc or run_utc - timedelta(minutes=LEAD_MINUTES) <= now_utc:
+        run_day += timedelta(days=1)
+        run_utc = _resolve_wall_time(run_day, local_time, zone).astimezone(timezone.utc)
+    earliest = not_before.astimezone(timezone.utc) if not_before is not None else None
+    while earliest is not None and run_utc < earliest:
+        run_day += timedelta(days=1)
+        run_utc = _resolve_wall_time(run_day, local_time, zone).astimezone(timezone.utc)
     return ScheduleWindow(run_at=run_utc, refresh_at=run_utc - timedelta(minutes=LEAD_MINUTES))
 
 
@@ -134,6 +142,11 @@ class AnalysisScheduleService:
                 "sync": {"status": "not_started", "github": github},
             }
         state, reason = _cycle_state(cycle)
+        sync_status = (
+            "unknown"
+            if cycle.get("quota_only", False)
+            else _sync_status(cycle["refresh_status"])
+        )
         return {
             "localDate": day.isoformat(),
             "timezone": timezone_name,
@@ -146,22 +159,53 @@ class AnalysisScheduleService:
             "sourceSnapshotCount": cycle["snapshot_chunk_count"],
             "canRequestToday": False,
             "reason": reason,
-            "sync": {"status": _sync_status(cycle["refresh_status"]), "github": github},
+            "sync": {"status": sync_status, "github": github},
         }
 
     def _schedule_response(self, record: AnalysisScheduleRecord) -> dict:
-        window = next_schedule_window(
-            now=self._clock(),
-            timezone_name=record.timezone,
-            local_time=record.local_time,
-        )
+        now = self._clock()
+        next_refresh_at = None
+        next_run_at = None
+        if record.enabled:
+            cycle = self._repository.daily_cycle(local_day(now, record.timezone))
+            if (
+                cycle is not None
+                and not cycle.get("quota_only", False)
+                and cycle["mode"] == "scheduled"
+                and cycle["refresh_status"] != "failed"
+                and cycle["scheduled_for"] > now
+            ):
+                # Once T-30 has materialized the durable cycle, expose that
+                # exact promise instead of previewing tomorrow's wall time.
+                next_refresh_at = cycle["refresh_due_at"]
+                next_run_at = cycle["scheduled_for"]
+            else:
+                not_before = None
+                if cycle is not None:
+                    not_before = cycle["scheduled_for"] + timedelta(hours=20)
+                    if cycle.get("local_date_consumed", False):
+                        zone = validate_timezone(record.timezone)
+                        next_day_start = _resolve_wall_time(
+                            local_day(now, record.timezone) + timedelta(days=1),
+                            time.min,
+                            zone,
+                        ).astimezone(timezone.utc)
+                        not_before = max(not_before, next_day_start)
+                window = next_schedule_window(
+                    now=now,
+                    timezone_name=record.timezone,
+                    local_time=record.local_time,
+                    not_before=not_before,
+                )
+                next_refresh_at = window.refresh_at
+                next_run_at = window.run_at
         return {
             "enabled": record.enabled,
             "timezone": record.timezone,
             "localTime": record.local_time.strftime("%H:%M"),
             "leadMinutes": LEAD_MINUTES,
-            "nextRefreshAt": window.refresh_at if record.enabled else None,
-            "nextRunAt": window.run_at if record.enabled else None,
+            "nextRefreshAt": next_refresh_at,
+            "nextRunAt": next_run_at,
             "updatedAt": record.updated_at,
         }
 
@@ -176,6 +220,10 @@ def _sync_status(refresh_status: str) -> str:
 
 
 def _cycle_state(cycle: dict) -> tuple[str, str | None]:
+    if cycle.get("quota_only", False):
+        # Detailed queue/run history may have reached retention, while the
+        # durable daily quota tombstone still keeps this local day consumed.
+        return "consumed", "daily_limit"
     refresh = cycle["refresh_status"]
     if refresh == "failed":
         error = cycle.get("last_error_code")

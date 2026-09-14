@@ -2,6 +2,8 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import logging
+from time import perf_counter
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -22,6 +24,14 @@ from app.models.database import Database, WorkspaceIdentity
 from app.services.email import EmailSender
 from app.services.smtp_email import LoggingEmailSender, SmtpEmailSender
 
+
+# Uvicorn configures this logger at INFO even when its raw access logger is off.
+request_logger = logging.getLogger("uvicorn.error")
+# Deployment commands also pass --no-access-log. Keep this defense here so an
+# accidental command override cannot put OAuth/query values back into logs.
+logging.getLogger("uvicorn.access").disabled = True
+_LOGGED_HTTP_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"})
+
 def create_app(
     application_settings: Settings | None = None,
     *,
@@ -32,6 +42,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+        logging.getLogger("uvicorn.access").disabled = True
         configured.validate()
         if email_sender is not None:
             application.state.email_sender = email_sender
@@ -89,6 +100,29 @@ def create_app(
         )):
             response.headers["Cache-Control"] = "no-store"
         return response
+
+    @application.middleware("http")
+    async def safe_request_log(request: Request, call_next):
+        """Log request outcomes without URLs, query strings, bodies or errors."""
+        started = perf_counter()
+        response_status = 500
+        try:
+            response = await call_next(request)
+            response_status = response.status_code
+            return response
+        finally:
+            route = request.scope.get("route")
+            route_template = getattr(route, "path", None)
+            if not isinstance(route_template, str) or not route_template.startswith("/"):
+                route_template = "unmatched"
+            method = request.method if request.method in _LOGGED_HTTP_METHODS else "OTHER"
+            request_logger.info(
+                "http_request method=%s route=%s status=%s duration_ms=%.1f",
+                method,
+                route_template,
+                response_status,
+                max(0.0, (perf_counter() - started) * 1_000),
+            )
 
     @application.exception_handler(RequestValidationError)
     async def validation_error(request: Request, error: RequestValidationError):

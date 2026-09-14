@@ -1,5 +1,6 @@
 """Public HTTP routes."""
 
+from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -22,7 +23,7 @@ from app.services.item_service import (
     ItemService,
     ItemValidationError,
 )
-from app.services.analytics_service import AnalyticsService
+from app.services.analytics_service import AnalyticsService, track_event_best_effort
 
 router = APIRouter()
 
@@ -80,14 +81,6 @@ def _raise_http_error(error: Exception) -> None:
     raise error
 
 
-def _track_event_safely(analytics: AnalyticsService, **event: object) -> None:
-    """Telemetry must never make a saved, read, or deleted item unavailable."""
-    try:
-        analytics.track_event(**event)
-    except Exception:
-        return
-
-
 @router.get("/health", response_model=HealthResponse, tags=["health"])
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
@@ -121,6 +114,11 @@ def create_item(
     service: Annotated[ItemService, Depends(_item_service)],
     analytics: Annotated[AnalyticsService, Depends(_analytics_service)],
 ) -> ItemResponse:
+    if payload.type == "audio":
+        raise HTTPException(
+            status_code=422,
+            detail="Voice memos must contain a validated transcript",
+        )
     content = payload.effective_content()
     if not content:
         raise HTTPException(status_code=422, detail="content is required for this item type")
@@ -140,7 +138,7 @@ def create_item(
                 file_type=payload.file_type,
             )
         )
-        _track_event_safely(
+        track_event_best_effort(
             analytics,
             event_type="item_created",
             target_type="item",
@@ -167,12 +165,23 @@ def list_items(
         Query(),
     ] = "all",
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    before_updated_at: Annotated[
+        datetime | None,
+        Query(alias="beforeUpdatedAt"),
+    ] = None,
+    before_id: Annotated[UUID | None, Query(alias="beforeId")] = None,
 ) -> list[ItemResponse]:
+    if (before_updated_at is None) != (before_id is None):
+        raise HTTPException(422, "beforeUpdatedAt and beforeId must be provided together")
+    if before_updated_at is not None and before_updated_at.tzinfo is None:
+        raise HTTPException(422, "beforeUpdatedAt must include a timezone")
     try:
         records = service.list_items(
             query=query,
             item_type=None if type == "all" else type,
             limit=limit,
+            before_updated_at=before_updated_at,
+            before_id=before_id,
         )
         return [ItemResponse.from_record(record) for record in records]
     except MembershipRequiredError as error:
@@ -204,7 +213,7 @@ def update_item(
                 "item_type": item.type,
                 "version_number": item.version_number,
             }
-            _track_event_safely(
+            track_event_best_effort(
                 analytics,
                 event_type="item_updated",
                 target_type="item",
@@ -212,7 +221,7 @@ def update_item(
                 metadata=safe_metadata,
             )
             if result.source_replaced:
-                _track_event_safely(
+                track_event_best_effort(
                     analytics,
                     event_type="source_replaced",
                     target_type="item",
@@ -244,11 +253,12 @@ def get_item(
 ) -> ItemResponse:
     try:
         item = ItemResponse.from_record(service.get_item(item_id))
-        _track_event_safely(
+        track_event_best_effort(
             analytics,
             event_type="item_viewed",
             target_type="item",
             target_id=str(item.id),
+            metadata={"sourceType": item.type},
         )
         return item
     except (ItemNotFoundError, MembershipRequiredError) as error:
@@ -267,7 +277,7 @@ def delete_item(
 ) -> Response:
     try:
         service.delete_item(item_id)
-        _track_event_safely(
+        track_event_best_effort(
             analytics,
             event_type="item_deleted",
             target_type="item",

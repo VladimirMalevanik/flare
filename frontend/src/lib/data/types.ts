@@ -57,8 +57,8 @@ export interface CreateItemInput {
 export interface UpdateItemInput {
   type: ItemType;
   expectedCurrentVersionId: string;
-  title: string;
-  content: string;
+  title?: string;
+  content?: string;
   sourceUrl?: string;
   fileName?: string;
   fileSize?: number;
@@ -121,6 +121,8 @@ export interface ListItemOptions {
   query?: string;
   type?: ItemType | "all";
   limit?: number;
+  beforeUpdatedAt?: string;
+  beforeId?: string;
 }
 
 export interface AnalysisRun {
@@ -150,6 +152,7 @@ export type DailyAnalysisState =
   | "queued"
   | "processing"
   | "completed"
+  | "consumed"
   | "failed";
 
 export interface DailyAnalysisStatus {
@@ -165,7 +168,7 @@ export interface DailyAnalysisStatus {
   canRequestToday: boolean;
   reason: "daily_limit" | "no_eligible_context" | "sync_failed" | null;
   sync: {
-    status: "not_started" | "running" | "succeeded" | "failed";
+    status: "not_started" | "running" | "succeeded" | "failed" | "unknown";
     github: {
       connected: boolean;
       ingestionSupported: false;

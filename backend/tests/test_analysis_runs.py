@@ -114,6 +114,26 @@ def test_selection_bounds_determinism_and_isolation(jobs, admin_url):
     assert request_size_bytes(build_bounded_request([Evidence(source_id=str(r[0]),content=r[1]) for r in rows], ai)) <= ai.max_input_bytes
 
 
+def test_recent_selection_prioritizes_an_edited_old_source_beyond_created_limit(jobs, admin_url):
+    items = ItemService(jobs[0].database, jobs[2][0])
+    old = items.create_note(title="Old roadmap", content="Original roadmap text.")
+    for index in range(200):
+        items.create_note(title=f"Newer {index}", content=f"Routine archive entry {index}.")
+    edited = items.update_item(
+        old.id,
+        expected_current_version_id=old.current_version_id,
+        changes={"content": "Current project decision: ship the edited roadmap this week."},
+    ).item
+    with jobs[0].database.workspace_transaction(jobs[2][0]) as connection:
+        edited_chunk = connection.execute(
+            "SELECT id FROM public.chunks WHERE document_version_id=%s",
+            (edited.current_version_id,),
+        ).fetchone()["id"]
+
+    run = start(jobs, ai=replace(AISettings(), max_sources=1))
+    assert snapshot(admin_url, run["id"]) == [(edited_chunk,)]
+
+
 def test_atomic_transaction_rollback(jobs, admin_url):
     queue, _, users, _ = jobs
     with pytest.raises(RuntimeError):
@@ -124,6 +144,7 @@ def test_atomic_transaction_rollback(jobs, admin_url):
         assert c.execute('SELECT count(*) FROM analysis_jobs').fetchone() == (0,)
         assert c.execute('SELECT count(*) FROM analysis_runs').fetchone() == (0,)
         assert c.execute('SELECT count(*) FROM analysis_cycles').fetchone() == (0,)
+        assert c.execute('SELECT count(*) FROM analysis_daily_quotas').fetchone() == (0,)
 
 
 def test_status_membership_and_stages(jobs, admin_url):
@@ -238,7 +259,7 @@ def test_recent_200_and_current_version_snapshot(jobs, admin_url):
     selected = snapshot(admin_url, run['id'])
     with psycopg.connect(admin_url) as c:
         eligible = c.execute('''SELECT ch.id FROM documents d JOIN chunks ch ON ch.document_version_id=d.current_version_id
-            WHERE d.workspace_id=%s ORDER BY d.created_at DESC,d.id DESC LIMIT 200''', (jobs[2][0].workspace_id,)).fetchall()
+            WHERE d.workspace_id=%s ORDER BY d.updated_at DESC,d.id DESC LIMIT 200''', (jobs[2][0].workspace_id,)).fetchall()
         assert set(selected).issubset(set(eligible))
         chunk = selected[0][0]
         document, old_version = c.execute('SELECT v.document_id,v.id FROM document_versions v JOIN chunks ch ON ch.document_version_id=v.id WHERE ch.id=%s', (chunk,)).fetchone()

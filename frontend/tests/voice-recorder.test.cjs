@@ -82,6 +82,12 @@ test('no demo transcription, transport or persistence in recording code', () => 
     const source = fs.readFileSync(require('node:path').join(__dirname, '../src/features/capture', file), 'utf8');
     assert.doesNotMatch(source, /Demo transcript|Use demo transcript|GROQ_API_KEY/);
   }
+  const dashboard = fs.readFileSync(
+    require('node:path').join(__dirname, '../src/features/dashboard/dashboard-page.tsx'),
+    'utf8',
+  );
+  assert.doesNotMatch(dashboard, /Demo transcript|new MediaRecorder|createItem\(\{[^}]*type:\s*["']audio["']/s);
+  assert.match(dashboard, /entry\.type === "audio"[\s\S]*openCapture\(\)/);
 });
 test('oversized recording is discarded and tracks stop', async () => {
   const f = setup(); await f.controller.start();

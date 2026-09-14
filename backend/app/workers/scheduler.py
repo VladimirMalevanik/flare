@@ -102,20 +102,28 @@ class DailyScheduleProcessor:
                 len(selected),
             )
             return "refresh_" + status
-        queued = await asyncio.to_thread(
+        outcomes = await asyncio.to_thread(
             self.schedules.enqueue_due,
             pipeline_revision=pipeline_revision(self.ai),
             generation_revision=self.flare.revision(self.ai),
             max_attempts=self.settings.max_attempts,
             now=now,
         )
-        if queued:
-            first = queued[0]
-            logger.info(
-                "analysis_schedule status=queued cycle_id=%s run_id=%s queued_count=%s",
-                first.get("cycle_id"),
-                first.get("run_id"),
-                len(queued),
-            )
-            return "scheduled_queued"
+        if outcomes:
+            queued_count = 0
+            for outcome in outcomes:
+                if outcome.get("status") == "queued":
+                    queued_count += 1
+                    logger.info(
+                        "analysis_schedule status=queued cycle_id=%s run_id=%s",
+                        outcome.get("cycle_id"),
+                        outcome.get("run_id"),
+                    )
+                else:
+                    logger.warning(
+                        "analysis_schedule status=failed cycle_id=%s error_code=%s",
+                        outcome.get("cycle_id"),
+                        outcome.get("error_code", "internal_error"),
+                    )
+            return "scheduled_queued" if queued_count else "scheduled_failed"
         return "cycle_materialized" if materialized else None

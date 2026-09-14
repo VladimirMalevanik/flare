@@ -7,7 +7,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from app.models.database import Database, WorkspaceIdentity
+from app.models.database import Database
 
 
 class JobUnavailable(Exception):
@@ -17,16 +17,6 @@ class JobUnavailable(Exception):
 class AnalysisJobs:
     def __init__(self, database: Database):
         self.database = database
-
-    def enqueue(self, identity: WorkspaceIdentity, chunks: tuple[UUID, ...],
-                pipeline_revision: str, max_attempts: int = 3) -> UUID:
-        try:
-            with self.database.workspace_transaction(identity, write=True) as conn:
-                return conn.execute('SELECT public.enqueue_analysis_job(%s,%s,%s) AS id',
-                                    (list(chunks), pipeline_revision, max_attempts)).fetchone()['id']
-        except (psycopg.IntegrityError, psycopg.errors.InsufficientPrivilege,
-                psycopg.errors.InvalidParameterValue):
-            raise JobUnavailable('Analysis sources unavailable') from None
 
 
 @dataclass(frozen=True)

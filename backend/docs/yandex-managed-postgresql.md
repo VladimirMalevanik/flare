@@ -146,7 +146,7 @@ FLARE_DOTENV_PATH="$PWD/.env.yandex.migrate" \
 
 ```sh
 FLARE_DOTENV_PATH="$PWD/.env.yandex.api" \
-  backend/.venv/bin/uvicorn --app-dir backend app.main:app --reload
+  backend/.venv/bin/uvicorn --app-dir backend app.main:app --reload --no-access-log
 ```
 
 Во втором терминале запустите frontend. Next.js самостоятельно прочитает

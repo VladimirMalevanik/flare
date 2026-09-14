@@ -31,9 +31,9 @@ class ItemRepository:
     _SELECT_ITEM = """
         SELECT d.id,
                d.source_type AS item_type,
-               d.title,
-               d.source_url,
-               d.metadata,
+               v.snapshot_title AS title,
+               v.snapshot_source_url AS source_url,
+               v.snapshot_metadata AS metadata,
                v.state,
                v.parser_version,
                v.id AS current_version_id,
@@ -82,13 +82,17 @@ class ItemRepository:
         document_id: UUID,
         content_hash: str,
         parser_version: str,
+        snapshot_title: str,
+        snapshot_source_url: str | None,
+        snapshot_metadata: dict[str, Any],
         version_number: int = 1,
     ) -> None:
         self._connection.execute(
             """INSERT INTO public.document_versions
                    (id, workspace_id, document_id, version_number, content_hash,
-                    parser_version, state)
-               VALUES (%s, %s, %s, %s, %s, %s, 'processing')""",
+                    parser_version, snapshot_title, snapshot_source_url,
+                    snapshot_metadata, state)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'processing')""",
             (
                 version_id,
                 workspace_id,
@@ -96,6 +100,9 @@ class ItemRepository:
                 version_number,
                 content_hash,
                 parser_version,
+                snapshot_title,
+                snapshot_source_url,
+                Jsonb(snapshot_metadata),
             ),
         )
 
@@ -189,12 +196,50 @@ class ItemRepository:
         ).fetchone()
         return self._to_record(row) if row else None
 
+    def get_version(self, item_id: UUID, version_id: UUID) -> ItemRecord | None:
+        """Read one exact published version while preserving soft-delete hiding."""
+        row = self._connection.execute(
+            """
+            SELECT d.id,
+                   d.source_type AS item_type,
+                   v.snapshot_title AS title,
+                   v.snapshot_source_url AS source_url,
+                   v.snapshot_metadata AS metadata,
+                   v.state,
+                   v.parser_version,
+                   v.id AS current_version_id,
+                   v.version_number,
+                   d.created_at,
+                   CASE
+                       WHEN d.current_version_id = v.id THEN d.updated_at
+                       ELSE v.created_at
+                   END AS updated_at,
+                   COALESCE((
+                       SELECT string_agg(c.content, '' ORDER BY c.ordinal)
+                       FROM public.chunks c
+                       WHERE c.workspace_id = d.workspace_id
+                         AND c.document_version_id = v.id
+                   ), '') AS content
+              FROM public.documents d
+              JOIN public.document_versions v
+                ON (v.workspace_id, v.document_id) = (d.workspace_id, d.id)
+             WHERE d.id = %s
+               AND v.id = %s
+               AND v.state = 'ready'
+               AND d.deleted_at IS NULL
+            """,
+            (item_id, version_id),
+        ).fetchone()
+        return self._to_record(row) if row else None
+
     def list_active(
         self,
         *,
         query: str | None,
         item_type: str | None,
         limit: int,
+        before_updated_at: datetime | None = None,
+        before_id: UUID | None = None,
     ) -> list[ItemRecord]:
         clauses = ["d.deleted_at IS NULL"]
         parameters: list[object] = []
@@ -205,7 +250,7 @@ class ItemRepository:
             escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             pattern = f"%{escaped}%"
             clauses.append(
-                """(d.title ILIKE %s ESCAPE '\\'
+                """(v.snapshot_title ILIKE %s ESCAPE '\\'
                     OR EXISTS (
                         SELECT 1 FROM public.chunks search_chunk
                         WHERE search_chunk.workspace_id = d.workspace_id
@@ -214,12 +259,15 @@ class ItemRepository:
                     ))"""
             )
             parameters.extend((pattern, pattern))
+        if before_updated_at is not None and before_id is not None:
+            clauses.append("(d.updated_at, d.id) < (%s, %s)")
+            parameters.extend((before_updated_at, before_id))
         parameters.append(limit)
         rows = self._connection.execute(
             self._SELECT_ITEM
             + " WHERE "
             + " AND ".join(clauses)
-            + " ORDER BY d.created_at DESC, d.id DESC LIMIT %s",
+            + " ORDER BY d.updated_at DESC, d.id DESC LIMIT %s",
             parameters,
         ).fetchall()
         return [self._to_record(row) for row in rows]

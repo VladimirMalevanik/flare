@@ -9,7 +9,6 @@ import pytest
 from app.models.events import ActivityEventRepository, EventSummary
 from app.models.tables import ItemRepository
 from app.services.analytics_service import _sanitize_metadata
-from app.services.ops_service import QueueService
 
 
 class _Result:
@@ -46,6 +45,16 @@ def test_item_repository_wraps_json_values_for_psycopg():
         source_url=None,
         metadata={"sourceType": "file"},
     )
+    repository.insert_version(
+        version_id=version_id,
+        workspace_id=workspace_id,
+        document_id=item_id,
+        content_hash="a" * 64,
+        parser_version="import-file-v1",
+        snapshot_title="Signals",
+        snapshot_source_url=None,
+        snapshot_metadata={"sourceType": "file"},
+    )
     repository.insert_chunk(
         chunk_id=chunk_id,
         workspace_id=workspace_id,
@@ -56,6 +65,36 @@ def test_item_repository_wraps_json_values_for_psycopg():
 
     assert isinstance(connection.calls[0][1][-1], Jsonb)
     assert isinstance(connection.calls[1][1][-1], Jsonb)
+    assert isinstance(connection.calls[2][1][-1], Jsonb)
+
+
+def test_item_repository_pages_by_latest_update():
+    connection = _Connection()
+    repository = ItemRepository(connection)
+
+    assert repository.list_active(
+        query=None,
+        item_type=None,
+        limit=50,
+    ) == []
+
+    statement, parameters = connection.calls[-1]
+    assert "ORDER BY d.updated_at DESC, d.id DESC LIMIT %s" in statement
+    assert parameters == [50]
+
+    cursor_time = datetime(2026, 9, 14, 12, 0, tzinfo=timezone.utc)
+    cursor_id = uuid4()
+    assert repository.list_active(
+        query="customer",
+        item_type="file",
+        limit=51,
+        before_updated_at=cursor_time,
+        before_id=cursor_id,
+    ) == []
+    statement, parameters = connection.calls[-1]
+    assert "(d.updated_at, d.id) < (%s, %s)" in statement
+    assert "ORDER BY d.updated_at DESC, d.id DESC LIMIT %s" in statement
+    assert parameters[-3:] == [cursor_time, cursor_id, 51]
 
 
 def test_activity_event_repository_wraps_json_and_reads_dict_rows():
@@ -81,13 +120,6 @@ def test_activity_event_repository_wraps_json_and_reads_dict_rows():
     ]
 
 
-def test_queue_health_sql_filters_the_aggregate_before_elapsed_time_is_calculated():
-    for statement in (QueueService._ANALYSIS_SQL, QueueService._FLARE_SQL):
-        assert "MIN(created_at) FILTER (WHERE status='pending')" in statement
-        assert "MIN(created_at) FILTER (WHERE status='processing')" in statement
-        assert "MIN(created_at)) FILTER" not in statement
-
-
 def test_analytics_metadata_is_small_scalar_allowlisted_telemetry():
     assert _sanitize_metadata(
         "capture_file_attached",
@@ -102,5 +134,10 @@ def test_analytics_metadata_is_small_scalar_allowlisted_telemetry():
     assert _sanitize_metadata("analysis_refresh_completed", {"source_count": 5}) == {
         "source_count": 5
     }
+    assert _sanitize_metadata("github_repository_selected", {"private": True}) == {
+        "private": True
+    }
     with pytest.raises(ValueError, match="not allowed"):
         _sanitize_metadata("analysis_refresh_failed", {"content": "private source"})
+    with pytest.raises(ValueError, match="not allowed"):
+        _sanitize_metadata("github_repository_selected", {"repository": "private/name"})

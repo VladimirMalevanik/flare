@@ -28,11 +28,11 @@ verification mail. GitHub supplies installation, account, and repository metadat
 for the connection flow.
 
 **TBD / deferred.** URL fetching, binary file ingestion, durable voice transcription,
-GitHub activity ingestion, automated synchronization, workspace switching,
-invitations, password reset, quota accounting, and scheduled analysis are outside
-the current end-to-end product boundary. The current Analyze selection is bounded
-and oriented toward recent Notes; full durable project-memory semantics are not
-implemented or guaranteed.
+GitHub activity ingestion, automated external-source synchronization, workspace
+switching, invitations, and password reset are outside the current end-to-end
+product boundary. The current Analyze selection is bounded and oriented toward
+recent eligible sources; full durable project-memory semantics are not implemented
+or guaranteed.
 
 ## 2. Repository map
 
@@ -93,32 +93,37 @@ flowchart LR
 
 **Implemented.**
 
-1. `POST /items` accepts Note, URL, file-metadata, or audio-metadata records from a
-   verified owner or editor. `POST /imports` accepts bounded UTF-8 CSV, TXT, or
-   Markdown source text.
+1. `POST /items` accepts Note, URL, or file-metadata records from a verified owner or
+   editor. Direct audio placeholders are rejected. `POST /imports` accepts bounded
+   UTF-8 CSV, TXT, or Markdown source text.
 2. One transaction writes `documents`, a ready `document_versions` row, and its
    immutable `chunks`; `documents.current_version_id` points at the published
    version.
 3. Item creation, text import and editing do not enqueue analysis. Imports use
    content-hash idempotency per workspace and split text into bounded chunks.
-4. `POST /analyze` remains an explicit orchestration path. It accepts an empty JSON
-   object plus an `Idempotency-Key` UUID and selects bounded, recent, ready chunks inside the caller's
-   workspace. It creates `analysis_runs`, `analysis_jobs`, and pinned
-   `analysis_job_sources` atomically.
-5. The API returns pending or processing state without calling Groq.
-6. The worker claims the analysis job with a lease, loads only the pinned evidence,
+4. `POST /analyze` is the manual orchestration path. It accepts an empty JSON object
+   plus an `Idempotency-Key` UUID and selects bounded, recent, ready chunks inside
+   the caller's workspace. The database atomically reserves the workspace's daily
+   slot and creates the cycle, `analysis_runs`, `analysis_jobs`, and pinned sources.
+   A replay returns the original run; another logical request returns exact
+   `409 daily_limit` when the local day or 20-hour guard is occupied.
+5. A saved daily schedule uses the workspace's IANA timezone and local run time.
+   At T-30, the worker reserves the same shared daily slot and pins exact immutable
+   chunk IDs. At the selected time it creates one analysis run and job from that
+   snapshot. Manual and scheduled paths therefore cannot both run for the same day.
+6. The API returns pending or processing state without calling Groq.
+7. The worker claims the analysis job with a lease, loads only the pinned evidence,
    releases the database connection, calls Groq, validates the structured result,
    and finishes the job through a restricted database function.
-7. Completion enqueues one `flare_generation_runs` record. The same worker claims
+8. Completion enqueues one `flare_generation_runs` record. The same worker claims
    that stage, calls Groq outside a database transaction, validates source IDs and
    exact quotes, and atomically writes typed `insights` and `insight_sources`.
-8. The frontend polls `GET /analysis-runs/{id}` and reloads `GET /flares` when the
+9. The frontend polls `GET /analysis-runs/{id}` and reloads `GET /flares` when the
    run completes. Evidence links open the matching Note in Vault.
 
 The request never calls Groq. Source writes remain committed independently from AI
 configuration. A valid empty Flare result is a successful
-completed run. URL, file-metadata, and audio-metadata records do not fetch, upload,
-or transcribe external content.
+completed run. URL and file-metadata records do not fetch or upload external content.
 
 ## 6. AI pipeline
 
@@ -138,9 +143,9 @@ credentials are not persisted as job errors.
 model policy reserves 120B for explicit reasoning escalation.
 
 **TBD / deferred.** No 120B routing or escalation is implemented. A quality set,
-quota accounting, production Groq reachability, and live representative acceptance
-still need release evidence. Explicit Analyze examines at most 200 recent Note
-documents and then fits a bounded set of chunks using recency and keyword signals.
+production Groq reachability, and live representative acceptance still need release
+evidence. Analyze examines at most 200 recent eligible documents and then fits a
+bounded set of chunks using recency and keyword signals.
 It does not summarize or retrieve full project history. Redesigning that behavior is
 deferred product and architecture work.
 
@@ -157,6 +162,12 @@ configuration, authorization, and source-invalidity failures terminate safely.
 idempotency key, source snapshot, and pipeline revisions prevent duplicate logical
 runs. Worker access is limited to reviewed `SECURITY DEFINER` capabilities; the
 worker cannot browse tenant tables directly.
+
+`analysis_daily_quotas` keeps one retention-safe tombstone per consumed workspace
+local date. Manual and scheduled creation serialize on a workspace lock and share
+that row. The 20-hour separation guard prevents an immediate timezone-change bypass.
+Scheduled cycles reserve the row at T-30, pin immutable chunk IDs, and enqueue from
+that snapshot at the configured run time.
 
 ## 8. Authentication and email verification
 
@@ -202,7 +213,7 @@ or the worker.
 | Identity | `auth_users`, `auth_sessions`, `auth_email_verifications` | User, revocable sessions, and verification tokens |
 | Tenancy | `workspaces`, `workspace_members` | Workspace boundary and owner/editor/viewer role |
 | Knowledge | `documents`, `document_versions`, `chunks` | Soft-deleted document, immutable published version, ordered evidence chunks |
-| Analysis | `analysis_jobs`, `analysis_job_sources`, `analysis_runs`, `analysis_schedules`, `analysis_cycles`, `analysis_cycle_sources` | Durable extraction job, daily schedule/quota, immutable T-30 snapshot, and public idempotent run |
+| Analysis | `analysis_jobs`, `analysis_job_sources`, `analysis_runs`, `analysis_schedules`, `analysis_daily_quotas`, `analysis_cycles`, `analysis_cycle_sources` | Durable extraction job, retention-safe daily quota, schedule, immutable T-30 snapshot, and public idempotent run |
 | Flares | `flare_generation_runs`, `insights`, `insight_sources` | Durable generation stage, typed Flare, and exact evidence quote |
 | GitHub | `github_connection_states`, `github_connections` | One-time state and one selected repository per workspace |
 | Imports | `import_batches` | Idempotent bounded text-import status and canonical document link |
@@ -237,9 +248,12 @@ frontend image. The final address remains TBD.
 - **Notes:** durable capture, Vault read/search, soft deletion, Analyze input, and
   Flare evidence.
 - **Text imports:** bounded UTF-8 CSV, TXT, and Markdown ingestion with exact source
-  text, locators, per-workspace hash idempotency, and durable analysis jobs.
-- **Operational visibility:** allowlisted workspace analytics and owner-only queue
-  health/maintenance endpoints. Maintenance defaults to dry-run.
+  text, locators, per-workspace hash idempotency, and durable source versions and
+  chunks. Import does not enqueue analysis.
+- **Operational visibility:** allowlisted workspace analytics with real-target checks,
+  a 600-event actor/hour browser budget, and owner-only queue health/maintenance
+  endpoints. Maintenance defaults to dry-run and includes bounded activity-event
+  retention (90 days by default).
 - **GitHub connection:** GitHub App install/user authorization, workspace- and
   user-bound single-use state, installation ownership verification, repository
   listing, selection of one repository, durable connection metadata, and disconnect.
@@ -252,9 +266,10 @@ have not been live verified.
 
 ### Active or draft
 
-- **Voice 6A:** browser recording and an isolated Groq Whisper Turbo boundary exist.
-  There is no upload route, server media-duration inspection, durable transcript
-  persistence, or release-ready end-to-end flow.
+- **Voice:** browser recording, isolated Groq Whisper Turbo boundary, pipe-only
+  ffprobe duration inspection, and immutable transcript persistence exist. The
+  consent-gated upload/provider handoff and transcription-specific quota remain
+  required before the release-ready end-to-end flow is enabled.
 
 ### Planned
 
@@ -390,7 +405,7 @@ need owners and tooling.
 | HTTP payload or endpoint | `backend/app/api/`, `frontend/src/lib/data/`, `frontend/docs/API_CONTRACT.md`, API/provider tests |
 | Auth, cookies, or verification | auth API/service/models, migration history, server bootstrap, auth and isolation tests |
 | Workspace write/read behavior | service transaction boundary, RLS policies, composite keys, self-managed and Yandex tests |
-| Analyze selection or status | analysis API/service/models, frontend controller/provider, idempotency and job tests |
+| Analyze selection, daily quota, schedule, or status | analysis API/service/models, schedule worker, `0015`, frontend controller/provider, idempotency and job tests |
 | AI model, prompt, or bounds | central config, adapter, prompt/schema revision, worker retry metadata, current provider documentation |
 | Worker lifecycle | claim/load/finish capabilities, lease semantics, restricted role, restart/failure tests |
 | Flare schema or evidence | generation validator, `insights`/`insight_sources`, public DTO, evidence navigation tests |
@@ -412,8 +427,9 @@ need owners and tooling.
 - Exact AWS PostgreSQL service, engine/extension versions, network topology,
   authentication method, and production connection/pooling parameters.
 - Production backup retention and restore-drill schedule.
-- Analyze quota contract and enforcement. See the
-  [decision note](ANALYZE_QUOTA_DECISION.md); no count or charging rule is approved.
+- Any future plan-based allowance beyond the implemented one workspace analysis
+  cycle per local calendar day. See the
+  [decision record](ANALYZE_QUOTA_DECISION.md).
 - Full durable project-memory behavior. Current Analyze context is a bounded,
   recent-Note selection and must not be represented as complete project history.
 - Whether and how to implement evaluated 120B reasoning escalation.

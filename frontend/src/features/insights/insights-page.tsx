@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { AnalyzeAction } from "@/features/analyze/analyze-action";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   dataProvider,
@@ -9,6 +9,7 @@ import {
 } from "@/lib/data";
 import { Icon } from "@/components/icons";
 import { useWorkspace } from "@/components/workspace-context";
+import { nextFlareViewEvent, resetFlareView } from "./view-analytics";
 const flareTypes = ["Reminder", "Warning", "Recommendation"] as const;
 type FlareType = (typeof flareTypes)[number];
 const plural: Record<FlareType, string> = {
@@ -26,6 +27,15 @@ export function InsightsPage() {
   const [filter, setFilter] = useState<FlareType | "All">("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const viewedFlare = useRef<string | null>(null);
+  const recordFlareView = useCallback((flareId: string) => {
+    const event = nextFlareViewEvent(viewedFlare, flareId);
+    if (event) void dataProvider.trackEvent(event);
+  }, []);
+  const closePanel = useCallback(() => {
+    resetFlareView(viewedFlare);
+    setPanelOpen(false);
+  }, []);
   const { openCapture, revision } = useWorkspace();
   useEffect(() => {
     let live = true;
@@ -56,6 +66,7 @@ export function InsightsPage() {
         if (live) {
           setDetail({ id: detailId, value, error: "" });
           setPanelOpen(true);
+          if (value) recordFlareView(detailId);
         }
       })
       .catch(() => {
@@ -65,7 +76,7 @@ export function InsightsPage() {
         }
       });
     return () => { live = false; };
-  }, [detailId, revision]);
+  }, [detailId, recordFlareView, revision]);
   const visible = insights.filter(
     (insight) => filter === "All" || flareTypeFor(insight) === filter,
   );
@@ -77,11 +88,14 @@ export function InsightsPage() {
       if (
         event.target instanceof Element &&
         !event.target.closest(".evidence-panel, .insight-card, .filters")
-      )
-        setPanelOpen(false);
+      ) {
+        closePanel();
+      }
     };
     const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setPanelOpen(false);
+      if (event.key === "Escape") {
+        closePanel();
+      }
     };
     document.addEventListener("pointerdown", outside);
     document.addEventListener("keydown", escape);
@@ -89,29 +103,27 @@ export function InsightsPage() {
       document.removeEventListener("pointerdown", outside);
       document.removeEventListener("keydown", escape);
     };
-  }, [panelOpen]);
+  }, [closePanel, panelOpen]);
   const toggleInsight = (id: string) => {
     const opening = !panelOpen || active?.id !== id;
     setSelected(insights.find((insight) => insight.id === id) ?? null);
-    setPanelOpen(opening);
+    if (!opening) {
+      closePanel();
+      return;
+    }
+    setPanelOpen(true);
     if (opening && detailId !== id) {
       const url = new URL(window.location.href);
       url.searchParams.set("insight", id);
       window.history.pushState(null, "", url);
     }
-    if (!opening) return;
     if (window.innerWidth <= 1050)
       requestAnimationFrame(() =>
         document
           .querySelector(".evidence-panel")
           ?.scrollIntoView({ block: "start" }),
       );
-    void dataProvider.trackEvent({
-      eventType: "flare_viewed",
-      targetType: "flare",
-      targetId: id,
-      metadata: { source: "insights_feed" },
-    });
+    recordFlareView(id);
   };
   return (
     <div className={`insights-layout ${active ? "with-evidence" : ""}`}>
@@ -178,11 +190,6 @@ export function InsightsPage() {
                   <button
                     className="button primary"
                     onClick={() => {
-                      void dataProvider.trackEvent({
-                        eventType: "capture_started",
-                        targetType: "capture",
-                        metadata: { source: "insights_no_flares" },
-                      });
                       openCapture();
                     }}
                   >
@@ -193,7 +200,7 @@ export function InsightsPage() {
                     href="/sources"
                     onClick={() => {
                       void dataProvider.trackEvent({
-                        eventType: "flare_viewed",
+                        eventType: "screen_opened",
                         targetType: "screen",
                         metadata: { screen: "sources_from_insights" },
                       });
@@ -295,7 +302,7 @@ export function InsightsPage() {
             <button
               className="icon-button"
               aria-label="Close evidence"
-              onClick={() => setPanelOpen(false)}
+              onClick={closePanel}
             >
               <Icon name="close" />
             </button>

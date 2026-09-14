@@ -32,6 +32,7 @@ TENANT_TABLES = (
     "activity_events",
     "import_batches",
     "analysis_schedules",
+    "analysis_daily_quotas",
     "analysis_cycles",
     "analysis_cycle_sources",
 )
@@ -110,6 +111,7 @@ def _connection_is_ready(connection: Connection) -> bool:
                UNION ALL SELECT 1 FROM public.activity_events
                UNION ALL SELECT 1 FROM public.import_batches
                UNION ALL SELECT 1 FROM public.analysis_schedules
+               UNION ALL SELECT 1 FROM public.analysis_daily_quotas
                UNION ALL SELECT 1 FROM public.analysis_cycles
                UNION ALL SELECT 1 FROM public.analysis_cycle_sources
            )"""

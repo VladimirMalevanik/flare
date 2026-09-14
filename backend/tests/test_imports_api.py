@@ -233,6 +233,94 @@ def test_import_is_idempotent_per_workspace_and_format_and_isolated(api_environm
     ) == (1,)
 
 
+def test_title_edit_keeps_import_dedupe_response_on_the_original_version(api_environment):
+    source = "Original customer evidence remains byte-for-byte stable.\n"
+    workspace_id = uuid4()
+    with api_environment.client(workspace_id=workspace_id) as client:
+        first_response = _post_import(
+            client,
+            format="txt",
+            file_name="evidence.txt",
+            content=source,
+        )
+        assert first_response.status_code == 201, first_response.text
+        first = first_response.json()
+
+        rename_response = client.patch(
+            f"/items/{first['item']['id']}",
+            json={
+                "expectedCurrentVersionId": first["item"]["currentVersionId"],
+                "title": "Renamed current source",
+            },
+        )
+        assert rename_response.status_code == 200, rename_response.text
+        renamed = rename_response.json()
+        assert renamed["versionNumber"] == 2
+        assert renamed["content"] == source
+
+        duplicate_response = _post_import(
+            client,
+            format="txt",
+            file_name="another-name.txt",
+            content=source,
+        )
+        assert duplicate_response.status_code == 200, duplicate_response.text
+        duplicate = duplicate_response.json()
+        assert duplicate["id"] == first["id"]
+        assert duplicate["sourceVersionId"] == first["sourceVersionId"]
+        assert duplicate["item"]["currentVersionId"] == first["sourceVersionId"]
+        assert duplicate["item"]["versionNumber"] == 1
+        assert duplicate["item"]["title"] == first["item"]["title"]
+        assert duplicate["item"]["content"] == source
+        assert duplicate["item"]["fileName"] == "evidence.txt"
+
+        historical = client.get(f"/imports/{first['id']}")
+        assert historical.status_code == 200
+        assert historical.json() == duplicate
+        current = client.get(f"/items/{first['item']['id']}")
+        assert current.status_code == 200
+        assert current.json()["currentVersionId"] == renamed["currentVersionId"]
+        assert current.json()["title"] == "Renamed current source"
+
+    versions = api_environment.fetchone_admin(
+        """SELECT array_agg(snapshot_title ORDER BY version_number),
+                  array_agg(snapshot_metadata->>'fileName' ORDER BY version_number)
+             FROM public.document_versions
+            WHERE workspace_id = %s AND document_id = %s""",
+        (workspace_id, UUID(first["item"]["id"])),
+    )
+    assert versions == (
+        [first["item"]["title"], "Renamed current source"],
+        ["evidence.txt", "evidence.txt"],
+    )
+
+
+def test_title_only_edit_preserves_utf8_bom_file_size(api_environment):
+    source = "\ufeffcustomer evidence\n"
+    with api_environment.client() as client:
+        imported_response = _post_import(
+            client,
+            format="txt",
+            file_name="bom.txt",
+            content=source,
+        )
+        assert imported_response.status_code == 201, imported_response.text
+        imported = imported_response.json()["item"]
+        assert imported["content"] == "customer evidence\n"
+        assert imported["fileSize"] == len(source.encode("utf-8"))
+
+        renamed = client.patch(
+            f"/items/{imported['id']}",
+            json={
+                "expectedCurrentVersionId": imported["currentVersionId"],
+                "title": "BOM import renamed",
+            },
+        )
+        assert renamed.status_code == 200, renamed.text
+        assert renamed.json()["fileSize"] == imported["fileSize"]
+        assert renamed.json()["content"] == imported["content"]
+
+
 def test_replacing_or_deleting_import_preserves_provenance_and_allows_reimport(api_environment):
     original_source = "# Research\nOriginal customer evidence.\n"
     replacement_source = "# Research\nUpdated customer evidence.\n"
@@ -261,8 +349,15 @@ def test_replacing_or_deleting_import_preserves_provenance_and_allows_reimport(a
         assert replaced["content"] == replacement_source
         historical = client.get(f"/imports/{first['id']}")
         assert historical.status_code == 200
+        historical_item = historical.json()["item"]
         assert historical.json()["sourceVersionId"] == first["sourceVersionId"]
         assert historical.json()["supersededAt"] is not None
+        assert historical_item["currentVersionId"] == first["sourceVersionId"]
+        assert historical_item["versionNumber"] == 1
+        assert historical_item["title"] == first["item"]["title"]
+        assert historical_item["content"] == original_source
+        assert historical_item["fileName"] == "research.md"
+        assert client.get(f"/items/{first['item']['id']}").json()["content"] == replacement_source
 
         # The original bytes can become a new source because the first batch
         # still points to v1 and is no longer an active deduplication target.
@@ -278,6 +373,7 @@ def test_replacing_or_deleting_import_preserves_provenance_and_allows_reimport(a
         assert repeated["item"]["id"] != first["item"]["id"]
 
         assert client.delete(f"/items/{repeated['item']['id']}").status_code == 204
+        assert client.get(f"/imports/{repeated['id']}").status_code == 404
         after_delete_response = _post_import(
             client,
             format="md",

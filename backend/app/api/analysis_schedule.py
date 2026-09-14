@@ -14,7 +14,7 @@ from app.api.routes import _database
 from app.models.database import Database, MembershipRequiredError, WritePermissionRequiredError
 from app.models.analysis_schedules import AnalysisScheduleRepository
 from app.services.analysis_schedule import AnalysisScheduleService, InvalidSchedule
-from app.services.analytics_service import AnalyticsService
+from app.services.analytics_service import AnalyticsService, track_event_best_effort
 from app.services.auth_service import AuthenticatedUser
 
 
@@ -49,7 +49,7 @@ class GitHubSyncStatus(BaseModel):
 
 
 class SyncStatus(BaseModel):
-    status: Literal["not_started", "running", "succeeded", "failed"]
+    status: Literal["not_started", "running", "succeeded", "failed", "unknown"]
     github: GitHubSyncStatus
 
 
@@ -58,7 +58,7 @@ class DailyStatusResponse(BaseModel):
 
     local_date: str = Field(alias="localDate")
     timezone: str
-    state: Literal["available", "scheduled", "refreshing", "ready", "queued", "processing", "completed", "failed"]
+    state: Literal["available", "scheduled", "refreshing", "ready", "queued", "processing", "completed", "failed", "consumed"]
     cycle_id: UUID | None = Field(alias="cycleId")
     run_id: UUID | None = Field(alias="runId")
     mode: Literal["manual", "scheduled"] | None
@@ -108,14 +108,12 @@ def put_schedule(
             timezone_name=payload.timezone,
             local_time_value=payload.local_time,
         )
-        try:
-            AnalyticsService(database, user.identity).track_event(
-                event_type="schedule_updated",
-                target_type="analysis_schedule",
-                metadata={"enabled": payload.enabled},
-            )
-        except Exception:
-            pass
+        track_event_best_effort(
+            AnalyticsService(database, user.identity),
+            event_type="schedule_updated",
+            target_type="analysis_schedule",
+            metadata={"enabled": payload.enabled},
+        )
         logger.info(
             "analysis_schedule status=updated workspace_id=%s enabled=%s",
             user.identity.workspace_id,

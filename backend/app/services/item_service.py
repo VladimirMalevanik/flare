@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from hashlib import sha256
 from typing import Any, Literal
 from uuid import UUID, uuid4
@@ -90,6 +91,9 @@ class ItemService:
                 document_id=item_id,
                 content_hash=content_hash,
                 parser_version=self._parser_version(item_type),
+                snapshot_title=resolved_title,
+                snapshot_source_url=source_url,
+                snapshot_metadata=metadata,
             )
             repository.insert_chunk(
                 chunk_id=chunk_id,
@@ -169,12 +173,16 @@ class ItemService:
         query: str | None,
         item_type: str | None,
         limit: int,
+        before_updated_at: datetime | None = None,
+        before_id: UUID | None = None,
     ) -> list[ItemRecord]:
         with self._database.workspace_transaction(self._identity) as connection:
             return ItemRepository(connection).list_active(
                 query=query,
                 item_type=item_type,
                 limit=limit,
+                before_updated_at=before_updated_at,
+                before_id=before_id,
             )
 
     def get_item(self, item_id: UUID) -> ItemRecord:
@@ -233,6 +241,9 @@ class ItemService:
                 version_number=current.version_number + 1,
                 content_hash=sha256(content.encode("utf-8")).hexdigest(),
                 parser_version=current.parser_version,
+                snapshot_title=title,
+                snapshot_source_url=source_url,
+                snapshot_metadata=metadata,
             )
             if replacement_chunks is None:
                 if repository.copy_chunks(
@@ -324,8 +335,21 @@ class ItemService:
                 metadata["fileType"] = file_type
 
             import_format = metadata.get("importFormat")
-            import_fields_changed = bool(
-                {"content", "file_name", "file_size", "file_type"} & set(changes)
+            current_metadata = current.metadata or {}
+            import_fields_changed = (
+                ("content" in changes and content != current.content)
+                or (
+                    "file_name" in changes
+                    and file_name != current_metadata.get("fileName")
+                )
+                or (
+                    "file_size" in changes
+                    and file_size != current_metadata.get("fileSize")
+                )
+                or (
+                    "file_type" in changes
+                    and file_type != current_metadata.get("fileType")
+                )
             )
             if item_type == "file" and import_format in {"csv", "txt", "md"} and import_fields_changed:
                 encoded_size = len(content.encode("utf-8"))
@@ -357,7 +381,11 @@ class ItemService:
                     metadata.pop("rowCount", None)
                 else:
                     metadata["rowCount"] = prepared.row_count
-            elif item_type == "file" and "content" in changes:
+            elif (
+                item_type == "file"
+                and "content" in changes
+                and content != current.content
+            ):
                 content_size = len(content.encode("utf-8"))
                 if "file_size" in changes and changes["file_size"] != content_size:
                     raise ItemValidationError(
@@ -407,10 +435,19 @@ class ItemService:
         if content != current.content or source_url != current.source_url:
             return True
         is_text_import = (current.metadata or {}).get("importFormat") in {"csv", "txt", "md"}
+        current_metadata = current.metadata or {}
+        file_metadata_changed = any(
+            field in changes and changes[field] != current_metadata.get(metadata_key)
+            for field, metadata_key in (
+                ("file_name", "fileName"),
+                ("file_size", "fileSize"),
+                ("file_type", "fileType"),
+            )
+        )
         return (
             current.item_type in {"file", "audio"}
             and not is_text_import
-            and bool({"file_name", "file_size", "file_type"} & set(changes))
+            and file_metadata_changed
         )
 
     def delete_item(self, item_id: UUID) -> None:

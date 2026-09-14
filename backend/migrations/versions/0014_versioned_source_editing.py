@@ -13,7 +13,88 @@ def upgrade():
     op.execute(
         r"""
         ALTER TABLE public.documents
-            ADD COLUMN updated_at timestamptz NOT NULL DEFAULT now();
+            ADD COLUMN updated_at timestamptz;
+        -- Managed deployments run migrations as the table owner. FORCE RLS
+        -- would otherwise hide every legacy row during this backfill.
+        ALTER TABLE public.documents NO FORCE ROW LEVEL SECURITY;
+        -- Preserve the real legacy recency order.  A DEFAULT added with the
+        -- column would stamp every pre-migration row with the same instant.
+        UPDATE public.documents SET updated_at = created_at;
+        ALTER TABLE public.documents
+            ALTER COLUMN updated_at SET DEFAULT now(),
+            ALTER COLUMN updated_at SET NOT NULL;
+        CREATE INDEX documents_workspace_updated_active_idx
+            ON public.documents(workspace_id, updated_at DESC, id DESC)
+            WHERE deleted_at IS NULL;
+
+        -- A chunk is immutable, but citations also expose its human label and
+        -- source URL.  Keep those fields (and display metadata used by import
+        -- history) on the same immutable version boundary so a later edit
+        -- cannot relabel evidence that an analysis already pinned.
+        ALTER TABLE public.document_versions NO FORCE ROW LEVEL SECURITY;
+        ALTER TABLE public.import_batches NO FORCE ROW LEVEL SECURITY;
+        UPDATE public.documents
+           SET metadata = (metadata - 'importBatchId') || jsonb_build_object(
+               'originImportBatchId', metadata->>'importBatchId'
+           )
+         WHERE metadata ? 'importBatchId';
+        ALTER TABLE public.document_versions
+            ADD COLUMN snapshot_title text,
+            ADD COLUMN snapshot_source_url text,
+            ADD COLUMN snapshot_metadata jsonb;
+
+        -- Application code supplies every snapshot explicitly.  This fallback
+        -- keeps migration checks and trusted legacy/admin ingestion paths safe:
+        -- when the new columns are wholly absent, freeze the parent projection
+        -- at INSERT time.  The invoker still has to see that parent through RLS.
+        CREATE FUNCTION public.set_document_version_snapshot() RETURNS trigger
+        LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
+        DECLARE
+            parent_title text;
+            parent_source_url text;
+            parent_metadata jsonb;
+            legacy_snapshot_missing boolean;
+        BEGIN
+            legacy_snapshot_missing :=
+                NEW.snapshot_title IS NULL
+                AND NEW.snapshot_source_url IS NULL
+                AND NEW.snapshot_metadata IS NULL;
+            IF NEW.snapshot_title IS NULL OR NEW.snapshot_metadata IS NULL THEN
+                SELECT d.title, d.source_url, d.metadata
+                  INTO parent_title, parent_source_url, parent_metadata
+                  FROM public.documents d
+                 WHERE (d.workspace_id, d.id) =
+                       (NEW.workspace_id, NEW.document_id);
+                NEW.snapshot_title := COALESCE(NEW.snapshot_title, parent_title);
+                NEW.snapshot_metadata := COALESCE(NEW.snapshot_metadata, parent_metadata);
+                IF legacy_snapshot_missing THEN
+                    NEW.snapshot_source_url := parent_source_url;
+                END IF;
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
+        CREATE TRIGGER document_versions_snapshot
+            BEFORE INSERT ON public.document_versions
+            FOR EACH ROW EXECUTE FUNCTION public.set_document_version_snapshot();
+
+        ALTER TABLE public.document_versions
+            DISABLE TRIGGER document_versions_immutable;
+        UPDATE public.document_versions v
+           SET snapshot_title = d.title,
+               snapshot_source_url = d.source_url,
+               snapshot_metadata = d.metadata
+          FROM public.documents d
+         WHERE (d.workspace_id, d.id) = (v.workspace_id, v.document_id);
+        ALTER TABLE public.document_versions
+            ENABLE TRIGGER document_versions_immutable;
+        ALTER TABLE public.document_versions
+            ALTER COLUMN snapshot_title SET NOT NULL,
+            ALTER COLUMN snapshot_metadata SET NOT NULL,
+            ADD CONSTRAINT document_versions_snapshot_title_check
+                CHECK (length(btrim(snapshot_title)) > 0),
+            ADD CONSTRAINT document_versions_snapshot_metadata_check
+                CHECK (jsonb_typeof(snapshot_metadata) = 'object');
 
         CREATE FUNCTION public.set_document_updated_at() RETURNS trigger
         LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp AS $$
@@ -103,11 +184,9 @@ def upgrade():
             BEFORE UPDATE ON public.import_batches
             FOR EACH ROW EXECUTE FUNCTION public.guard_import_batch_update();
 
-        UPDATE public.documents
-           SET metadata = (metadata - 'importBatchId') || jsonb_build_object(
-               'originImportBatchId', metadata->>'importBatchId'
-           )
-         WHERE metadata ? 'importBatchId';
+        ALTER TABLE public.document_versions FORCE ROW LEVEL SECURITY;
+        ALTER TABLE public.documents FORCE ROW LEVEL SECURITY;
+        ALTER TABLE public.import_batches FORCE ROW LEVEL SECURITY;
 
         DO $$
         DECLARE constraint_name text;

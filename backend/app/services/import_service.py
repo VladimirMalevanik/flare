@@ -125,9 +125,18 @@ class ImportService:
                 )
                 if existing is None or existing.document_id is None or existing.status != "completed":
                     raise ImportUnavailableError("Import batch is unavailable")
-                item = ItemRepository(connection).get_active(existing.document_id)
-                if item is not None and item.content == prepared.content:
-                    return ImportResult(batch=existing, item=item, created=False)
+                repository = ItemRepository(connection)
+                current = repository.get_active(existing.document_id)
+                if current is not None and current.content == prepared.content:
+                    if existing.document_version_id is None:
+                        raise ImportUnavailableError("Import batch is unavailable")
+                    historical = repository.get_version(
+                        existing.document_id,
+                        existing.document_version_id,
+                    )
+                    if historical is None:
+                        raise ImportUnavailableError("Import batch is unavailable")
+                    return ImportResult(batch=existing, item=historical, created=False)
 
                 # A deleted or replaced source no longer represents these bytes.
                 # Retain its exact historical batch/version link, deactivate it
@@ -148,13 +157,15 @@ class ImportService:
 
             item_id, version_id = uuid4(), uuid4()
             repository = ItemRepository(connection)
+            item_title = _title_from_file_name(prepared.file_name)
+            item_metadata = _document_metadata(prepared, batch_id)
             repository.insert_document(
                 item_id=item_id,
                 workspace_id=self._identity.workspace_id,
-                title=_title_from_file_name(prepared.file_name),
+                title=item_title,
                 item_type="file",
                 source_url=None,
-                metadata=_document_metadata(prepared, batch_id),
+                metadata=item_metadata,
             )
             repository.insert_version(
                 version_id=version_id,
@@ -162,6 +173,9 @@ class ImportService:
                 document_id=item_id,
                 content_hash=prepared.content_hash,
                 parser_version=f"import-{prepared.format}-v1",
+                snapshot_title=item_title,
+                snapshot_source_url=None,
+                snapshot_metadata=item_metadata,
             )
             chunk_ids: list[UUID] = []
             for ordinal, chunk in enumerate(prepared.chunks):
@@ -194,7 +208,12 @@ class ImportService:
             batch = ImportBatchRepository(connection).get(batch_id)
             if batch is None or batch.document_id is None or batch.status != "completed":
                 raise ImportNotFoundError
-            item = ItemRepository(connection).get_active(batch.document_id)
+            if batch.document_version_id is None:
+                raise ImportNotFoundError
+            item = ItemRepository(connection).get_version(
+                batch.document_id,
+                batch.document_version_id,
+            )
             if item is None:
                 raise ImportNotFoundError
             return ImportResult(batch=batch, item=item, created=False)

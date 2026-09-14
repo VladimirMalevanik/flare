@@ -7,9 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.api.auth import verified_user
 from app.api.schemas import AnalyticsEventRequest, AnalyticsSummary
 from app.api.routes import _database
-from app.models.database import Database, MembershipRequiredError, WritePermissionRequiredError
+from app.models.database import Database, MembershipRequiredError
 from app.services.auth_service import AuthenticatedUser
-from app.services.analytics_service import AnalyticsService, InvalidEventType
+from app.services.analytics_service import (
+    AnalyticsService,
+    CLIENT_EVENTS,
+    InvalidEventType,
+    log_dropped_event,
+)
 
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -27,6 +32,8 @@ def track_event(
     payload: AnalyticsEventRequest,
     analytics: Annotated[AnalyticsService, Depends(service)],
 ) -> None:
+    if payload.event_type not in CLIENT_EVENTS:
+        raise HTTPException(status_code=422, detail="Invalid client analytics event")
     try:
         analytics.track_event(
             event_type=payload.event_type,
@@ -36,8 +43,12 @@ def track_event(
         )
     except (InvalidEventType, ValueError):
         raise HTTPException(status_code=422, detail="Invalid event type") from None
-    except (MembershipRequiredError, WritePermissionRequiredError):
+    except MembershipRequiredError:
         raise HTTPException(status_code=403, detail="Workspace membership is required") from None
+    except Exception:
+        # Client telemetry is best effort. Keep the product action successful,
+        # and do not put a database/provider error into structured logs.
+        log_dropped_event(analytics, payload.event_type)
 
 
 @router.get("/events", response_model=AnalyticsSummary)

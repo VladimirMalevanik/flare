@@ -50,7 +50,10 @@ def test_worker_roles_and_function_capabilities(admin_url):
 
 def test_force_rls_and_fail_closed_context(admin_url):
     with psycopg.connect(admin_url) as conn:
-        for table in ('analysis_jobs','analysis_job_sources','documents','chunks','workspace_members'):
+        for table in (
+            'analysis_jobs','analysis_job_sources','documents','chunks','workspace_members',
+            'analysis_daily_quotas',
+        ):
             assert conn.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass', ('public.'+table,)).fetchone() == (True, True)
         conn.execute('SET LOCAL ROLE ' + executor_role())
         for table in ('documents','chunks','workspace_members'):
@@ -74,7 +77,7 @@ def jobs(admin_url):
     from app.models.database import Database, WorkspaceIdentity
     from app.services.auth_service import AuthService
     from app.services.item_service import ItemService
-    from app.models.analysis_jobs import AnalysisJobs, WorkerJobs
+    from app.models.analysis_jobs import AnalysisJobs, JobUnavailable, WorkerJobs
     from test_items_api import ApiEnvironment
     runtime = os.environ['DATABASE_URL']
     db = Database(runtime)
@@ -95,7 +98,27 @@ def jobs(admin_url):
     if not worker_url:
         from psycopg.conninfo import make_conninfo
         worker_url = make_conninfo(admin_url, user='flare_worker')
-    yield AnalysisJobs(db), WorkerJobs(worker_url), users, chunks
+
+    class AdminAnalysisJobs(AnalysisJobs):
+        """Legacy queue fixture with migration/admin authority, never an app capability."""
+
+        def enqueue(self, identity, selected_chunks, pipeline_revision, max_attempts=3):
+            try:
+                with psycopg.connect(admin_url) as connection:
+                    connection.execute(
+                        "SELECT set_config('app.workspace_id',%s,true),"
+                        "set_config('app.user_id',%s,true)",
+                        (str(identity.workspace_id), identity.user_id),
+                    )
+                    return connection.execute(
+                        'SELECT public.enqueue_analysis_job(%s,%s,%s)',
+                        (list(selected_chunks), pipeline_revision, max_attempts),
+                    ).fetchone()[0]
+            except (psycopg.IntegrityError, psycopg.errors.InsufficientPrivilege,
+                    psycopg.errors.InvalidParameterValue):
+                raise JobUnavailable('Analysis sources unavailable') from None
+
+    yield AdminAnalysisJobs(db), WorkerJobs(worker_url), users, chunks
     db.close()
     with psycopg.connect(admin_url) as conn:
         conn.execute('DELETE FROM public.analysis_cycle_sources WHERE workspace_id=ANY(%s)', ([u.workspace_id for u in users],))
@@ -258,11 +281,13 @@ class FakeAnalyzer:
 
 def processor_for(jobs, analyzer):
     from app.config import AISettings
-    from app.services.analysis_jobs import AnalysisJobService, AnalysisProcessor
-    from app.workers.config import WorkerSettings
+    from app.services.analysis_jobs import AnalysisProcessor
+    from app.workers.config import WorkerSettings, pipeline_revision
     queue, worker, users, chunks = jobs
     ai, settings = AISettings(), WorkerSettings()
-    job_id = AnalysisJobService(queue, ai, settings).enqueue(users[0], (chunks[0],))
+    job_id = queue.enqueue(
+        users[0], (chunks[0],), pipeline_revision(ai), settings.max_attempts
+    )
     return job_id, AnalysisProcessor(worker, analyzer, ai, settings)
 
 
@@ -472,8 +497,8 @@ def test_failed_row_can_be_explicitly_requeued_in_future(jobs, admin_url):
 def test_dedupe_uses_sorted_snapshot_ids_and_results_stay_isolated(jobs):
     import asyncio
     from app.services.item_service import ItemService
-    from app.services.analysis_jobs import AnalysisJobService, AnalysisProcessor
-    from app.workers.config import WorkerSettings
+    from app.services.analysis_jobs import AnalysisProcessor
+    from app.workers.config import WorkerSettings, pipeline_revision
     from app.config import AISettings
     queue, worker, users, chunks = jobs
     ItemService(queue.database, users[0]).create_note(
@@ -481,10 +506,10 @@ def test_dedupe_uses_sorted_snapshot_ids_and_results_stay_isolated(jobs):
     )
     with queue.database.workspace_transaction(users[0]) as conn:
         selected = tuple(row['id'] for row in conn.execute('SELECT id FROM chunks ORDER BY id').fetchall())
-    service = AnalysisJobService(queue, AISettings(), WorkerSettings())
-    first = service.enqueue(users[0], selected)
-    assert service.enqueue(users[0], tuple(reversed(selected))) == first
-    second = service.enqueue(users[1], (chunks[1],))
+    revision = pipeline_revision(AISettings())
+    first = queue.enqueue(users[0], selected, revision)
+    assert queue.enqueue(users[0], tuple(reversed(selected)), revision) == first
+    second = queue.enqueue(users[1], (chunks[1],), revision)
     processor = AnalysisProcessor(worker, FakeAnalyzer(), AISettings(), WorkerSettings())
     assert asyncio.run(processor.process_one()) == 'completed'
     assert asyncio.run(processor.process_one()) == 'completed'
@@ -497,27 +522,27 @@ def test_dedupe_uses_sorted_snapshot_ids_and_results_stay_isolated(jobs):
 
 def test_analyzer_deadline_becomes_retry_without_holding_database(jobs):
     import asyncio
-    from app.services.analysis_jobs import AnalysisJobService, AnalysisProcessor
-    from app.workers.config import WorkerSettings
+    from app.services.analysis_jobs import AnalysisProcessor
+    from app.workers.config import WorkerSettings, pipeline_revision
     from app.config import AISettings
     class NeverReturns(FakeAnalyzer):
         async def analyze(self, evidence):
             await asyncio.Event().wait()
     ai = AISettings(deadline_seconds=0.02)
     queue, worker, users, chunks = jobs
-    AnalysisJobService(queue, ai, WorkerSettings()).enqueue(users[0], (chunks[0],))
+    queue.enqueue(users[0], (chunks[0],), pipeline_revision(ai))
     processor = AnalysisProcessor(worker, NeverReturns(), ai, WorkerSettings())
     assert asyncio.run(processor.process_one()) == 'pending'
 
 
 def test_source_bounds_reject_before_analyzer(jobs):
     import asyncio
-    from app.services.analysis_jobs import AnalysisJobService, AnalysisProcessor
-    from app.workers.config import WorkerSettings
+    from app.services.analysis_jobs import AnalysisProcessor
+    from app.workers.config import WorkerSettings, pipeline_revision
     from app.config import AISettings
     ai = AISettings(max_input_bytes=1)
     queue, worker, users, chunks = jobs
-    AnalysisJobService(queue, ai, WorkerSettings()).enqueue(users[0], (chunks[0],))
+    queue.enqueue(users[0], (chunks[0],), pipeline_revision(ai))
     fake = FakeAnalyzer()
     processor = AnalysisProcessor(worker, fake, ai, WorkerSettings())
     assert asyncio.run(processor.process_one()) == 'failed' and fake.calls == 0

@@ -6,7 +6,8 @@ require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileMo
   fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }
 ).outputText, filename);
 const { AnalyzeController } = require('../src/features/analyze/analyze-controller.ts');
-const { ApiDataProvider } = require('../src/lib/data/api-provider.ts');
+const { ApiDataProvider, FlareApiError } = require('../src/lib/data/api-provider.ts');
+const { dailyStatusMessage } = require('../src/features/analyze/daily-status-copy.ts');
 const pending = { id: 'run', status:'pending',stage:'analysis',selectedChunkCount:2,flareIds:[],error:null };
 const completed = {...pending,status:'completed',stage:'completed',flareIds:['flare']};
 function setup(provider, sleep = async () => {}, maxPolls = 40) {
@@ -73,7 +74,31 @@ test('API error and malformed run never fall back to mock', async () => {
   global.fetch=async()=>new Response('{}',{status:503}); await assert.rejects(api.startAnalysis('key'));
   global.fetch=async()=>new Response(JSON.stringify({...pending,stage:'completed'})); await assert.rejects(api.getAnalysisRun('run'));
 });
+test('API preserves stable analyze conflict detail as an error code', async () => {
+  const api=new ApiDataProvider({baseUrl:'/api',fallback:new Proxy({}, {get(){assert.fail('mock fallback');}})});
+  global.fetch=async()=>new Response(JSON.stringify({detail:'selection_changed'}),{status:409});
+  await assert.rejects(api.startAnalysis('key'), error => {
+    assert.equal(error.status,409); assert.equal(error.code,'selection_changed');
+    return true;
+  });
+});
+test('controller distinguishes a consumed daily slot from a retryable selection race', async () => {
+  for (const [code, expected] of [
+    ['daily_limit', /next run is available tomorrow/],
+    ['selection_changed', /Try again now/],
+  ]) {
+    const f=setup({startAnalysis:async()=>{throw new FlareApiError(code,409,code);},getAnalysisRun:()=>assert.fail()});
+    await f.controller.start();
+    assert.match(f.states.at(-1).message,expected);
+  }
+});
 test('zero-Flares completion refreshes real feed and says none found', async () => {
   const f=setup({startAnalysis:async()=>({...completed,flareIds:[]}),getAnalysisRun:()=>assert.fail()});
   await f.controller.start(); assert.equal(f.refreshed(),1); assert.match(f.states.at(-1).message,/No new Flares/);
+});
+test('consumed quota copy does not claim that a retained run completed', () => {
+  const message=dailyStatusMessage({state:'consumed'},null);
+  assert.match(message,/already used/);
+  assert.match(message,/detailed status is no longer available/);
+  assert.doesNotMatch(message,/is complete/);
 });

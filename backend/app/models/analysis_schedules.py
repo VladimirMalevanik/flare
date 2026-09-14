@@ -35,37 +35,37 @@ class AnalysisScheduleRepository:
     def put(self, *, enabled: bool, timezone_name: str, local_time: time) -> AnalysisScheduleRecord:
         with self._database.workspace_transaction(self._identity, write=True) as connection:
             row = connection.execute(
-                """INSERT INTO public.analysis_schedules
-                       (workspace_id,enabled,timezone,local_time,lead_minutes,updated_by_user_id)
-                   VALUES(%s,%s,%s,%s,30,%s)
-                   ON CONFLICT(workspace_id) DO UPDATE SET
-                       enabled=excluded.enabled,timezone=excluded.timezone,
-                       local_time=excluded.local_time,lead_minutes=30,
-                       updated_by_user_id=excluded.updated_by_user_id,updated_at=clock_timestamp()
-                   RETURNING enabled,timezone,local_time,lead_minutes,updated_at""",
-                (
-                    self._identity.workspace_id,
-                    enabled,
-                    timezone_name,
-                    local_time,
-                    self._identity.user_id,
-                ),
+                """SELECT enabled,timezone,local_time,lead_minutes,updated_at
+                     FROM public.set_analysis_schedule(%s,%s,%s)""",
+                (enabled, timezone_name, local_time),
             ).fetchone()
             return AnalysisScheduleRecord(**row)
 
     def daily_cycle(self, local_date: date) -> dict[str, Any] | None:
         with self._database.workspace_transaction(self._identity) as connection:
             return connection.execute(
-                """SELECT c.id AS cycle_id,c.mode,c.scheduled_for,c.refresh_due_at,
-                          c.refresh_status,c.snapshot_chunk_count,c.analysis_run_id AS run_id,
-                          c.last_error_code,run.value->>'status' AS run_status,
-                          run.value->>'stage' AS run_stage
-                   FROM public.analysis_cycles c
+                """SELECT c.id AS cycle_id,q.local_date,q.mode,q.scheduled_for,
+                          coalesce(c.refresh_due_at,q.scheduled_for-interval '30 minutes')
+                              AS refresh_due_at,
+                          coalesce(c.refresh_status,'ready') AS refresh_status,
+                          coalesce(c.snapshot_chunk_count,0) AS snapshot_chunk_count,
+                          c.analysis_run_id AS run_id,c.last_error_code,
+                          run.value->>'status' AS run_status,run.value->>'stage' AS run_stage,
+                          c.id IS NULL AS quota_only,
+                          EXISTS(SELECT 1 FROM public.analysis_daily_quotas exact
+                              WHERE exact.workspace_id=q.workspace_id AND exact.local_date=%s)
+                              AS local_date_consumed
+                   FROM public.analysis_daily_quotas q
+                   LEFT JOIN public.analysis_cycles c
+                     ON (c.workspace_id,c.local_date)=(q.workspace_id,q.local_date)
                    LEFT JOIN LATERAL (
                        SELECT public.read_analysis_run(c.analysis_run_id) AS value
                    ) run ON c.analysis_run_id IS NOT NULL
-                   WHERE c.workspace_id=%s AND c.local_date=%s""",
-                (self._identity.workspace_id, local_date),
+                   WHERE q.workspace_id=%s
+                     AND (q.local_date=%s OR q.scheduled_for>clock_timestamp()-interval '20 hours')
+                   ORDER BY q.scheduled_for DESC,q.created_at DESC
+                   LIMIT 1""",
+                (local_date, self._identity.workspace_id, local_date),
             ).fetchone()
 
     def github_connected(self) -> bool:

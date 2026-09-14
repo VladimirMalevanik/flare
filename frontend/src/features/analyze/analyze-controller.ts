@@ -70,11 +70,16 @@ export class AnalyzeController {
     } catch (error) {
       if (generation !== this.generation) return;
       const status = (error as { status?: number }).status;
+      const code = (error as { code?: string }).code;
       if (status && status >= 400 && status < 500) this.pendingKey = null;
       this.update({ busy: false, run, error: true, message: status === 422
         ? "No fitting sources to analyze. Add project context and try again."
         : status === 403 ? "Only workspace owners and editors can analyze context."
-        : status === 409 ? "Today’s insight slot is already used or scheduled. The next run is available tomorrow."
+        : status === 409 && code === "daily_limit"
+          ? "Today’s insight slot is already used or scheduled. The next run is available tomorrow."
+        : status === 409 && code === "selection_changed"
+          ? "Project context changed while analysis was starting. Try again now."
+        : status === 409 ? "Analysis request conflicted with another change. Try again."
         : "Analysis status is unavailable. Try again to check this request." });
     } finally {
       clearTimeout(deadline);

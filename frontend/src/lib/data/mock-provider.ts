@@ -116,8 +116,8 @@ const addLocalDays = (date: string, days: number) => {
 };
 
 // Resolve a local wall-clock time without assuming a fixed UTC offset. Scanning
-// also mirrors the API rules for DST: first occurrence on overlaps and the first
-// valid minute after a clock gap.
+// also mirrors PostgreSQL AT TIME ZONE: the standard-time occurrence on overlaps
+// and the first valid minute after a clock gap.
 const localInstant = (date: string, localTime: string, timezone: string) => {
   const [year, month, day] = date.split("-").map(Number);
   const [hour, minute] = localTime.split(":").map(Number);
@@ -125,17 +125,21 @@ const localInstant = (date: string, localTime: string, timezone: string) => {
   const center = Date.UTC(year, month - 1, day, hour, minute);
   let gapCandidate: Date | null = null;
   let gapMinute = Number.POSITIVE_INFINITY;
+  let exactCandidate: Date | null = null;
   for (let offset = -18 * 60; offset <= 18 * 60; offset += 1) {
     const candidate = new Date(center + offset * 60_000);
     const local = zonedParts(candidate, timezone);
     if (local.date !== date) continue;
-    if (local.minuteOfDay === targetMinute) return candidate;
+    if (local.minuteOfDay === targetMinute) {
+      exactCandidate = candidate;
+      continue;
+    }
     if (local.minuteOfDay > targetMinute && local.minuteOfDay < gapMinute) {
       gapCandidate = candidate;
       gapMinute = local.minuteOfDay;
     }
   }
-  return gapCandidate;
+  return exactCandidate ?? gapCandidate;
 };
 
 const nextScheduleWindow = (
@@ -310,6 +314,9 @@ export class MockDataProvider implements FlareDataProvider {
   }
   async disconnectGitHub(): Promise<void> {}
   async listItems(options: ListItemOptions = {}): Promise<Item[]> {
+    if ((options.beforeUpdatedAt === undefined) !== (options.beforeId === undefined)) {
+      throw new Error("Both item cursor fields are required.");
+    }
     const query = options.query?.toLowerCase().trim() ?? "";
     const deleted = new Set(getDeletedItemIds());
     const userItems = getUserItems();
@@ -325,13 +332,24 @@ export class MockDataProvider implements FlareDataProvider {
           !query ||
           `${item.title} ${item.content}`.toLowerCase().includes(query),
       )
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .slice(0, options.limit);
+      .sort((a, b) =>
+        b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id),
+      )
+      .filter((item) => {
+        if (options.beforeUpdatedAt === undefined || options.beforeId === undefined) return true;
+        const itemTime = Date.parse(item.updatedAt);
+        const cursorTime = Date.parse(options.beforeUpdatedAt);
+        return itemTime < cursorTime || (itemTime === cursorTime && item.id < options.beforeId);
+      })
+      .slice(0, options.limit ?? 50);
   }
   async getItem(id: string) {
     return (await this.listItems()).find((item) => item.id === id) ?? null;
   }
   async createItem(input: CreateItemInput): Promise<Item> {
+    if (input.type === "audio") {
+      throw new Error("Voice transcription requires the Flare API.");
+    }
     const now = new Date().toISOString();
     const id = `local-${crypto.randomUUID()}`;
     const item: Item = {
@@ -342,9 +360,7 @@ export class MockDataProvider implements FlareDataProvider {
       title: titleFor(input),
       content:
         input.content?.trim() ||
-        (input.type === "audio"
-          ? "Audio captured locally. A demo transcript will be available while processing."
-          : "No original content available."),
+        "No original content available.",
       sourceUrl: input.sourceUrl,
       fileName: input.fileName,
       fileSize: input.fileSize,
@@ -367,11 +383,18 @@ export class MockDataProvider implements FlareDataProvider {
       throw new Error("This item changed while you were editing it. Reopen it and try again.");
     }
     const versionNumber = existing.versionNumber + 1;
+    const title = input.title === undefined ? existing.title : input.title.trim();
+    const content = input.content === undefined
+      ? existing.content
+      : input.type === "file"
+        ? input.content
+        : input.content.trim();
+    if (!title || !content.trim()) throw new Error("Title and content are required.");
     const updated: Item = {
       ...existing,
-      title: input.title.trim(),
-      content: input.type === "file" ? input.content : input.content.trim(),
-      sourceUrl: input.sourceUrl,
+      title,
+      content,
+      sourceUrl: input.sourceUrl ?? existing.sourceUrl,
       fileName: input.fileName ?? existing.fileName,
       fileSize: input.fileSize ?? existing.fileSize,
       fileType: input.fileType ?? existing.fileType,

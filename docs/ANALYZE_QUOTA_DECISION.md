@@ -1,79 +1,84 @@
-# Analyze Quota Decision Note
+# Daily Analyze Quota Decision Record
 
-No Analyze quota is implemented. Count, subject, reset period, charging boundary,
-and paid/free behavior remain product decisions. This note identifies the safest
-implementation boundary after those decisions are approved.
+**Status: implemented at migration head `0015`.** Flare allows one accepted
+analysis cycle per workspace local calendar day. Manual Analyze requests and
+scheduled analysis use the same slot.
 
-## Current request boundary
+## Product contract
+
+- The quota subject is the workspace, not an individual user.
+- The allowance is one logical analysis cycle for each workspace local date.
+- The date uses the workspace schedule's IANA timezone. A workspace without a
+  saved schedule uses `UTC`.
+- Manual and scheduled analysis share the allowance. Whichever path reserves the
+  day first prevents a second path from starting that day.
+- A 20-hour minimum separation check also applies to the prior promised run time.
+  This closes the immediate bypass where changing the workspace timezone would
+  otherwise expose a different calendar date moments after an analysis.
+- Capture, import, and source editing do not consume the allowance and do not
+  enqueue analysis. They only publish source data for a later manual or scheduled
+  cycle.
+
+This is a product usage rule rather than provider billing. One slot is reserved
+when Flare atomically accepts a manual run or materializes a scheduled cycle. AI
+retries inside that cycle do not consume another slot. A failed cycle remains the
+workspace's cycle for that day; failures do not silently permit extra provider
+work.
+
+## Manual Analyze
 
 `POST /analyze` requires a verified owner/editor and a UUID `Idempotency-Key`.
-`AnalysisRuns.start` opens the workspace transaction, serializes the logical key with
-an advisory transaction lock, returns an existing run on replay, selects eligible
-context, and calls the database `start_analysis_run` function. That function repeats
-authorization and idempotency checks before it creates the durable job and run.
+Before creating work, the service checks for a prior run with the same workspace,
+user, and key. Replaying an accepted request returns that run and does not consume
+another slot.
 
-Note capture, text import and source editing do not enqueue jobs. Only the
-explicit/scheduled insight boundary can consume the allowance.
+For a new logical request, the database serializes the workspace operation,
+validates the selected current source chunks, reserves the daily slot, and creates
+the cycle, analysis job, public run, pinned source references, and
+`analysis_requested` event in one transaction. Concurrent requests cannot both
+pass the limit.
 
-## Recommended atomic enforcement point
+If today's slot, or the 20-hour guard, is already occupied, a new request returns
+HTTP `409` with the exact stable detail code `daily_limit`. A changed source
+selection remains a separate `409 selection_changed` response, so the frontend can
+tell the user whether to retry now or wait for the next available day.
 
-Enforce an approved quota in the database transaction that creates a new logical
-run, inside `start_analysis_run` or a database function it calls. Check for an
-existing `(workspace_id, requested_by_user_id, idempotency_key)` first. A replay must
-return its existing run without consuming another unit. For a new key, lock or
-atomically update the relevant quota subject and period before inserting the job and
-run; all three operations commit or roll back together.
+## Scheduled Analyze and the T-30 snapshot
 
-An API-side `COUNT(*)` followed by enqueue is unsafe because concurrent requests can
-both pass the count. Worker-start or provider-completion charging is also a different
-product contract: it permits accepted jobs beyond the limit and requires reservations
-or later settlement.
+Owners and editors can save one workspace schedule with an IANA timezone and local
+run time. The lead time is fixed at 30 minutes.
 
-## Schema options after the contract is approved
+At T-30, the worker materializes the day's scheduled cycle and reserves the shared
+daily slot. The refresh stage then selects eligible current source chunks and
+stores their exact immutable chunk IDs in `analysis_cycle_sources`. At the selected
+run time, the worker enqueues analysis from that pinned snapshot. Edits or imports
+made after the snapshot remain available for a later cycle but do not rewrite the
+current cycle's evidence. Deleting source evidence still causes the existing
+source-validity checks to reject or hide invalid results.
 
-| Option | Shape | Tradeoff |
-| --- | --- | --- |
-| Usage ledger | Immutable row per charged logical action with a unique reference to the run/request | Best audit trail; period counts need an index and may become expensive without rollups |
-| Period counter | One row per subject and period, updated with a row lock or atomic conditional update | Fast enforcement; requires a precise period/time-zone contract and a separate audit story |
-| Reservation and settlement | Reserved, consumed, and released units tied to a run | Supports charge-on-completion/refunds; adds failure recovery and reconciliation complexity |
+A schedule change may cancel automatic work that has not created an analysis run
+and release that unstarted reservation. Already enqueued, completed, or failed
+daily work remains consumed. Worker leases, bounded refresh retries, and the queue
+maintenance path recover or surface stuck scheduled work without creating an
+extra cycle.
 
-Possible subject keys are workspace, user, or workspace-user. Possible boundaries are
-accepted run, claimed job, provider request, completed analysis, or published Flare.
-None is selected here.
+## Durable enforcement and retention
 
-## Idempotency and concurrency requirements
+`analysis_daily_quotas` is the compact, retention-safe record of a consumed local
+day. It is independent of job and run foreign keys, so deleting old queue or result
+rows cannot reopen that date. Migration `0015` also backfills one UTC-day tombstone
+for each workspace/day represented by legacy `analysis_runs` before the new rule
+becomes reachable.
 
-- The existing request key is the logical-action identity. Unknown POST outcomes and
-  client retries with the same key must observe the original charge and run.
-- Two new keys for the same quota subject may arrive concurrently. Enforcement must
-  serialize on a stable subject/period row or use one conditional `UPDATE ... WHERE`
-  that cannot exceed the limit.
-- Authorization, source selection, quota consumption, analysis job insertion, and run
-  insertion must have an explicit ordering. The recommended order avoids charging an
-  idempotent replay or a request that cannot create a valid run.
-- Retry attempts inside one durable job must not consume additional units unless the
-  product owner explicitly chooses provider-call billing.
-- Capture/import/edit must remain outside quota accounting because they create no job.
+Database constraints, workspace advisory locks, and restricted security-definer
+functions enforce the rule for both API and worker paths. Row-level security keeps
+schedule, cycle, snapshot, and quota rows inside their workspace. The daily-status
+API reports the cycle state, scheduled and refresh times, pinned source count, and
+whether another request is available without exposing source content.
 
-## Frontend and API contract to approve
+## Future product changes
 
-When the limit is known, reject a new logical run with HTTP 429 and a stable structured
-code such as `analysis_quota_exceeded`. The response may include a user-safe `resetAt`
-timestamp and allowance metadata only if the product contract defines them. Use
-`Retry-After` only for a time-based reset that the server can state accurately.
-
-The frontend should preserve the current Note and prior run state, stop polling the
-rejected request, and show specific recovery copy based on the approved reset or plan
-behavior. `FlareApiError` currently keeps HTTP status but not the structured error
-code, so the eventual implementation must carry that code through the provider and
-add explicit controller/UI tests.
-
-## Decisions required before implementation
-
-1. Whether a unit is consumed by an accepted scheduled/explicit Analyze, provider
-   attempt, completed analysis, or published Flare.
-2. Is the subject a workspace, a user, or both?
-3. What is the allowance and reset period, and which clock/time zone defines it?
-4. Do configuration/provider failures consume, reserve, refund, or never charge?
-5. How do free and paid plans differ, and what upgrade or support action is shown?
-6. What usage/audit data may owners and operators see, and how long is it retained?
+The implemented launch rule is fixed at one workspace cycle per local day. Paid
+tiers, additional manual runs, provider-call billing, refunds, and custom allowance
+counts are separate future product decisions. Changing them requires a new
+database/API contract; they must not be inferred from the current tombstone.

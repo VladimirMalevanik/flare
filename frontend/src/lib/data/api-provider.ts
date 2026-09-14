@@ -30,6 +30,7 @@ export class FlareApiError extends Error {
   constructor(
     message: string,
     readonly status?: number,
+    readonly code?: string,
   ) {
     super(message);
     this.name = "FlareApiError";
@@ -137,7 +138,7 @@ function mapAnalysisSchedule(value: unknown): AnalysisSchedule {
 }
 
 const dailyStates: DailyAnalysisStatus["state"][] = [
-  "available", "scheduled", "refreshing", "ready", "queued", "processing", "completed", "failed",
+  "available", "scheduled", "refreshing", "ready", "queued", "processing", "completed", "consumed", "failed",
 ];
 
 function mapDailyAnalysisStatus(value: unknown): DailyAnalysisStatus {
@@ -148,7 +149,8 @@ function mapDailyAnalysisStatus(value: unknown): DailyAnalysisStatus {
   const syncStatus = stringField(sync, "status") as DailyAnalysisStatus["sync"]["status"];
   const githubStatus = stringField(github, "status") as DailyAnalysisStatus["sync"]["github"]["status"];
   if (!dailyStates.includes(state)
-    || !["not_started", "running", "succeeded", "failed"].includes(syncStatus)
+    || !["not_started", "running", "succeeded", "failed", "unknown"].includes(syncStatus)
+    || ((state === "consumed") !== (syncStatus === "unknown"))
     || !["not_connected", "not_ingested"].includes(githubStatus)
     || typeof github.connected !== "boolean"
     || github.ingestionSupported !== false
@@ -253,7 +255,9 @@ async function responseError(
     const body: unknown = await response.json();
     if (typeof body === "object" && body !== null) {
       const record = body as Record<string, unknown>;
-      if (typeof record.detail === "string") return { message: record.detail };
+      if (typeof record.detail === "string") {
+        return { message: record.detail, code: record.detail };
+      }
       if (typeof record.detail === "object" && record.detail !== null) {
         const detail = record.detail as Record<string, unknown>;
         if (typeof detail.message === "string") {
@@ -367,7 +371,7 @@ export class ApiDataProvider implements FlareDataProvider {
       ) {
         window.location.replace("/verify-email?pending=1");
       }
-      throw new FlareApiError(error.message, response.status);
+      throw new FlareApiError(error.message, response.status, error.code);
     }
     if (response.status === 204) return undefined;
     return response.json();
@@ -465,10 +469,15 @@ export class ApiDataProvider implements FlareDataProvider {
   }
 
   async listItems(options: ListItemOptions = {}): Promise<Item[]> {
+    if ((options.beforeUpdatedAt === undefined) !== (options.beforeId === undefined)) {
+      throw new FlareApiError("Both item cursor fields are required.");
+    }
     const params = new URLSearchParams();
     if (options.query?.trim()) params.set("query", options.query.trim());
     if (options.type && options.type !== "all") params.set("type", options.type);
     if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.beforeUpdatedAt !== undefined) params.set("beforeUpdatedAt", options.beforeUpdatedAt);
+    if (options.beforeId !== undefined) params.set("beforeId", options.beforeId);
     const query = params.size ? `?${params.toString()}` : "";
     const body = await this.request(`/items${query}`);
     if (!Array.isArray(body)) {
@@ -511,17 +520,22 @@ export class ApiDataProvider implements FlareDataProvider {
   }
 
   async updateItem(id: string, input: UpdateItemInput): Promise<Item> {
-    const title = input.title.trim();
-    const content = input.type === "file" ? input.content : input.content.trim();
-    if (!title || !content.trim()) {
-      throw new FlareApiError("Title and content are required.");
+    const title = input.title?.trim();
+    const content = input.content === undefined
+      ? undefined
+      : input.type === "file"
+        ? input.content
+        : input.content.trim();
+    if (title !== undefined && !title) throw new FlareApiError("Title is required.");
+    if (content !== undefined && !content.trim()) {
+      throw new FlareApiError("Content is required.");
     }
     return mapItem(await this.request(`/items/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify({
         expectedCurrentVersionId: input.expectedCurrentVersionId,
-        title,
-        content,
+        ...(title !== undefined ? { title } : {}),
+        ...(content !== undefined ? { content } : {}),
         ...(input.sourceUrl !== undefined ? { sourceUrl: input.sourceUrl.trim() } : {}),
         ...(input.fileName !== undefined ? { fileName: input.fileName.trim() } : {}),
         ...(input.fileSize !== undefined ? { fileSize: input.fileSize } : {}),

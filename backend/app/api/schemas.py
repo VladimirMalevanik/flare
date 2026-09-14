@@ -53,8 +53,6 @@ class CreateItemRequest(BaseModel):
             return self.source_url.strip()
         if self.type == "file" and self.file_name:
             return f"File upload metadata only: {self.file_name}"
-        if self.type == "audio":
-            return "Audio memo"
         return ""
 
 
@@ -220,12 +218,32 @@ class QueueSummary(BaseModel):
     oldest_processing_seconds: float | None = Field(serialization_alias="oldestProcessingSeconds")
 
 
+class AnalysisCycleSummary(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    scheduled: int
+    refreshing: int
+    ready: int
+    failed: int
+    due_refresh: int = Field(serialization_alias="dueRefresh")
+    due_run: int = Field(serialization_alias="dueRun")
+    stale_refreshing: int = Field(serialization_alias="staleRefreshing")
+    overdue: int
+    oldest_refresh_due_seconds: float | None = Field(
+        serialization_alias="oldestRefreshDueSeconds"
+    )
+    oldest_run_due_seconds: float | None = Field(
+        serialization_alias="oldestRunDueSeconds"
+    )
+
+
 class QueueHealthResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     as_of: datetime = Field(serialization_alias="asOf")
     analysis: QueueSummary
     flares: QueueSummary
+    cycles: AnalysisCycleSummary
     alerts: list[str]
 
 
@@ -247,6 +265,12 @@ class QueueMaintenanceRequest(BaseModel):
     flare_failed_retention_days: int = Field(
         default=14, ge=1, le=3650, alias="flareFailedRetentionDays"
     )
+    cycle_failed_retention_days: int = Field(
+        default=14, ge=1, le=3650, alias="cycleFailedRetentionDays"
+    )
+    activity_event_retention_days: int = Field(
+        default=90, ge=1, le=3650, alias="activityEventRetentionDays"
+    )
 
 
 class QueueBucketSummary(BaseModel):
@@ -263,8 +287,16 @@ class QueueMaintenanceResponse(BaseModel):
     after: QueueHealthResponse
     recovered_stale_analysis_jobs: int = Field(serialization_alias="recoveredStaleAnalysisJobs")
     recovered_stale_flare_runs: int = Field(serialization_alias="recoveredStaleFlareRuns")
+    recovered_stale_analysis_cycle_refreshes: int = Field(
+        serialization_alias="recoveredStaleAnalysisCycleRefreshes"
+    )
+    failed_stale_analysis_cycles: int = Field(
+        serialization_alias="failedStaleAnalysisCycles"
+    )
     analysis_jobs: QueueBucketSummary = Field(serialization_alias="analysisJobs")
     flare_generation_runs: QueueBucketSummary = Field(serialization_alias="flareGenerationRuns")
+    analysis_cycles: QueueBucketSummary = Field(serialization_alias="analysisCycles")
+    activity_events: QueueBucketSummary = Field(serialization_alias="activityEvents")
 
 
 class AnalyticsEventRequest(BaseModel):
@@ -276,22 +308,9 @@ class AnalyticsEventRequest(BaseModel):
         "capture_file_attached",
         "capture_voice_started",
         "capture_voice_stopped",
-        "item_created",
-        "item_updated",
-        "source_replaced",
-        "item_deleted",
         "item_viewed",
         "flare_viewed",
-        "queue_health_requested",
-        "queue_maintenance_run",
-        "import_started",
-        "import_completed",
-        "import_failed",
-        "analysis_requested",
-        "schedule_updated",
-        "analysis_refresh_started",
-        "analysis_refresh_completed",
-        "analysis_refresh_failed",
+        "screen_opened",
     ] = Field(serialization_alias="eventType", validation_alias="eventType")
     target_type: str | None = Field(
         default=None,

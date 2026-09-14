@@ -126,7 +126,7 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
       setAnalysisSchedule(saved);
       setScheduleMessage(saved.enabled
         ? "Daily insight scheduled. Saved context is prepared 30 minutes before it runs."
-        : "Automatic daily insights are paused.");
+        : "Future automatic daily insights are paused. A run already queued may still finish.");
     } catch (error) {
       setScheduleError(true);
       setScheduleMessage(dataErrorMessage(error, "Daily insight schedule could not be saved."));

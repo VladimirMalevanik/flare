@@ -54,12 +54,6 @@ class AnalysisJobService:
         settings.validate(ai)
         self.queue, self.ai, self.settings = queue, ai, settings
 
-    def enqueue(self, identity: WorkspaceIdentity, chunks: tuple[UUID, ...]) -> UUID:
-        if not 1 <= len(chunks) <= min(self.ai.max_sources, 100):
-            raise ValueError('Invalid analysis source count')
-        return self.queue.enqueue(identity, chunks, pipeline_revision(self.ai), self.settings.max_attempts)
-
-
     def start_run(self, identity: WorkspaceIdentity, key: UUID, generation_revision: str):
         from app.models.analysis_runs import AnalysisRuns, DailyLimitReached
         try:
@@ -67,10 +61,10 @@ class AnalysisJobService:
                 return AnalysisRuns.start(conn, identity, key, self.ai, pipeline_revision(self.ai),
                                           generation_revision, self.settings.max_attempts)
         except psycopg.errors.UniqueViolation as error:
-            if (
-                getattr(getattr(error, "diag", None), "constraint_name", None)
-                == "analysis_cycles_workspace_local_date_key"
-            ):
+            if getattr(getattr(error, "diag", None), "constraint_name", None) in {
+                "analysis_cycles_workspace_local_date_key",
+                "analysis_daily_quotas_pkey",
+            }:
                 raise DailyLimitReached("daily_limit") from None
             raise
 

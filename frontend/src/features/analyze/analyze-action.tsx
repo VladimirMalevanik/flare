@@ -8,6 +8,7 @@ import {
   type DailyAnalysisStatus,
 } from "@/lib/data";
 import { AnalyzeController, type AnalyzeState } from "./analyze-controller";
+import { dailyStatusMessage } from "./daily-status-copy";
 
 export function AnalyzeAction() {
   const session = useSession();
@@ -61,17 +62,7 @@ export function AnalyzeAction() {
         timeZone: daily.timezone,
       }).format(new Date(daily.scheduledFor))} (${daily.timezone})`
     : null;
-  const scheduledMessage = daily?.state === "scheduled" && daily.scheduledFor
-    ? `Next insight is scheduled for ${scheduledFor}. Saved source versions are prepared 30 minutes earlier.`
-    : daily?.state === "refreshing"
-      ? "Flare is preparing the latest saved context for today’s insight."
-      : daily?.state === "ready"
-        ? "Fresh context is ready. Today’s insight will start at the scheduled time."
-        : daily?.state === "completed"
-          ? "Today’s insight is complete. The next slot opens tomorrow."
-          : daily?.state === "failed"
-            ? "Today’s insight did not complete after automatic retries. Saved context is safe; the next slot opens tomorrow."
-            : "";
+  const scheduledMessage = dailyStatusMessage(daily, scheduledFor);
   const trigger = () => {
     if (daily?.runId && canResume) {
       void controller.current?.resume(daily.runId);
@@ -90,7 +81,7 @@ export function AnalyzeAction() {
           ? "Analyzing…"
           : pending || canResume
             ? "Check today’s insight"
-            : daily?.state === "failed"
+            : daily?.state === "failed" || daily?.state === "consumed"
               ? "Next insight tomorrow"
             : dailyReserved
               ? "Scheduled for today"

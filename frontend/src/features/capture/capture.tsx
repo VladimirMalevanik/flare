@@ -164,7 +164,7 @@ export function Capture() {
     void dataProvider.trackEvent({
       eventType: "capture_file_attached",
       targetType: "import",
-      metadata: { format, fileSize: next.size, fileType: next.type || null },
+      metadata: { format, fileSize: next.size },
     });
   };
 
@@ -294,8 +294,9 @@ export function Capture() {
       setFile(null);
       void dataProvider.trackEvent({
         eventType: "capture_submitted",
-        targetType: file ? "import" : "note",
+        targetType: "item",
         targetId: item.id,
+        metadata: { sourceType: file ? "file" : "note" },
       });
       closeCapture();
     } catch (caught) {
@@ -492,12 +493,9 @@ export function Capture() {
               </button>
               <button
                 className="icon-button"
-                aria-label="Start recording"
-                disabled={busy || !!voice.recording || !!file}
-                onClick={() => {
-                  void dataProvider.trackEvent({ eventType: "capture_voice_started", targetType: "capture" });
-                  void voice.start();
-                }}
+                aria-label="Voice transcription coming soon"
+                title="Voice transcription coming soon"
+                disabled
               >
                 <Icon name="audio" />
               </button>
