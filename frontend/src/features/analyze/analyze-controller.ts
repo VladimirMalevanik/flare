@@ -72,13 +72,43 @@ export class AnalyzeController {
       const status = (error as { status?: number }).status;
       if (status && status >= 400 && status < 500) this.pendingKey = null;
       this.update({ busy: false, run, error: true, message: status === 422
-        ? "No fitting Notes to analyze. Add a short project Note and try again."
-        : status === 403 ? "Only workspace owners and editors can analyze Notes."
+        ? "No fitting sources to analyze. Add project context and try again."
+        : status === 403 ? "Only workspace owners and editors can analyze context."
+        : status === 409 ? "Today’s insight slot is already used or scheduled. The next run is available tomorrow."
         : "Analysis status is unavailable. Try again to check this request." });
     } finally {
       clearTimeout(deadline);
       if (generation === this.generation && this.state.busy) {
         this.update({ busy: false, run, error: true, message: "Analysis is still pending. Check status again shortly." });
+      }
+    }
+  };
+
+  resume = async (runId: string) => {
+    if (this.state.busy) return;
+    const generation = ++this.generation;
+    const abort = new AbortController();
+    this.abort = abort;
+    this.update({ busy: true, run: null, error: false, message: "Loading today’s insight…" });
+    try {
+      const run = await this.provider.getAnalysisRun(runId, abort.signal);
+      if (generation !== this.generation || abort.signal.aborted) return;
+      if (run.status === "completed") {
+        this.complete();
+        this.update({ busy: false, run, error: false, message: run.flareIds.length
+          ? "Today’s insight is complete."
+          : "Today’s insight completed with no new Flares." });
+        return;
+      }
+      if (run.status === "failed") {
+        this.update({ busy: false, run, error: true, message: failureMessage(run.error) });
+        return;
+      }
+      this.state = { busy: false, run, error: false, message: "" };
+      await this.start();
+    } catch {
+      if (generation === this.generation) {
+        this.update({ busy: false, run: null, error: true, message: "Today’s insight status is unavailable." });
       }
     }
   };

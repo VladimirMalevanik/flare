@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { dataErrorMessage, dataProvider, type Item } from "@/lib/data";
 import { useWorkspace } from "@/components/workspace-context";
+import { useSession } from "@/components/auth-session";
 import { Icon, itemIcon } from "@/components/icons";
 import { Dialog } from "@/components/dialog";
 const category = (item: Item) =>
@@ -16,6 +17,7 @@ const filters = [
 ];
 export function VaultPage() {
   const params = useSearchParams();
+  const session = useSession();
   const { revision, refresh } = useWorkspace();
   const [items, setItems] = useState<Item[]>([]);
   const [selected, setSelected] = useState<Item | null>(null);
@@ -26,6 +28,12 @@ export function VaultPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [editSourceUrl, setEditSourceUrl] = useState("");
+  const [editError, setEditError] = useState("");
   useEffect(() => {
     let live = true;
     const itemId = params.get("item");
@@ -67,7 +75,44 @@ export function VaultPage() {
         sourceType: item.type,
       },
     });
+    setEditing(false);
     setSelected(item);
+  };
+  const beginEdit = () => {
+    if (!selected) return;
+    setEditTitle(selected.title);
+    setEditContent(selected.content);
+    setEditSourceUrl(selected.sourceUrl ?? "");
+    setError("");
+    setEditError("");
+    setEditing(true);
+  };
+  const saveEdit = async () => {
+    if (!selected || saving || !editTitle.trim() || !editContent.trim()) return;
+    setSaving(true);
+    setEditError("");
+    try {
+      const updated = await dataProvider.updateItem(selected.id, {
+        type: selected.type,
+        expectedCurrentVersionId: selected.currentVersionId,
+        title: editTitle,
+        content: editContent,
+        ...(selected.type === "url" ? { sourceUrl: editSourceUrl } : {}),
+        fileName: selected.fileName,
+        fileSize: selected.type === "file"
+          ? new TextEncoder().encode(editContent).byteLength
+          : selected.fileSize,
+        fileType: selected.fileType,
+      });
+      setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setSelected(updated);
+      setEditing(false);
+      refresh();
+    } catch (caught) {
+      setEditError(dataErrorMessage(caught, "The item could not be updated."));
+    } finally {
+      setSaving(false);
+    }
   };
   const deleteSelected = async () => {
     if (!selected || deleting) return;
@@ -96,7 +141,7 @@ export function VaultPage() {
     .sort((a, b) =>
       sort === "title"
         ? a.title.localeCompare(b.title)
-        : b.createdAt.localeCompare(a.createdAt),
+        : b.updatedAt.localeCompare(a.updatedAt),
     );
   return (
     <section className="page vault-page">
@@ -244,7 +289,12 @@ export function VaultPage() {
       {selected && (
         <Dialog
           title={selected.title}
-          onClose={() => setSelected(null)}
+          onClose={() => {
+            if (!saving) {
+              setEditing(false);
+              setSelected(null);
+            }
+          }}
           className="item-sheet"
         >
           <header className="sheet-header">
@@ -257,11 +307,83 @@ export function VaultPage() {
             <button
               className="icon-button"
               aria-label="Close item"
-              onClick={() => setSelected(null)}
+              disabled={saving}
+              onClick={() => {
+                setEditing(false);
+                setSelected(null);
+              }}
             >
               <Icon name="close" />
             </button>
           </header>
+          {editing ? (
+            <form
+              className="item-edit-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveEdit();
+              }}
+            >
+              <label>
+                Title
+                <input
+                  value={editTitle}
+                  maxLength={300}
+                  required
+                  disabled={saving}
+                  onChange={(event) => setEditTitle(event.target.value)}
+                />
+              </label>
+              {selected.type === "url" && (
+                <label>
+                  URL
+                  <input
+                    type="url"
+                    value={editSourceUrl}
+                    maxLength={2048}
+                    required
+                    disabled={saving}
+                    onChange={(event) => setEditSourceUrl(event.target.value)}
+                  />
+                </label>
+              )}
+              <label>
+                {selected.type === "audio" ? "Transcript" : "Content"}
+                <textarea
+                  value={editContent}
+                  maxLength={200000}
+                  rows={12}
+                  required
+                  disabled={saving}
+                  onChange={(event) => setEditContent(event.target.value)}
+                />
+              </label>
+              <p className="muted meta">
+                Saving creates version {selected.versionNumber + 1}. Existing Flares keep their original evidence.
+              </p>
+              {editError && (
+                <p className="error-text meta" role="alert">{editError}</p>
+              )}
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="button"
+                  disabled={saving}
+                  onClick={() => setEditing(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="button primary"
+                  disabled={saving || !editTitle.trim() || !editContent.trim()}
+                >
+                  {saving ? "Saving…" : selected.type === "note" ? "Save new version" : "Replace source"}
+                </button>
+              </div>
+            </form>
+          ) : (
+          <>
           <section>
             <h3>Extracted Facts</h3>
             {selected.extractedFacts.length ? (
@@ -325,13 +447,23 @@ export function VaultPage() {
           <footer className="form-actions">
             <button
               type="button"
+              className="button primary"
+              disabled={session?.workspace.role === "viewer"}
+              onClick={beginEdit}
+            >
+              {selected.type === "note" ? "Edit note" : "Edit source"}
+            </button>
+            <button
+              type="button"
               className="button"
-              disabled={deleting}
+              disabled={deleting || session?.workspace.role === "viewer"}
               onClick={() => void deleteSelected()}
             >
               {deleting ? "Deleting…" : "Delete item"}
             </button>
           </footer>
+          </>
+          )}
         </Dialog>
       )}
     </section>

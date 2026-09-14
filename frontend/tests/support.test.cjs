@@ -42,6 +42,7 @@ function renderSettings(supportEmail) {
     react: {
       useState: (initial) => [initial, () => {}],
       useEffect: () => {},
+      useMemo: (factory) => factory(),
     },
     "@/components/auth-session": { useSession: () => null },
     "@/lib/auth/session": { authRequest: async () => ({ ok: true }) },
@@ -65,6 +66,24 @@ function renderSettings(supportEmail) {
       }),
     },
     "@/lib/storage/preferences": { readLocal: () => ({}), writeLocal() {} },
+    "@/lib/data": {
+      dataErrorMessage: (_error, fallback) => fallback,
+      dataProvider: {
+        async getAnalysisSchedule() {
+          return {
+            enabled: false,
+            timezone: "Europe/Moscow",
+            localTime: "19:00",
+            leadMinutes: 30,
+            nextRefreshAt: null,
+            nextRunAt: null,
+            updatedAt: "2026-09-14T00:00:00Z",
+          };
+        },
+        async updateAnalysisSchedule(value) { return value; },
+        async trackEvent() {},
+      },
+    },
   });
   return nodes(SettingsPage({ supportEmail }));
 }

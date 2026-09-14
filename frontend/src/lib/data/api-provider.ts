@@ -1,7 +1,9 @@
 import type { AnalyticsEventInput, FlareDataProvider } from "./provider";
 import type {
   AnalysisRun,
+  AnalysisSchedule,
   CreateItemInput,
+  DailyAnalysisStatus,
   Insight,
   Item,
   ItemStatus,
@@ -13,6 +15,7 @@ import type {
   ImportFormat,
   ImportResult,
   ImportTextFileInput,
+  UpdateItemInput,
 } from "./types";
 
 type ApiDataProviderOptions = {
@@ -62,6 +65,14 @@ function mapItem(value: unknown): Item {
   if (!Number.isFinite(Date.parse(createdAt))) {
     throw new FlareApiError("The server returned an invalid creation date.");
   }
+  const updatedAt = stringField(dto, "updatedAt");
+  if (!Number.isFinite(Date.parse(updatedAt))) {
+    throw new FlareApiError("The server returned an invalid update date.");
+  }
+  const versionNumber = numberField(dto, "versionNumber");
+  if (!Number.isInteger(versionNumber) || versionNumber < 1) {
+    throw new FlareApiError("The server returned an invalid item version.");
+  }
 
   const facts = Array.isArray(dto.extractedFacts) ? dto.extractedFacts : [];
   const relatedIds = Array.isArray(dto.relatedItemIds)
@@ -75,6 +86,9 @@ function mapItem(value: unknown): Item {
     content: stringField(dto, "content"),
     status: status as ItemStatus,
     createdAt,
+    updatedAt,
+    currentVersionId: stringField(dto, "currentVersionId"),
+    versionNumber,
     extractedFacts: facts.map((fact) => {
       const mapped = asRecord(fact);
       return {
@@ -87,6 +101,86 @@ function mapItem(value: unknown): Item {
     ...(typeof dto.fileName === "string" ? { fileName: dto.fileName } : {}),
     ...(typeof dto.fileSize === "number" ? { fileSize: dto.fileSize } : {}),
     ...(typeof dto.fileType === "string" ? { fileType: dto.fileType } : {}),
+  };
+}
+
+function nullableDateField(dto: Record<string, unknown>, key: string): string | null {
+  const value = dto[key];
+  if (value === null) return null;
+  if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) {
+    throw new FlareApiError(`The server returned an invalid ${key}.`);
+  }
+  return value;
+}
+
+function mapAnalysisSchedule(value: unknown): AnalysisSchedule {
+  const dto = asRecord(value);
+  const localTime = stringField(dto, "localTime");
+  const timezone = stringField(dto, "timezone");
+  const updatedAt = stringField(dto, "updatedAt");
+  if (typeof dto.enabled !== "boolean"
+    || !/^([01]\d|2[0-3]):[0-5]\d$/.test(localTime)
+    || !timezone.trim()
+    || dto.leadMinutes !== 30
+    || !Number.isFinite(Date.parse(updatedAt))) {
+    throw new FlareApiError("The server returned an invalid analysis schedule.");
+  }
+  return {
+    enabled: dto.enabled,
+    timezone,
+    localTime,
+    leadMinutes: 30,
+    nextRefreshAt: nullableDateField(dto, "nextRefreshAt"),
+    nextRunAt: nullableDateField(dto, "nextRunAt"),
+    updatedAt,
+  };
+}
+
+const dailyStates: DailyAnalysisStatus["state"][] = [
+  "available", "scheduled", "refreshing", "ready", "queued", "processing", "completed", "failed",
+];
+
+function mapDailyAnalysisStatus(value: unknown): DailyAnalysisStatus {
+  const dto = asRecord(value);
+  const state = stringField(dto, "state") as DailyAnalysisStatus["state"];
+  const sync = asRecord(dto.sync);
+  const github = asRecord(sync.github);
+  const syncStatus = stringField(sync, "status") as DailyAnalysisStatus["sync"]["status"];
+  const githubStatus = stringField(github, "status") as DailyAnalysisStatus["sync"]["github"]["status"];
+  if (!dailyStates.includes(state)
+    || !["not_started", "running", "succeeded", "failed"].includes(syncStatus)
+    || !["not_connected", "not_ingested"].includes(githubStatus)
+    || typeof github.connected !== "boolean"
+    || github.ingestionSupported !== false
+    || typeof dto.canRequestToday !== "boolean"
+    || !Number.isInteger(dto.sourceSnapshotCount) || (dto.sourceSnapshotCount as number) < 0
+    || (dto.cycleId !== null && typeof dto.cycleId !== "string")
+    || (dto.runId !== null && typeof dto.runId !== "string")
+    || ![null, "manual", "scheduled"].includes(dto.mode as never)
+    || ![null, "daily_limit", "no_eligible_context", "sync_failed"].includes(dto.reason as never)
+    || !/^\d{4}-\d{2}-\d{2}$/.test(stringField(dto, "localDate"))) {
+    throw new FlareApiError("The server returned an invalid daily analysis status.");
+  }
+  return {
+    localDate: dto.localDate as string,
+    timezone: stringField(dto, "timezone"),
+    state,
+    cycleId: dto.cycleId as string | null,
+    runId: dto.runId as string | null,
+    mode: dto.mode as DailyAnalysisStatus["mode"],
+    scheduledFor: nullableDateField(dto, "scheduledFor"),
+    refreshDueAt: nullableDateField(dto, "refreshDueAt"),
+    sourceSnapshotCount: dto.sourceSnapshotCount as number,
+    canRequestToday: dto.canRequestToday,
+    reason: dto.reason as DailyAnalysisStatus["reason"],
+    sync: {
+      status: syncStatus,
+      github: {
+        connected: github.connected,
+        ingestionSupported: false,
+        status: githubStatus,
+      },
+    },
   };
 }
 
@@ -289,6 +383,25 @@ export class ApiDataProvider implements FlareDataProvider {
     return mapAnalysisRun(await this.request(`/analysis-runs/${encodeURIComponent(id)}`, { signal }));
   }
 
+  async getAnalysisSchedule(): Promise<AnalysisSchedule> {
+    return mapAnalysisSchedule(await this.request("/analysis-schedule"));
+  }
+
+  async updateAnalysisSchedule(input: {
+    enabled: boolean;
+    timezone: string;
+    localTime: string;
+  }): Promise<AnalysisSchedule> {
+    return mapAnalysisSchedule(await this.request("/analysis-schedule", {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }));
+  }
+
+  async getDailyAnalysisStatus(): Promise<DailyAnalysisStatus> {
+    return mapDailyAnalysisStatus(await this.request("/analysis/daily-status"));
+  }
+
   async listSources(): Promise<Source[]> {
     const sources = await this.fallback.listSources();
     let connection: GitHubConnection;
@@ -395,6 +508,26 @@ export class ApiDataProvider implements FlareDataProvider {
         )),
       }),
     );
+  }
+
+  async updateItem(id: string, input: UpdateItemInput): Promise<Item> {
+    const title = input.title.trim();
+    const content = input.type === "file" ? input.content : input.content.trim();
+    if (!title || !content.trim()) {
+      throw new FlareApiError("Title and content are required.");
+    }
+    return mapItem(await this.request(`/items/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        expectedCurrentVersionId: input.expectedCurrentVersionId,
+        title,
+        content,
+        ...(input.sourceUrl !== undefined ? { sourceUrl: input.sourceUrl.trim() } : {}),
+        ...(input.fileName !== undefined ? { fileName: input.fileName.trim() } : {}),
+        ...(input.fileSize !== undefined ? { fileSize: input.fileSize } : {}),
+        ...(input.fileType !== undefined ? { fileType: input.fileType.trim() } : {}),
+      }),
+    }));
   }
 
   async importTextFile(input: ImportTextFileInput): Promise<ImportResult> {

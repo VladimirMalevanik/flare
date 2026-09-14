@@ -19,6 +19,9 @@ export interface Item {
   fileSize?: number;
   status: ItemStatus;
   createdAt: string;
+  updatedAt: string;
+  currentVersionId: string;
+  versionNumber: number;
   extractedFacts: ExtractedFact[];
   relatedItemIds: string[];
 }
@@ -49,6 +52,17 @@ export interface CreateItemInput {
   fileSize?: number;
   fileType?: string;
   status?: ItemStatus;
+}
+
+export interface UpdateItemInput {
+  type: ItemType;
+  expectedCurrentVersionId: string;
+  title: string;
+  content: string;
+  sourceUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  fileType?: string;
 }
 
 export type ImportFormat = "csv" | "txt" | "md";
@@ -116,4 +130,46 @@ export interface AnalysisRun {
   selectedChunkCount: number;
   flareIds: string[];
   error: string | null;
+}
+
+export interface AnalysisSchedule {
+  enabled: boolean;
+  timezone: string;
+  localTime: string;
+  leadMinutes: number;
+  nextRefreshAt: string | null;
+  nextRunAt: string | null;
+  updatedAt: string;
+}
+
+export type DailyAnalysisState =
+  | "available"
+  | "scheduled"
+  | "refreshing"
+  | "ready"
+  | "queued"
+  | "processing"
+  | "completed"
+  | "failed";
+
+export interface DailyAnalysisStatus {
+  localDate: string;
+  timezone: string;
+  state: DailyAnalysisState;
+  cycleId: string | null;
+  runId: string | null;
+  mode: "manual" | "scheduled" | null;
+  scheduledFor: string | null;
+  refreshDueAt: string | null;
+  sourceSnapshotCount: number;
+  canRequestToday: boolean;
+  reason: "daily_limit" | "no_eligible_context" | "sync_failed" | null;
+  sync: {
+    status: "not_started" | "running" | "succeeded" | "failed";
+    github: {
+      connected: boolean;
+      ingestionSupported: false;
+      status: "not_connected" | "not_ingested";
+    };
+  };
 }

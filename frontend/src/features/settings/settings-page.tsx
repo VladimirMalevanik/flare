@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSession } from "@/components/auth-session";
 import { authRequest } from "@/lib/auth/session";
 import { Icon } from "@/components/icons";
@@ -10,6 +10,11 @@ import {
   type Theme,
 } from "@/components/workspace-context";
 import { readLocal, writeLocal } from "@/lib/storage/preferences";
+import {
+  dataErrorMessage,
+  dataProvider,
+  type AnalysisSchedule,
+} from "@/lib/data";
 const defaults = {
   alerts: true,
   digest: true,
@@ -43,6 +48,27 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
   } = useWorkspace();
   const [settings, setSettings] = useState(defaults);
   const [billingOpen, setBillingOpen] = useState(false);
+  const [analysisSchedule, setAnalysisSchedule] = useState<AnalysisSchedule | null>(null);
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleTime, setScheduleTime] = useState("19:00");
+  const [scheduleTimezone, setScheduleTimezone] = useState(profile.timezone);
+  const [scheduleLoading, setScheduleLoading] = useState(true);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [scheduleMessage, setScheduleMessage] = useState("");
+  const [scheduleError, setScheduleError] = useState(false);
+  const timezoneOptions = useMemo(() => {
+    const extended = Intl as typeof Intl & {
+      supportedValuesOf?: (key: "timeZone") => string[];
+    };
+    const supported = extended.supportedValuesOf?.("timeZone") ?? [
+      "Europe/Moscow",
+      "Europe/London",
+      "America/New_York",
+      "America/Los_Angeles",
+      "Asia/Singapore",
+    ];
+    return Array.from(new Set(["UTC", profile.timezone, scheduleTimezone, ...supported])).sort();
+  }, [profile.timezone, scheduleTimezone]);
   const [message, setMessage] = useState(
     "Preferences are saved in this browser",
   );
@@ -63,6 +89,58 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
+  useEffect(() => {
+    let live = true;
+    void dataProvider.getAnalysisSchedule()
+      .then((value) => {
+        if (!live) return;
+        setAnalysisSchedule(value);
+        setScheduleEnabled(value.enabled);
+        setScheduleTime(value.localTime);
+        setScheduleTimezone(value.timezone);
+        setScheduleMessage("");
+        setScheduleError(false);
+      })
+      .catch((error) => {
+        if (live) {
+          setScheduleError(true);
+          setScheduleMessage(dataErrorMessage(error, "Daily insight schedule could not be loaded."));
+        }
+      })
+      .finally(() => {
+        if (live) setScheduleLoading(false);
+      });
+    return () => { live = false; };
+  }, []);
+  async function saveAnalysisSchedule() {
+    if (scheduleSaving) return;
+    setScheduleSaving(true);
+    setScheduleMessage("");
+    setScheduleError(false);
+    try {
+      const saved = await dataProvider.updateAnalysisSchedule({
+        enabled: scheduleEnabled,
+        timezone: scheduleTimezone,
+        localTime: scheduleTime,
+      });
+      setAnalysisSchedule(saved);
+      setScheduleMessage(saved.enabled
+        ? "Daily insight scheduled. Saved context is prepared 30 minutes before it runs."
+        : "Automatic daily insights are paused.");
+    } catch (error) {
+      setScheduleError(true);
+      setScheduleMessage(dataErrorMessage(error, "Daily insight schedule could not be saved."));
+    } finally {
+      setScheduleSaving(false);
+    }
+  }
+  const scheduleDate = (value: string | null) => value
+    ? new Intl.DateTimeFormat("en", {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: analysisSchedule?.timezone ?? scheduleTimezone,
+      }).format(new Date(value))
+    : "—";
   function update<K extends keyof typeof defaults>(
     key: K,
     value: (typeof defaults)[K],
@@ -315,6 +393,85 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
             ))}
           </div>
         </SettingRow>
+      </SettingsSection>
+      <SettingsSection
+        title="Daily insight"
+        subtitle="Choose one workspace insight time. Flare freezes the latest supported source versions 30 minutes beforehand."
+        icon="insights"
+      >
+        {scheduleLoading ? (
+          <p className="muted" role="status">Loading daily insight schedule…</p>
+        ) : (
+          <>
+            <SettingRow
+              title="Automatic daily insight"
+              description="At most one insight run is allowed per workspace day, including manual Analyze."
+            >
+              <input
+                type="checkbox"
+                className="switch"
+                aria-label="Automatic daily insight"
+                checked={scheduleEnabled}
+                disabled={scheduleSaving || session?.workspace.role === "viewer"}
+                onChange={(event) => setScheduleEnabled(event.target.checked)}
+              />
+            </SettingRow>
+            <SettingRow
+              title="Insight time"
+              description="If today’s 30-minute preparation window has passed, the first run is scheduled for tomorrow."
+            >
+              <input
+                type="time"
+                aria-label="Daily insight time"
+                value={scheduleTime}
+                disabled={scheduleSaving || !scheduleEnabled || session?.workspace.role === "viewer"}
+                onChange={(event) => setScheduleTime(event.target.value)}
+              />
+            </SettingRow>
+            <SettingRow
+              title="Workspace timezone"
+              description="The daily limit and schedule follow this timezone."
+            >
+              <select
+                aria-label="Daily insight timezone"
+                value={scheduleTimezone}
+                disabled={scheduleSaving || !scheduleEnabled || session?.workspace.role === "viewer"}
+                onChange={(event) => setScheduleTimezone(event.target.value)}
+              >
+                {timezoneOptions.map((timezone) => (
+                  <option value={timezone} key={timezone}>{timezone}</option>
+                ))}
+              </select>
+            </SettingRow>
+            {analysisSchedule?.enabled && (
+              <div className="schedule-preview" aria-live="polite">
+                <span><strong>Next refresh</strong>{scheduleDate(analysisSchedule.nextRefreshAt)}</span>
+                <span><strong>Next insight</strong>{scheduleDate(analysisSchedule.nextRunAt)}</span>
+              </div>
+            )}
+            <p className="muted meta">
+              Notes and CSV/TXT/Markdown are included. GitHub repository content is not imported yet; its connection currently stores metadata only.
+            </p>
+            <div className="form-actions schedule-actions">
+              {scheduleMessage && (
+                <p
+                  className={scheduleError ? "error-text meta" : "muted meta"}
+                  role={scheduleError ? "alert" : "status"}
+                >
+                  {scheduleMessage}
+                </p>
+              )}
+              <button
+                type="button"
+                className="button primary"
+                disabled={scheduleSaving || !scheduleTime || !scheduleTimezone || session?.workspace.role === "viewer"}
+                onClick={() => void saveAnalysisSchedule()}
+              >
+                {scheduleSaving ? "Saving…" : "Save insight schedule"}
+              </button>
+            </div>
+          </>
+        )}
       </SettingsSection>
       <SettingsSection
         title="Data & Privacy"

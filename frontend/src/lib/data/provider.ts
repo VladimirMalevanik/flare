@@ -1,11 +1,14 @@
 import type {
   AnalysisRun,
+  AnalysisSchedule,
+  DailyAnalysisStatus,
   CreateItemInput,
   Insight,
   ImportResult,
   ImportTextFileInput,
   Item,
   ListItemOptions,
+  UpdateItemInput,
   Source,
   GitHubConnection,
   GitHubRepository,
@@ -21,6 +24,13 @@ export interface AnalyticsEventInput {
 export interface FlareDataProvider {
   startAnalysis(key: string, signal?: AbortSignal): Promise<AnalysisRun>;
   getAnalysisRun(id: string, signal?: AbortSignal): Promise<AnalysisRun>;
+  getAnalysisSchedule(): Promise<AnalysisSchedule>;
+  updateAnalysisSchedule(input: {
+    enabled: boolean;
+    timezone: string;
+    localTime: string;
+  }): Promise<AnalysisSchedule>;
+  getDailyAnalysisStatus(): Promise<DailyAnalysisStatus>;
   listSources(): Promise<Source[]>;
   saveSource(source: Source): Promise<Source>;
   getGitHubConnection(): Promise<GitHubConnection>;
@@ -31,6 +41,7 @@ export interface FlareDataProvider {
   listItems(options?: ListItemOptions): Promise<Item[]>;
   getItem(id: string): Promise<Item | null>;
   createItem(input: CreateItemInput): Promise<Item>;
+  updateItem(id: string, input: UpdateItemInput): Promise<Item>;
   importTextFile(input: ImportTextFileInput): Promise<ImportResult>;
   deleteItem(id: string): Promise<void>;
   listInsights(): Promise<Insight[]>;

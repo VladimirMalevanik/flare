@@ -1351,6 +1351,35 @@ blockquote {
   margin-bottom: 12px;
   font-weight: 600;
 }
+.item-edit-form {
+  display: grid;
+  gap: 16px;
+}
+.item-edit-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+.item-edit-form input,
+.item-edit-form textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--inset);
+  color: var(--ink);
+  padding: 11px 12px;
+}
+.item-edit-form textarea {
+  resize: vertical;
+  min-height: 220px;
+  line-height: 1.55;
+}
+.item-edit-form .form-actions {
+  gap: 8px;
+  margin-top: 4px;
+}
 .original-content {
   white-space: pre-wrap;
   background: var(--inset);
@@ -1385,6 +1414,33 @@ blockquote {
   display: flex;
   justify-content: flex-end;
   margin-top: 24px;
+}
+.schedule-preview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.schedule-preview span {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--inset);
+  color: var(--secondary);
+  font-size: 12px;
+}
+.schedule-preview strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.schedule-actions {
+  align-items: center;
+  gap: 12px;
+}
+.schedule-actions p {
+  margin-right: auto;
 }
 .mobile-menu {
   display: none;
