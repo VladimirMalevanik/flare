@@ -13,6 +13,7 @@ from app.api.analytics import router as analytics_router
 from app.api.auth import router as auth_router
 from app.api.flares import router as flares_router
 from app.api.analysis import router as analysis_router
+from app.api.analysis_schedule import router as analysis_schedule_router
 from app.api.github import router as github_router
 from app.api.imports import router as imports_router
 from app.api import ops
@@ -72,7 +73,7 @@ def create_app(
         CORSMiddleware,
         allow_origins=configured.cors_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "DELETE"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["Content-Type", "Idempotency-Key"],
     )
     @application.middleware("http")
@@ -84,6 +85,7 @@ def create_app(
         if request.url.path.startswith((
             "/auth", "/items", "/imports", "/flares", "/analyze", "/analysis-runs",
             "/integrations", "/ops", "/analytics",
+            "/analysis-schedule", "/analysis/daily-status",
         )):
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -100,6 +102,7 @@ def create_app(
     application.include_router(imports_router)
     application.include_router(flares_router)
     application.include_router(analysis_router)
+    application.include_router(analysis_schedule_router)
     application.include_router(github_router)
     application.include_router(ops.router)
     application.include_router(analytics_router)

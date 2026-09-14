@@ -1,6 +1,6 @@
 # Flare Architecture
 
-This document describes the repository at migration head `0014`.
+This document describes the repository at migration head `0015`.
 
 Status labels used throughout:
 
@@ -186,7 +186,7 @@ membership, and requires owner/editor for writes. Viewer access is read-only.
 Tenant tables have enabled and forced PostgreSQL row-level security. Composite keys
 and foreign keys prevent cross-workspace relationships. The API connects as the
 restricted `flare_app` role without `SUPERUSER`, `BYPASSRLS`, role membership, or
-schema ownership. Readiness fails if the schema revision is not `0014`, required
+schema ownership. Readiness fails if the schema revision is not `0015`, required
 tenant tables lack forced RLS, or tenant rows are visible without context.
 
 Auth tables are intentionally outside tenant RLS because session lookup happens
@@ -202,7 +202,7 @@ or the worker.
 | Identity | `auth_users`, `auth_sessions`, `auth_email_verifications` | User, revocable sessions, and verification tokens |
 | Tenancy | `workspaces`, `workspace_members` | Workspace boundary and owner/editor/viewer role |
 | Knowledge | `documents`, `document_versions`, `chunks` | Soft-deleted document, immutable published version, ordered evidence chunks |
-| Analysis | `analysis_jobs`, `analysis_job_sources`, `analysis_runs` | Durable extraction job, pinned sources, and public idempotent run |
+| Analysis | `analysis_jobs`, `analysis_job_sources`, `analysis_runs`, `analysis_schedules`, `analysis_cycles`, `analysis_cycle_sources` | Durable extraction job, daily schedule/quota, immutable T-30 snapshot, and public idempotent run |
 | Flares | `flare_generation_runs`, `insights`, `insight_sources` | Durable generation stage, typed Flare, and exact evidence quote |
 | GitHub | `github_connection_states`, `github_connections` | One-time state and one selected repository per workspace |
 | Imports | `import_batches` | Idempotent bounded text-import status and canonical document link |
@@ -326,15 +326,16 @@ than a secret, but the server validates it before exposing it in Settings.
 **Implemented.** Alembic has one linear head:
 
 ```text
-0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0008 → 0009 → 0010 → 0011 → 0012 → 0013 → 0014
+0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0008 → 0009 → 0010 → 0011 → 0012 → 0013 → 0014 → 0015
 ```
 
 `0008` adds email verification and backfills existing users. `0009` adds GitHub
 connection state and metadata. `0010` expands analysis source types, `0011` adds
 bounded queue maintenance, `0012` adds activity events and source types, `0013`
-adds import batches and import-safe chunk constraints, and `0014` adds optimistic
-source versions and exact import provenance. Application readiness requires
-`0014`. CI tests both self-managed and Yandex-compatible upgrades,
+adds import batches and import-safe chunk constraints, `0014` adds optimistic
+source versions and exact import provenance, and `0015` adds daily schedules,
+cycles, immutable source snapshots, and the database-enforced daily limit.
+Application readiness requires `0015`. CI tests both self-managed and Yandex-compatible upgrades,
 historical upgrade steps, repeat `upgrade head`, role
 ownership, RLS, preserved data, and worker isolation.
 

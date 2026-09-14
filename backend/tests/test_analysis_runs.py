@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.config import AISettings, Settings
 from app.models.database import WorkspaceIdentity
-from app.models.analysis_runs import AnalysisRuns
+from app.models.analysis_runs import AnalysisRuns, DailyLimitReached
 from app.services.analysis_jobs import AnalysisJobService, AnalysisProcessor
 from app.services.context_selection import select_context
 from app.ai_engine.prompts import build_bounded_request, request_size_bytes
@@ -105,9 +105,7 @@ def test_selection_bounds_determinism_and_isolation(jobs, admin_url):
     notes.create_note(title='Huge', content='x' * 5000)
     notes.create_note(title='Goal', content='Our goal is the MVP release. Deadline next week.')
     note = notes.create_note(title='Latest', content='Current project state: analysis is incomplete.')
-    a, b = start(jobs, ai=ai), start(jobs, ai=ai)
-    assert a['id'] != b['id']
-    assert snapshot(admin_url,a['id']) == snapshot(admin_url,b['id'])
+    a = start(jobs, ai=ai)
     assert a['selectedChunkCount'] == 2
     with psycopg.connect(admin_url) as c:
         rows = c.execute('SELECT c.id,c.content,c.workspace_id FROM analysis_job_sources s JOIN chunks c ON c.id=s.chunk_id JOIN analysis_runs r ON r.analysis_job_id=s.job_id WHERE r.id=%s',(a['id'],)).fetchall()
@@ -125,6 +123,7 @@ def test_atomic_transaction_rollback(jobs, admin_url):
     with psycopg.connect(admin_url) as c:
         assert c.execute('SELECT count(*) FROM analysis_jobs').fetchone() == (0,)
         assert c.execute('SELECT count(*) FROM analysis_runs').fetchone() == (0,)
+        assert c.execute('SELECT count(*) FROM analysis_cycles').fetchone() == (0,)
 
 
 def test_status_membership_and_stages(jobs, admin_url):
@@ -187,13 +186,13 @@ def test_register_notes_analyze_worker_flares_e2e(jobs, admin_url, empty):
         assert post(c,key).status_code==200
 
 
-def test_new_key_after_failure_creates_new_job(jobs):
+def test_terminal_failure_keeps_daily_slot_consumed(jobs):
     first=start(jobs)
     claim=jobs[1].claim(uuid4(),120)
     assert jobs[1].finish(claim,error='invalid_output')=='failed'
-    second=start(jobs)
-    assert second['id']!=first['id']
-    assert jobs[1].claim(uuid4(),120).job_id!=claim.job_id
+    with pytest.raises(DailyLimitReached):
+        start(jobs)
+    assert jobs[1].claim(uuid4(),120) is None
 
 
 def test_run_privileges_and_rls(jobs, admin_url):
@@ -249,7 +248,8 @@ def test_recent_200_and_current_version_snapshot(jobs, admin_url):
         c.execute("UPDATE document_versions SET state='ready' WHERE id=%s", (version,))
         c.execute('UPDATE documents SET current_version_id=%s WHERE id=%s', (version,document))
     assert snapshot(admin_url,run['id']) == selected
-    assert (chunk,) not in snapshot(admin_url,start(jobs)['id'])
+    with pytest.raises(DailyLimitReached):
+        start(jobs)
 
 
 def test_safe_database_failure(jobs, monkeypatch):

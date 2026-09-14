@@ -5,7 +5,22 @@ The Flares page submits an authenticated, Origin-protected `POST /analyze` with
 workspace member can read `GET /analysis-runs/{id}`. Cookies are required even in
 development identity mode. No caller-supplied identity or source IDs are accepted.
 
-Selection inspects the most recent 200 eligible Notes (`created_at DESC, id DESC`):
+Migration 0015 adds one daily analysis cycle per workspace local date, enforced by
+`UNIQUE(workspace_id, local_date)`. The date comes from the workspace IANA timezone.
+Manual Analyze consumes the same slot as the permanent schedule. Replaying the same
+idempotency key returns the same run; a different key on that local date returns
+`409 daily_limit`. Automatic transient attempts remain inside the same job/cycle.
+A terminal failure keeps the slot consumed until the next local date.
+
+`GET/PUT /analysis-schedule` manages `{enabled, timezone, localTime}`; the lead is
+fixed at 30 minutes. Saving within that lead window defers the first scheduled run
+until tomorrow. `GET /analysis/daily-status` exposes the cycle, run, refresh state
+and snapshot count. The single worker materializes due cycles, freezes their source
+IDs at T-30, and enqueues the pinned snapshot at T. DST gaps and overlaps follow
+PostgreSQL `AT TIME ZONE` semantics, so API previews and worker materialization agree.
+
+Selection inspects the most recent 200 eligible stored text sources of every schema
+type (`note`, `file`, `url`, `audio`; `created_at DESC, id DESC`):
 current ready version, immutable chunks, same workspace, not deleted. Per Note,
 at most `min(LLM_MAX_SOURCES, 100)` chunks are inspected in ordinal/id order.
 Reserve the newest chunk that fits, then rank remaining chunks by distinct explicit
@@ -15,7 +30,8 @@ within `LLM_MAX_INPUT_BYTES` and the source count fits. No embeddings or extra A
 call; no task completion inferred from absent text. Revision: `recent-project-v1`.
 No fitting context returns 422 without creating a job.
 
-Migration 0007 adds `analysis_runs`; existing migrations remain unchanged. A
+Migration 0007 adds `analysis_runs`; migration 0015 adds schedules, cycles and
+immutable cycle-source snapshots. A
 workspace/user/key advisory lock serializes replay. Selection, document locks,
 existing durable enqueue, pinned `analysis_job_sources`, and run insertion share
 one transaction. A new key creates a new attempt; replay returns the same snapshot
@@ -43,6 +59,8 @@ worker. Run `docker compose up --build -d`. The database initializes, migrations
 finish, and the one-shot `configure-worker` service sets the restricted worker
 role password before the worker starts. The worker runs
 `python -m app.workers.analysis_worker`; an absent key fails closed at startup.
+GitHub connection metadata is reported as `not_ingested`: repository-content
+ingestion is not implemented and the scheduler never claims that it was refreshed.
 
 The API receives only its runtime database URL and nonsecret model settings.
 The worker receives only its worker URL, provider key and model settings.

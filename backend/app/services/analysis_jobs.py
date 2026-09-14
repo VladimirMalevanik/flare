@@ -6,6 +6,8 @@ import random
 import re
 from uuid import UUID, uuid4
 
+import psycopg
+
 from app.ai_engine.analysis import Evidence, TextAnalysis, validate_evidence
 from app.ai_engine.errors import AnalysisError
 from app.ai_engine.llm import TextAnalyzer
@@ -59,10 +61,18 @@ class AnalysisJobService:
 
 
     def start_run(self, identity: WorkspaceIdentity, key: UUID, generation_revision: str):
-        from app.models.analysis_runs import AnalysisRuns
-        with self.queue.database.workspace_transaction(identity, write=True) as conn:
-            return AnalysisRuns.start(conn, identity, key, self.ai, pipeline_revision(self.ai),
-                                      generation_revision, self.settings.max_attempts)
+        from app.models.analysis_runs import AnalysisRuns, DailyLimitReached
+        try:
+            with self.queue.database.workspace_transaction(identity, write=True) as conn:
+                return AnalysisRuns.start(conn, identity, key, self.ai, pipeline_revision(self.ai),
+                                          generation_revision, self.settings.max_attempts)
+        except psycopg.errors.UniqueViolation as error:
+            if (
+                getattr(getattr(error, "diag", None), "constraint_name", None)
+                == "analysis_cycles_workspace_local_date_key"
+            ):
+                raise DailyLimitReached("daily_limit") from None
+            raise
 
     def read_run(self, identity: WorkspaceIdentity, run_id: UUID):
         from app.models.analysis_runs import AnalysisRuns

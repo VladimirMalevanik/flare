@@ -55,6 +55,9 @@ PostgreSQL пользователи `flare_owner`, `flare_app`, `flare_worker` �
 | `GET /imports/{id}` | Статус и canonical item одного текстового импорта |
 | `POST /analytics/events` | Разрешённое действие продукта → `202`, без содержимого источника |
 | `GET /analytics/events` | Сводка частоты действий workspace за 1–720 часов |
+| `GET/PUT /analysis-schedule` | IANA timezone + `HH:MM`; snapshot источников начинается за 30 минут |
+| `GET /analysis/daily-status` | Дневной slot, refresh/snapshot/run state и честный статус GitHub ingestion |
+| `POST /analyze` | Ручной анализ; тот же DB-slot «не чаще одного раза за local day» |
 | `GET /ops/queue` | Только owner: состояние jobs, flare runs и признаки зависания |
 | `POST /ops/queue/maintenance` | Только owner: dry-run/очистка старых задач и возврат просроченных leases |
 | `POST /integrations/github/start` | Запускает GitHub App installation flow; callback, выбор repo и disconnect живут под тем же префиксом |

@@ -109,6 +109,18 @@ class ApiEnvironment:
                 (ids,),
             )
             connection.execute(
+                "DELETE FROM public.analysis_cycle_sources WHERE workspace_id = ANY(%s)",
+                (ids,),
+            )
+            connection.execute(
+                "DELETE FROM public.analysis_cycles WHERE workspace_id = ANY(%s)",
+                (ids,),
+            )
+            connection.execute(
+                "DELETE FROM public.analysis_schedules WHERE workspace_id = ANY(%s)",
+                (ids,),
+            )
+            connection.execute(
                 "UPDATE public.documents SET current_version_id = NULL "
                 "WHERE workspace_id = ANY(%s)",
                 (ids,),

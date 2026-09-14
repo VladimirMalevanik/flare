@@ -98,3 +98,9 @@ def test_analytics_metadata_is_small_scalar_allowlisted_telemetry():
         _sanitize_metadata("capture_file_attached", {"content": "customer source text"})
     with pytest.raises(ValueError, match="too long"):
         _sanitize_metadata("capture_started", {"channel": "x" * 129})
+    assert _sanitize_metadata("analysis_requested", {"mode": "manual"}) == {"mode": "manual"}
+    assert _sanitize_metadata("analysis_refresh_completed", {"source_count": 5}) == {
+        "source_count": 5
+    }
+    with pytest.raises(ValueError, match="not allowed"):
+        _sanitize_metadata("analysis_refresh_failed", {"content": "private source"})

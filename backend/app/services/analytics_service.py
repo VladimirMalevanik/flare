@@ -45,8 +45,15 @@ ALLOWED_EVENTS = {
     "import_started",
     "import_completed",
     "import_failed",
+    "analysis_requested",
+    "schedule_updated",
+    "analysis_refresh_started",
+    "analysis_refresh_completed",
+    "analysis_refresh_failed",
 }
-_ALLOWED_TARGET_TYPES = {"capture", "flare", "import", "item", "note", "screen"}
+_ALLOWED_TARGET_TYPES = {
+    "analysis_cycle", "analysis_run", "analysis_schedule", "capture", "flare", "import", "item", "note", "screen"
+}
 
 # Telemetry is intentionally a small, structured signal rather than a second
 # document store.  Values stay bounded even when clients call the endpoint
@@ -78,6 +85,11 @@ _METADATA_KEYS_BY_EVENT: dict[str, frozenset[str]] = {
     "import_started": frozenset(),
     "import_completed": frozenset(),
     "import_failed": frozenset(),
+    "analysis_requested": frozenset({"mode"}),
+    "schedule_updated": frozenset({"enabled"}),
+    "analysis_refresh_started": frozenset({"attempt"}),
+    "analysis_refresh_completed": frozenset({"source_count"}),
+    "analysis_refresh_failed": frozenset({"error_code", "attempt"}),
 }
 _MAX_METADATA_FIELDS = 16
 _MAX_METADATA_KEY_LENGTH = 64

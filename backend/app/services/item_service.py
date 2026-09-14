@@ -207,6 +207,15 @@ class ItemService:
                 current,
                 changes,
             )
+            source_replaced = self._source_was_replaced(
+                current=current,
+                content=content,
+                source_url=source_url,
+                changes=changes,
+            )
+            if source_replaced:
+                metadata.pop("extractedFacts", None)
+                metadata.pop("relatedItemIds", None)
             changed = (
                 title != current.title
                 or content != current.content
@@ -216,7 +225,6 @@ class ItemService:
             if not changed:
                 return ItemUpdateResult(item=current, changed=False, source_replaced=False)
 
-            source_replaced = content != current.content or source_url != current.source_url
             version_id = uuid4()
             repository.insert_version(
                 version_id=version_id,
@@ -364,9 +372,6 @@ class ItemService:
             raise ItemValidationError("content must contain text")
         if item_type in {"note", "url"}:
             content = content.strip()
-        if content != current.content or source_url != current.source_url:
-            metadata.pop("extractedFacts", None)
-            metadata.pop("relatedItemIds", None)
         metadata["sourceType"] = item_type
         if source_url:
             metadata["sourceUrl"] = source_url
@@ -390,6 +395,23 @@ class ItemService:
                 ),
             )
         return title, content, source_url, metadata, replacement_chunks
+
+    @staticmethod
+    def _source_was_replaced(
+        *,
+        current: ItemRecord,
+        content: str,
+        source_url: str | None,
+        changes: dict[str, Any],
+    ) -> bool:
+        if content != current.content or source_url != current.source_url:
+            return True
+        is_text_import = (current.metadata or {}).get("importFormat") in {"csv", "txt", "md"}
+        return (
+            current.item_type in {"file", "audio"}
+            and not is_text_import
+            and bool({"file_name", "file_size", "file_type"} & set(changes))
+        )
 
     def delete_item(self, item_id: UUID) -> None:
         with self._database.workspace_transaction(self._identity, write=True) as connection:

@@ -217,3 +217,23 @@ def test_post_github_queue_analytics_and_import_migrations_keep_worker_isolated(
     assert "superseded_at" in editing_sql
     assert "item_updated" in editing_sql
     assert "source_replaced" in editing_sql
+
+
+@pytest.mark.parametrize('provider,owner', [
+    ('self-managed', 'flare_job_executor'), ('yandex', 'flare_owner'),
+])
+def test_daily_schedule_migration_uses_execute_only_worker_capabilities(monkeypatch, provider, owner):
+    migration = load_migration('0015_daily_analysis_schedule.py')
+    operation = FakeOp()
+    monkeypatch.setattr(migration, 'op', operation)
+    monkeypatch.setenv('FLARE_DATABASE_PROVIDER', provider)
+    migration.upgrade()
+    sql = '\n'.join(operation.statements)
+    assert 'CREATE ROLE' not in sql
+    assert 'analysis_cycles_workspace_local_date_key UNIQUE (workspace_id, local_date)' in sql
+    assert sql.count('FORCE ROW LEVEL SECURITY') == 3
+    assert f'CREATE POLICY cycle_executor ON public.analysis_cycles TO {owner}' in sql
+    assert f'OWNER TO {owner}' in sql
+    assert 'GRANT EXECUTE ON FUNCTION public.claim_analysis_cycle_refresh' in sql
+    assert 'TO flare_worker' in sql
+    assert 'GRANT SELECT ON public.analysis_cycles TO flare_worker' not in sql

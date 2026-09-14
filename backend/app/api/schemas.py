@@ -287,6 +287,11 @@ class AnalyticsEventRequest(BaseModel):
         "import_started",
         "import_completed",
         "import_failed",
+        "analysis_requested",
+        "schedule_updated",
+        "analysis_refresh_started",
+        "analysis_refresh_completed",
+        "analysis_refresh_failed",
     ] = Field(serialization_alias="eventType", validation_alias="eventType")
     target_type: str | None = Field(
         default=None,

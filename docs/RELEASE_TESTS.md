@@ -153,7 +153,7 @@ Severity meanings:
 - **Precondition:** Production database is migrated and all three credential sets exist.
 - **Steps:** Call `/ready`. Connect separately as API, worker, and migration owner.
   Test tenant reads without context and direct worker table reads.
-- **Expected:** `/ready` succeeds only at migration `0014` with pgvector and forced
+- **Expected:** `/ready` succeeds only at migration `0015` with pgvector and forced
   RLS. API without context sees no tenant rows. Worker direct table reads fail while
   reviewed capabilities work. Runtime processes do not possess migration credentials.
 
