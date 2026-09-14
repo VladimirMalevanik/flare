@@ -183,15 +183,16 @@ def test_post_github_queue_analytics_and_import_migrations_keep_worker_isolated(
     queue = load_migration('0011_queue_ops_maintenance.py')
     analytics = load_migration('0012_activity_events_and_source_types.py')
     imports = load_migration('0013_import_batches.py')
+    editing = load_migration('0014_versioned_source_editing.py')
     operations = []
-    for migration in (queue, analytics, imports):
+    for migration in (queue, analytics, imports, editing):
         operation = FakeOp()
         monkeypatch.setattr(migration, 'op', operation)
         monkeypatch.setenv('FLARE_DATABASE_PROVIDER', provider)
         migration.upgrade()
         operations.append('\n'.join(operation.statements))
 
-    queue_sql, analytics_sql, import_sql = operations
+    queue_sql, analytics_sql, import_sql, editing_sql = operations
     assert all('CREATE ROLE' not in sql for sql in operations)
     assert 'queue_maintenance' in queue_sql
     assert 'GRANT EXECUTE ON FUNCTION public.queue_maintenance' in queue_sql
@@ -210,3 +211,9 @@ def test_post_github_queue_analytics_and_import_migrations_keep_worker_isolated(
     assert 'import_batches' in import_sql
     assert import_sql.count('FORCE ROW LEVEL SECURITY') == 1
     assert "GRANT SELECT, INSERT, UPDATE ON public.import_batches TO flare_app" in import_sql
+    assert "ADD COLUMN updated_at" in editing_sql
+    assert "document_version_id" in editing_sql
+    assert "import_batches_active_hash_unique" in editing_sql
+    assert "superseded_at" in editing_sql
+    assert "item_updated" in editing_sql
+    assert "source_replaced" in editing_sql

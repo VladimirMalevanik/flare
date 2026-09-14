@@ -12,9 +12,8 @@ an advisory transaction lock, returns an existing run on replay, selects eligibl
 context, and calls the database `start_analysis_run` function. That function repeats
 authorization and idempotency checks before it creates the durable job and run.
 
-Automatic jobs created by Note capture and text import use another enqueue path.
-Product must decide whether those jobs consume the same allowance as the explicit
-Analyze button before any shared accounting is designed.
+Note capture, text import and source editing do not enqueue jobs. Only the
+explicit/scheduled insight boundary can consume the allowance.
 
 ## Recommended atomic enforcement point
 
@@ -54,7 +53,7 @@ None is selected here.
   idempotent replay or a request that cannot create a valid run.
 - Retry attempts inside one durable job must not consume additional units unless the
   product owner explicitly chooses provider-call billing.
-- Automatic capture/import jobs need a separately approved relationship to the quota.
+- Capture/import/edit must remain outside quota accounting because they create no job.
 
 ## Frontend and API contract to approve
 
@@ -71,8 +70,8 @@ add explicit controller/UI tests.
 
 ## Decisions required before implementation
 
-1. What consumes a unit: explicit Analyze, automatic jobs, provider attempts,
-   completed analyses, or published Flares?
+1. Whether a unit is consumed by an accepted scheduled/explicit Analyze, provider
+   attempt, completed analysis, or published Flare.
 2. Is the subject a workspace, a user, or both?
 3. What is the allowance and reset period, and which clock/time zone defines it?
 4. Do configuration/provider failures consume, reserve, refund, or never charge?

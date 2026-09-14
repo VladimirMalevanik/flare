@@ -46,11 +46,12 @@ PostgreSQL пользователи `flare_owner`, `flare_app`, `flare_worker` �
 | `GET /auth/me` | `{user: {id, email, name, emailVerified}, workspace: {id, name, role}}` |
 | `POST /auth/verify-email` | `{token}` → одноразовое подтверждение email |
 | `POST /auth/resend-verification` | `{email}` → нейтральный 202 без раскрытия аккаунта |
-| `POST /items` | `{type: "note" | "url" | "file" | "audio", ...}` → документ, готовая версия, chunk и задача анализа |
+| `POST /items` | `{type: "note" | "url" | "file" | "audio", ...}` → документ и готовая версия; ИИ не запускается |
 | `GET /items` | Поиск: `query`, `type`, `limit` |
 | `GET /items/{id}` | Активная заметка своего workspace |
+| `PATCH /items/{id}` | `{expectedCurrentVersionId, title?, content?, sourceUrl?, fileName?, fileSize?, fileType?}` → новая immutable версия; stale token → 409; ИИ не запускается |
 | `DELETE /items/{id}` | Soft delete; опубликованная версия и chunk сохраняются |
-| `POST /imports` | `{format: "csv" | "txt" | "md", fileName, fileSize, content}` → документ, import batch и задачи анализа |
+| `POST /imports` | `{format: "csv" | "txt" | "md", fileName, fileSize, content}` → документ и import batch с `sourceVersionId`/`supersededAt`; `analysisJobsQueued` всегда 0 |
 | `GET /imports/{id}` | Статус и canonical item одного текстового импорта |
 | `POST /analytics/events` | Разрешённое действие продукта → `202`, без содержимого источника |
 | `GET /analytics/events` | Сводка частоты действий workspace за 1–720 часов |
@@ -136,9 +137,9 @@ editing не реализован. TLS/reverse-proxy deployment проверяе
 
 ## Durable jobs
 
-Новая заметка или текстовый импорт в той же транзакции добавляет durable job для
-immutable chunks. API возвращает сохранённый источник сразу; worker обрабатывает
-очередь отдельно и требует только свою DB-роль и `GROQ_API_KEY`. Явный Analyze
+Создание, импорт и редактирование сохраняют immutable chunks, но не добавляют
+analysis job. Анализ запускается только отдельным пользовательским действием или
+согласованным расписанием; worker требует свою DB-роль и `GROQ_API_KEY`. Явный Analyze
 остаётся для отдельного ограниченного прогона. Схема, роли, настройка, команда
 запуска и проверки: [docs/analysis-jobs.md](docs/analysis-jobs.md) и
 [docs/analyze.md](docs/analyze.md).
@@ -148,8 +149,8 @@ immutable chunks. API возвращает сохранённый источни
 Migration 0006 adds a separate durable generation stage after completed analysis.
 The same worker alternates extraction/generation attempts. Authenticated
 `GET /flares` and `GET /flares/{id}` expose typed, evidence-backed records.
-New sources now enqueue analysis through the ingestion path; generation still
-only starts after completed analysis.
+Source writes do not enqueue analysis; generation starts only after a separately
+requested analysis has completed.
 See [generation configuration, security and checks](docs/flare-generation.md).
 
 ## GitHub App connection

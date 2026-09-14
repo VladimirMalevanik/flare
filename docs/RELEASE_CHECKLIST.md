@@ -19,7 +19,7 @@ must remain unchecked until observed.
 - [ ] Confirm every required PR is merged and no release PR is Draft or blocked.
 - [ ] Confirm required checks are green for the exact release SHA.
 - [ ] Confirm P0 count is zero and P1 release-blocker count is zero.
-- [ ] Confirm Alembic has one head and it is `0013`.
+- [ ] Confirm Alembic has one head and it is `0014`.
 - [ ] Run `git diff --check origin/main^..origin/main` and review the release diff.
 - [ ] Run the full self-managed backend suite against disposable PostgreSQL 17 with
   pgvector and the restricted API/worker roles.
@@ -64,7 +64,7 @@ must remain unchecked until observed.
 - [ ] Take or confirm a restorable backup before migration.
 - [ ] Record the current `alembic_version` before deployment.
 - [ ] Apply `alembic -c backend/alembic.ini upgrade head` with the migration env.
-- [ ] Confirm the one applied version row is `0013`.
+- [ ] Confirm the one applied version row is `0014`.
 - [ ] Run the migration command again and confirm it is idempotent.
 - [ ] Confirm required tenant tables have enabled and forced RLS.
 - [ ] Confirm a `flare_app` transaction without workspace context sees no tenant rows.
@@ -165,8 +165,8 @@ must remain unchecked until observed.
 - [ ] Capture a Note with a distinctive title and body.
 - [ ] Open Vault, find the Note, refresh the browser, and confirm persistence.
 - [ ] Press Analyze once and observe pending or processing state.
-- [ ] Confirm the captured Note and imported text enqueue analysis without an API
-  request to Groq; explicit Analyze still creates an idempotent workspace run.
+- [ ] Confirm capture/import/edit persist versions without analysis jobs; explicit
+  Analyze still creates one idempotent workspace run.
 - [ ] Confirm the worker claims and completes extraction and Flare generation.
 - [ ] Confirm the run reaches completed state; an evidence-backed Flare appears when
   the fixture has sufficient evidence.
@@ -235,7 +235,7 @@ Release is **GO** only when all statements are true:
 - [ ] P0 count is zero.
 - [ ] P1 release-blocker count is zero.
 - [ ] The exact release SHA has green required CI.
-- [ ] The migration chain is valid and production is at `0013`.
+- [ ] The migration chain is valid and production is at `0014`.
 - [ ] PostgreSQL health, TLS, RLS, role separation, and backup are verified.
 - [ ] The exact selected AWS service passed the disposable migration and restore
   rehearsal; the connection budget is recorded.

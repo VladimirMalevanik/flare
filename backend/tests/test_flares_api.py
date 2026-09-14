@@ -79,7 +79,7 @@ def test_one_deleted_support_hides_multi_document_flare(stage, jobs, admin_url):
     from app.services.item_service import ItemService
     from test_flare_runs import metadata, TEXT
     queue, worker, users, _ = jobs
-    note = ItemService(queue.database, users[0], enqueue_analysis=False).create_note(
+    note = ItemService(queue.database, users[0]).create_note(
         title='Second support', content=TEXT
     )
     with queue.database.workspace_transaction(users[0]) as c:

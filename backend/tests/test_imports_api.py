@@ -38,12 +38,10 @@ def _post_import(client, *, format: str, file_name: str, content: str, file_type
     return client.post("/imports", json=payload)
 
 
-def test_csv_import_persists_exact_text_locators_and_bounded_jobs(api_environment, monkeypatch):
-    # Force multiple chunks/jobs so the test proves the worker's hard limits
-    # are respected rather than merely exercising the single-chunk happy path.
-    monkeypatch.setenv("LLM_MAX_INPUT_BYTES", "80")
-    monkeypatch.setenv("LLM_MAX_SOURCES", "2")
-    monkeypatch.setenv("ANALYSIS_LEASE_SECONDS", "120")
+def test_csv_import_persists_exact_text_locators_without_starting_ai(api_environment, monkeypatch):
+    # Force multiple chunks so the persisted source remains suitable for a
+    # later user-scheduled insight without starting analysis during upload.
+    monkeypatch.setattr("app.services.import_service.IMPORT_CHUNK_TARGET_BYTES", 80)
     source = (
         "company,signal\n"
         "Acme,Customers need faster onboarding to invite their team\n"
@@ -65,7 +63,8 @@ def test_csv_import_persists_exact_text_locators_and_bounded_jobs(api_environmen
         assert result["fileName"] == "signals.csv"
         assert result["rowCount"] == 3
         assert result["chunkCount"] >= 3
-        assert result["analysisJobsQueued"] >= 2
+        assert result["analysisJobsQueued"] == 0
+        assert result["sourceVersionId"] == result["item"]["currentVersionId"]
         assert result["item"]["type"] == "file"
         assert result["item"]["content"] == source
         assert result["item"]["fileType"] == "application/octet-stream"
@@ -78,7 +77,8 @@ def test_csv_import_persists_exact_text_locators_and_bounded_jobs(api_environmen
     item_id = UUID(result["item"]["id"])
     persisted = api_environment.fetchone_admin(
         """SELECT b.format, b.file_name, b.file_size, b.row_count, b.chunk_count,
-                  b.analysis_jobs_queued, b.document_id, v.parser_version,
+                  b.analysis_jobs_queued, b.document_id, b.document_version_id,
+                  v.parser_version,
                   string_agg(c.content, '' ORDER BY c.ordinal)
              FROM public.import_batches b
              JOIN public.document_versions v
@@ -99,6 +99,7 @@ def test_csv_import_persists_exact_text_locators_and_bounded_jobs(api_environmen
         result["chunkCount"],
         result["analysisJobsQueued"],
         item_id,
+        UUID(result["sourceVersionId"]),
         "import-csv-v1",
         source,
     )
@@ -127,14 +128,11 @@ def test_csv_import_persists_exact_text_locators_and_bounded_jobs(api_environmen
              ) grouped""",
         (workspace_id,),
     )
-    assert job_bounds[0] <= 2
-    assert job_bounds[1] <= 80
-    assert job_bounds[2] == result["analysisJobsQueued"]
+    assert job_bounds == (None, None, 0)
 
 
 def test_markdown_import_keeps_content_and_section_boundaries(api_environment, monkeypatch):
-    monkeypatch.setenv("LLM_MAX_INPUT_BYTES", "120")
-    monkeypatch.setenv("LLM_MAX_SOURCES", "2")
+    monkeypatch.setattr("app.services.import_service.IMPORT_CHUNK_TARGET_BYTES", 120)
     source = "# Market\nTeams need cited answers.\n\n## Interviews\nOnboarding is the recurring pain.\n"
     with api_environment.client() as client:
         response = _post_import(
@@ -233,3 +231,70 @@ def test_import_is_idempotent_per_workspace_and_format_and_isolated(api_environm
         "SELECT count(*) FROM public.import_batches WHERE workspace_id = %s",
         (workspace_b,),
     ) == (1,)
+
+
+def test_replacing_or_deleting_import_preserves_provenance_and_allows_reimport(api_environment):
+    original_source = "# Research\nOriginal customer evidence.\n"
+    replacement_source = "# Research\nUpdated customer evidence.\n"
+    workspace_id = uuid4()
+    with api_environment.client(workspace_id=workspace_id) as client:
+        first_response = _post_import(
+            client,
+            format="md",
+            file_name="research.md",
+            content=original_source,
+        )
+        assert first_response.status_code == 201, first_response.text
+        first = first_response.json()
+
+        replaced_response = client.patch(
+            f"/items/{first['item']['id']}",
+            json={
+                "expectedCurrentVersionId": first["item"]["currentVersionId"],
+                "content": replacement_source,
+                "fileSize": len(replacement_source.encode("utf-8")),
+            },
+        )
+        assert replaced_response.status_code == 200, replaced_response.text
+        replaced = replaced_response.json()
+        assert replaced["versionNumber"] == 2
+        assert replaced["content"] == replacement_source
+        historical = client.get(f"/imports/{first['id']}")
+        assert historical.status_code == 200
+        assert historical.json()["sourceVersionId"] == first["sourceVersionId"]
+        assert historical.json()["supersededAt"] is not None
+
+        # The original bytes can become a new source because the first batch
+        # still points to v1 and is no longer an active deduplication target.
+        repeated_response = _post_import(
+            client,
+            format="md",
+            file_name="research.md",
+            content=original_source,
+        )
+        assert repeated_response.status_code == 201, repeated_response.text
+        repeated = repeated_response.json()
+        assert repeated["id"] != first["id"]
+        assert repeated["item"]["id"] != first["item"]["id"]
+
+        assert client.delete(f"/items/{repeated['item']['id']}").status_code == 204
+        after_delete_response = _post_import(
+            client,
+            format="md",
+            file_name="research.md",
+            content=original_source,
+        )
+        assert after_delete_response.status_code == 201, after_delete_response.text
+        after_delete = after_delete_response.json()
+        assert after_delete["id"] not in {first["id"], repeated["id"]}
+
+    provenance = api_environment.fetchone_admin(
+        """SELECT count(*),
+                  count(DISTINCT document_version_id),
+                  count(*) FILTER (WHERE superseded_at IS NOT NULL),
+                  bool_and(analysis_jobs_queued = 0)
+             FROM public.import_batches
+            WHERE workspace_id = %s AND format = 'md'""",
+        (workspace_id,),
+    )
+    assert provenance == (3, 3, 2, True)

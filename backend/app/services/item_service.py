@@ -1,17 +1,35 @@
 """Use cases for workspace-scoped knowledge items."""
 
+from __future__ import annotations
+
+from dataclasses import dataclass
 from hashlib import sha256
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
-from app.config import load_ai_settings
 from app.models.database import Database, WorkspaceIdentity
+from app.models.import_batches import ImportBatchRepository
 from app.models.tables import ItemRecord, ItemRepository
-from app.workers.config import load_worker_settings, pipeline_revision
+from app.services.import_service import ChunkSpec, ImportService, ImportValidationError
 
 
 class ItemNotFoundError(Exception):
     """An active item is unavailable inside the caller's workspace."""
+
+
+class ItemConflictError(Exception):
+    """The caller edited a version that is no longer current."""
+
+
+class ItemValidationError(ValueError):
+    """A type-specific item update is invalid without exposing source text."""
+
+
+@dataclass(frozen=True)
+class ItemUpdateResult:
+    item: ItemRecord
+    changed: bool
+    source_replaced: bool
 
 
 class ItemService:
@@ -19,12 +37,9 @@ class ItemService:
         self,
         database: Database,
         identity: WorkspaceIdentity,
-        *,
-        enqueue_analysis: bool = True,
     ):
         self._database = database
         self._identity = identity
-        self._enqueue_analysis = enqueue_analysis
 
     def create_note(self, *, title: str | None, content: str) -> ItemRecord:
         return self.create_item(
@@ -89,8 +104,6 @@ class ItemService:
                 ),
             )
             repository.publish_version(document_id=item_id, version_id=version_id)
-            if self._enqueue_analysis:
-                self._enqueue_item_analysis(connection, (chunk_id,))
             item = repository.get_active(item_id)
             if item is None:
                 raise RuntimeError("Created item could not be read back")
@@ -142,21 +155,6 @@ class ItemService:
             locator["fileType"] = file_type
         return locator
 
-    def _enqueue_item_analysis(self, connection, chunks: tuple[UUID, ...]) -> None:
-        """Enqueue valid work without making capture depend on AI configuration."""
-        try:
-            ai = load_ai_settings()
-            worker = load_worker_settings()
-            worker.validate(ai)
-        except ValueError:
-            # Capture remains durable when the separately operated AI worker is
-            # absent or misconfigured. No provider is constructed in this path.
-            return
-        connection.execute(
-            "SELECT public.enqueue_analysis_job(%s, %s, %s)",
-            (list(chunks), pipeline_revision(ai), worker.max_attempts),
-        )
-
     @staticmethod
     def _title_from_content(content: str) -> str:
         first_line = next(
@@ -186,7 +184,221 @@ class ItemService:
                 raise ItemNotFoundError
             return item
 
+    def update_item(
+        self,
+        item_id: UUID,
+        *,
+        expected_current_version_id: UUID,
+        changes: dict[str, Any],
+    ) -> ItemUpdateResult:
+        """Publish one immutable replacement using an optimistic version token."""
+        if not changes:
+            raise ItemValidationError("At least one editable field is required")
+
+        with self._database.workspace_transaction(self._identity, write=True) as connection:
+            repository = ItemRepository(connection)
+            current = repository.get_active_for_update(item_id)
+            if current is None:
+                raise ItemNotFoundError
+            if current.current_version_id != expected_current_version_id:
+                raise ItemConflictError
+
+            title, content, source_url, metadata, replacement_chunks = self._resolve_update(
+                current,
+                changes,
+            )
+            changed = (
+                title != current.title
+                or content != current.content
+                or source_url != current.source_url
+                or metadata != current.metadata
+            )
+            if not changed:
+                return ItemUpdateResult(item=current, changed=False, source_replaced=False)
+
+            source_replaced = content != current.content or source_url != current.source_url
+            version_id = uuid4()
+            repository.insert_version(
+                version_id=version_id,
+                workspace_id=self._identity.workspace_id,
+                document_id=item_id,
+                version_number=current.version_number + 1,
+                content_hash=sha256(content.encode("utf-8")).hexdigest(),
+                parser_version=current.parser_version,
+            )
+            if replacement_chunks is None:
+                if repository.copy_chunks(
+                    source_version_id=current.current_version_id,
+                    target_version_id=version_id,
+                ) < 1:
+                    raise RuntimeError("Current item has no chunks")
+            else:
+                for ordinal, chunk in enumerate(replacement_chunks):
+                    repository.insert_chunk(
+                        chunk_id=uuid4(),
+                        workspace_id=self._identity.workspace_id,
+                        version_id=version_id,
+                        ordinal=ordinal,
+                        content=chunk.content,
+                        locator=chunk.locator,
+                    )
+            repository.mark_version_ready(version_id)
+            if not repository.replace_current(
+                document_id=item_id,
+                expected_version_id=expected_current_version_id,
+                version_id=version_id,
+                title=title,
+                source_url=source_url,
+                metadata=metadata,
+            ):
+                raise ItemConflictError
+            if source_replaced:
+                ImportBatchRepository(connection).supersede_for_document(item_id)
+            updated = repository.get_active(item_id)
+            if updated is None:
+                raise RuntimeError("Updated item could not be read back")
+            return ItemUpdateResult(
+                item=updated,
+                changed=True,
+                source_replaced=source_replaced,
+            )
+
+    def _resolve_update(
+        self,
+        current: ItemRecord,
+        changes: dict[str, Any],
+    ) -> tuple[
+        str,
+        str,
+        str | None,
+        dict[str, Any],
+        tuple[ChunkSpec | _ReplacementChunk, ...] | None,
+    ]:
+        item_type = current.item_type
+        allowed_by_type = {
+            "note": {"title", "content"},
+            "url": {"title", "content", "source_url"},
+            "file": {"title", "content", "file_name", "file_size", "file_type"},
+            "audio": {"title", "content", "file_name", "file_size", "file_type"},
+        }
+        unsupported = set(changes) - allowed_by_type[item_type]
+        if unsupported:
+            raise ItemValidationError("Fields are not valid for this item type")
+
+        title = changes.get("title", current.title)
+        source_url = changes.get("source_url", current.source_url)
+        content = changes.get("content", current.content)
+        metadata = dict(current.metadata or {})
+        replacement_chunks = None
+
+        if item_type == "url":
+            if not source_url:
+                raise ItemValidationError("sourceUrl is required for url items")
+            if "source_url" in changes and "content" not in changes:
+                content = source_url
+        elif item_type in {"file", "audio"}:
+            file_name = changes.get("file_name", metadata.get("fileName"))
+            file_size = changes.get("file_size", metadata.get("fileSize"))
+            file_type = changes.get("file_type", metadata.get("fileType"))
+            if item_type == "file" and not file_name:
+                raise ItemValidationError("fileName is required for file items")
+            if file_name is None:
+                metadata.pop("fileName", None)
+            else:
+                metadata["fileName"] = file_name
+            if file_size is None:
+                metadata.pop("fileSize", None)
+            else:
+                metadata["fileSize"] = file_size
+            if file_type is None:
+                metadata.pop("fileType", None)
+            else:
+                metadata["fileType"] = file_type
+
+            import_format = metadata.get("importFormat")
+            import_fields_changed = bool(
+                {"content", "file_name", "file_size", "file_type"} & set(changes)
+            )
+            if item_type == "file" and import_format in {"csv", "txt", "md"} and import_fields_changed:
+                encoded_size = len(content.encode("utf-8"))
+                supplied_size = changes.get("file_size", encoded_size)
+                try:
+                    prepared = ImportService.prepare_content(
+                        format=import_format,
+                        file_name=file_name,
+                        file_type=file_type,
+                        file_size=supplied_size,
+                        content=content,
+                    )
+                except ImportValidationError as error:
+                    raise ItemValidationError(error.detail) from None
+                content = prepared.content
+                replacement_chunks = prepared.chunks
+                metadata.update(
+                    {
+                        "fileName": prepared.file_name,
+                        "fileSize": prepared.file_size,
+                        "importFormat": prepared.format,
+                    }
+                )
+                if prepared.file_type:
+                    metadata["fileType"] = prepared.file_type
+                else:
+                    metadata.pop("fileType", None)
+                if prepared.row_count is None:
+                    metadata.pop("rowCount", None)
+                else:
+                    metadata["rowCount"] = prepared.row_count
+            elif item_type == "file" and "content" in changes:
+                content_size = len(content.encode("utf-8"))
+                if "file_size" in changes and changes["file_size"] != content_size:
+                    raise ItemValidationError(
+                        "fileSize must equal the UTF-8 byte length of content"
+                    )
+                metadata["fileSize"] = content_size
+
+        if not isinstance(title, str) or not title.strip():
+            raise ItemValidationError("title must contain text")
+        title = title.strip()
+        if not isinstance(content, str) or not content.strip():
+            raise ItemValidationError("content must contain text")
+        if item_type in {"note", "url"}:
+            content = content.strip()
+        if content != current.content or source_url != current.source_url:
+            metadata.pop("extractedFacts", None)
+            metadata.pop("relatedItemIds", None)
+        metadata["sourceType"] = item_type
+        if source_url:
+            metadata["sourceUrl"] = source_url
+        else:
+            metadata.pop("sourceUrl", None)
+        locator_changed = (
+            source_url != current.source_url
+            or metadata.get("fileName") != (current.metadata or {}).get("fileName")
+            or metadata.get("fileType") != (current.metadata or {}).get("fileType")
+        )
+        if replacement_chunks is None and (content != current.content or locator_changed):
+            replacement_chunks = (
+                _ReplacementChunk(
+                    content=content,
+                    locator=self._chunk_locator(
+                        item_type=item_type,
+                        source_url=source_url,
+                        file_name=metadata.get("fileName"),
+                        file_type=metadata.get("fileType"),
+                    ),
+                ),
+            )
+        return title, content, source_url, metadata, replacement_chunks
+
     def delete_item(self, item_id: UUID) -> None:
         with self._database.workspace_transaction(self._identity, write=True) as connection:
             if not ItemRepository(connection).soft_delete(item_id):
                 raise ItemNotFoundError
+            ImportBatchRepository(connection).supersede_for_document(item_id)
+
+
+@dataclass(frozen=True)
+class _ReplacementChunk:
+    content: str
+    locator: dict[str, object]

@@ -48,11 +48,15 @@ def _analytics_service(
 
 
 def _response(result: ImportResult) -> ImportResponse:
+    if result.batch.document_version_id is None:
+        raise RuntimeError("Completed import has no source version")
     return ImportResponse(
         id=result.batch.id,
         format=result.batch.format,
         file_name=result.batch.file_name,
         item=ItemResponse.from_record(result.item),
+        source_version_id=result.batch.document_version_id,
+        superseded_at=result.batch.superseded_at,
         row_count=result.batch.row_count,
         chunk_count=result.batch.chunk_count,
         analysis_jobs_queued=result.batch.analysis_jobs_queued,

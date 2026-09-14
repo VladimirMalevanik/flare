@@ -58,6 +58,47 @@ class CreateItemRequest(BaseModel):
         return ""
 
 
+class UpdateItemRequest(BaseModel):
+    """Optimistic, type-aware replacement of an item's current snapshot."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    expected_current_version_id: UUID = Field(
+        serialization_alias="expectedCurrentVersionId",
+        validation_alias="expectedCurrentVersionId",
+    )
+    title: NonBlankTitle | None = None
+    # Imported text keeps significant leading/trailing whitespace. ItemService
+    # applies note/url normalization after it knows the persisted source type.
+    content: str | None = Field(default=None, min_length=1, max_length=200_000)
+    source_url: SourceUrl | None = Field(
+        default=None,
+        serialization_alias="sourceUrl",
+        validation_alias="sourceUrl",
+    )
+    file_name: FileName | None = Field(
+        default=None,
+        serialization_alias="fileName",
+        validation_alias="fileName",
+    )
+    file_size: int | None = Field(
+        default=None,
+        ge=0,
+        strict=True,
+        serialization_alias="fileSize",
+        validation_alias="fileSize",
+    )
+    file_type: FileType | None = Field(
+        default=None,
+        serialization_alias="fileType",
+        validation_alias="fileType",
+    )
+
+    def changes(self) -> dict[str, Any]:
+        fields = self.model_fields_set - {"expected_current_version_id"}
+        return {field: getattr(self, field) for field in fields}
+
+
 class ExtractedFactResponse(BaseModel):
     id: str
     text: str
@@ -75,7 +116,10 @@ class ItemResponse(BaseModel):
     file_size: int | None = Field(default=None, serialization_alias="fileSize")
     file_type: str | None = Field(default=None, serialization_alias="fileType")
     status: Literal["ready", "processing", "error"]
+    current_version_id: UUID = Field(serialization_alias="currentVersionId")
+    version_number: int = Field(serialization_alias="versionNumber")
     created_at: datetime = Field(serialization_alias="createdAt")
+    updated_at: datetime = Field(serialization_alias="updatedAt")
     extracted_facts: list[ExtractedFactResponse] = Field(
         default_factory=list,
         serialization_alias="extractedFacts",
@@ -106,7 +150,10 @@ class ItemResponse(BaseModel):
             file_size=metadata.get("fileSize"),
             file_type=metadata.get("fileType"),
             status=state_to_status[record.state],
+            current_version_id=record.current_version_id,
+            version_number=record.version_number,
             created_at=record.created_at,
+            updated_at=record.updated_at,
             extracted_facts=facts if isinstance(facts, list) else [],
             related_item_ids=related_ids if isinstance(related_ids, list) else [],
         )
@@ -150,6 +197,11 @@ class ImportResponse(BaseModel):
     format: Literal["csv", "txt", "md"]
     file_name: str = Field(serialization_alias="fileName")
     item: ItemResponse
+    source_version_id: UUID = Field(serialization_alias="sourceVersionId")
+    superseded_at: datetime | None = Field(
+        default=None,
+        serialization_alias="supersededAt",
+    )
     row_count: int | None = Field(serialization_alias="rowCount")
     chunk_count: int = Field(serialization_alias="chunkCount")
     analysis_jobs_queued: int = Field(serialization_alias="analysisJobsQueued")
@@ -225,6 +277,8 @@ class AnalyticsEventRequest(BaseModel):
         "capture_voice_started",
         "capture_voice_stopped",
         "item_created",
+        "item_updated",
+        "source_replaced",
         "item_deleted",
         "item_viewed",
         "flare_viewed",

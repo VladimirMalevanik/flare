@@ -1,9 +1,9 @@
 # Block 4: real Flares
 
 The input is a completed `TextAnalysis` plus the parent's pinned, authorized
-chunks. This stage consumes the parent job snapshot. The ingestion path now
-automatically enqueues a job for each saved source; explicit Analyze remains for
-a separately selected, bounded context.
+chunks. This stage consumes the parent job snapshot. Source writes only persist
+versions; an explicit or scheduled insight request selects the bounded context
+and enqueues analysis.
 See [Analyze flow](analyze.md).
 
 ## Two durable stages

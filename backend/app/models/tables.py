@@ -18,7 +18,11 @@ class ItemRecord:
     source_url: str | None
     metadata: dict[str, Any]
     state: str
+    parser_version: str
+    current_version_id: UUID
+    version_number: int
     created_at: datetime
+    updated_at: datetime
 
 
 class ItemRepository:
@@ -31,7 +35,11 @@ class ItemRepository:
                d.source_url,
                d.metadata,
                v.state,
+               v.parser_version,
+               v.id AS current_version_id,
+               v.version_number,
                d.created_at,
+               d.updated_at,
                COALESCE((
                    SELECT string_agg(c.content, '' ORDER BY c.ordinal)
                    FROM public.chunks c
@@ -74,13 +82,21 @@ class ItemRepository:
         document_id: UUID,
         content_hash: str,
         parser_version: str,
+        version_number: int = 1,
     ) -> None:
         self._connection.execute(
             """INSERT INTO public.document_versions
                    (id, workspace_id, document_id, version_number, content_hash,
                     parser_version, state)
-               VALUES (%s, %s, %s, 1, %s, %s, 'processing')""",
-            (version_id, workspace_id, document_id, content_hash, parser_version),
+               VALUES (%s, %s, %s, %s, %s, %s, 'processing')""",
+            (
+                version_id,
+                workspace_id,
+                document_id,
+                version_number,
+                content_hash,
+                parser_version,
+            ),
         )
 
     def insert_chunk(
@@ -110,6 +126,60 @@ class ItemRepository:
             "UPDATE public.documents SET current_version_id = %s WHERE id = %s",
             (version_id, document_id),
         )
+
+    def mark_version_ready(self, version_id: UUID) -> None:
+        self._connection.execute(
+            "UPDATE public.document_versions SET state = 'ready' WHERE id = %s",
+            (version_id,),
+        )
+
+    def get_active_for_update(self, item_id: UUID) -> ItemRecord | None:
+        row = self._connection.execute(
+            self._SELECT_ITEM
+            + " WHERE d.id = %s AND d.deleted_at IS NULL FOR UPDATE OF d",
+            (item_id,),
+        ).fetchone()
+        return self._to_record(row) if row else None
+
+    def copy_chunks(self, *, source_version_id: UUID, target_version_id: UUID) -> int:
+        rows = self._connection.execute(
+            """INSERT INTO public.chunks
+                   (id, workspace_id, document_version_id, ordinal, content, locator)
+               SELECT gen_random_uuid(), workspace_id, %s, ordinal, content, locator
+                 FROM public.chunks
+                WHERE document_version_id = %s
+                ORDER BY ordinal
+               RETURNING id""",
+            (target_version_id, source_version_id),
+        ).fetchall()
+        return len(rows)
+
+    def replace_current(
+        self,
+        *,
+        document_id: UUID,
+        expected_version_id: UUID,
+        version_id: UUID,
+        title: str,
+        source_url: str | None,
+        metadata: dict[str, Any],
+    ) -> bool:
+        row = self._connection.execute(
+            """UPDATE public.documents
+                  SET title = %s, source_url = %s, metadata = %s,
+                      current_version_id = %s
+                WHERE id = %s AND deleted_at IS NULL AND current_version_id = %s
+                RETURNING id""",
+            (
+                title,
+                source_url,
+                Jsonb(metadata),
+                version_id,
+                document_id,
+                expected_version_id,
+            ),
+        ).fetchone()
+        return row is not None
 
     def get_active(self, item_id: UUID) -> ItemRecord | None:
         row = self._connection.execute(

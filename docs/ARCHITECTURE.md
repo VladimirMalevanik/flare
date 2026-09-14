@@ -1,6 +1,6 @@
 # Flare Architecture
 
-This document describes the repository at migration head `0013`.
+This document describes the repository at migration head `0014`.
 
 Status labels used throughout:
 
@@ -14,9 +14,8 @@ Status labels used throughout:
 **Implemented.** Flare is a workspace-scoped knowledge application. A
 user registers, verifies an email address when verification is enabled, captures
 Notes, imports bounded CSV/TXT/Markdown text, searches the Vault, and reads
-generated Flares with links to their supporting evidence. New captures enqueue
-analysis automatically; explicit Analyze remains available for a bounded workspace
-snapshot.
+generated Flares with links to their supporting evidence. Capture/import/edit only
+publish source versions; Analyze remains a separate bounded workspace action.
 
 Settings provides an email support entry. The server reads the optional
 `SUPPORT_EMAIL` value at request time and passes a validated public address to the
@@ -100,9 +99,8 @@ flowchart LR
 2. One transaction writes `documents`, a ready `document_versions` row, and its
    immutable `chunks`; `documents.current_version_id` points at the published
    version.
-3. Item creation and text import enqueue analysis in the same transaction as the
-   published source snapshot. Imports use content-hash idempotency per workspace and
-   split text into bounded chunks and jobs.
+3. Item creation, text import and editing do not enqueue analysis. Imports use
+   content-hash idempotency per workspace and split text into bounded chunks.
 4. `POST /analyze` remains an explicit orchestration path. It accepts an empty JSON
    object plus an `Idempotency-Key` UUID and selects bounded, recent, ready chunks inside the caller's
    workspace. It creates `analysis_runs`, `analysis_jobs`, and pinned
@@ -117,9 +115,8 @@ flowchart LR
 8. The frontend polls `GET /analysis-runs/{id}` and reloads `GET /flares` when the
    run completes. Evidence links open the matching Note in Vault.
 
-The request never calls Groq. If AI or worker configuration is invalid, ordinary
-item capture remains committed without a job; operations must correct configuration
-before expecting automatic processing. A valid empty Flare result is a successful
+The request never calls Groq. Source writes remain committed independently from AI
+configuration. A valid empty Flare result is a successful
 completed run. URL, file-metadata, and audio-metadata records do not fetch, upload,
 or transcribe external content.
 
@@ -189,7 +186,7 @@ membership, and requires owner/editor for writes. Viewer access is read-only.
 Tenant tables have enabled and forced PostgreSQL row-level security. Composite keys
 and foreign keys prevent cross-workspace relationships. The API connects as the
 restricted `flare_app` role without `SUPERUSER`, `BYPASSRLS`, role membership, or
-schema ownership. Readiness fails if the schema revision is not `0013`, required
+schema ownership. Readiness fails if the schema revision is not `0014`, required
 tenant tables lack forced RLS, or tenant rows are visible without context.
 
 Auth tables are intentionally outside tenant RLS because session lookup happens
@@ -329,14 +326,15 @@ than a secret, but the server validates it before exposing it in Settings.
 **Implemented.** Alembic has one linear head:
 
 ```text
-0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0008 → 0009 → 0010 → 0011 → 0012 → 0013
+0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0008 → 0009 → 0010 → 0011 → 0012 → 0013 → 0014
 ```
 
 `0008` adds email verification and backfills existing users. `0009` adds GitHub
 connection state and metadata. `0010` expands analysis source types, `0011` adds
-bounded queue maintenance, `0012` adds activity events and source types, and `0013`
-adds import batches and import-safe chunk constraints. Application readiness
-requires `0013`. CI tests both self-managed and Yandex-compatible upgrades,
+bounded queue maintenance, `0012` adds activity events and source types, `0013`
+adds import batches and import-safe chunk constraints, and `0014` adds optimistic
+source versions and exact import provenance. Application readiness requires
+`0014`. CI tests both self-managed and Yandex-compatible upgrades,
 historical upgrade steps, repeat `upgrade head`, role
 ownership, RLS, preserved data, and worker isolation.
 
@@ -356,7 +354,7 @@ worker processes.
 | --- | --- |
 | PostgreSQL unavailable or wrong role/head | `/ready` fails; API/worker startup or operations fail closed |
 | Groq unavailable or rate limited | Note data remains committed; job retries within bounded attempts or ends with a safe code |
-| Invalid AI/worker configuration during item capture | Source data remains committed and no automatic item job is created; fix configuration before processing |
+| Invalid AI/worker configuration during item capture | Source data remains committed; capture never creates an analysis job |
 | Invalid AI output or fabricated evidence | Entire stage fails; no partial Flare set is published |
 | Worker exits mid-job | Lease expiry permits a later claim; idempotent database functions prevent duplicate terminal state |
 | API restarts | Sessions, Notes, run state, and jobs remain in PostgreSQL |
@@ -396,7 +394,7 @@ need owners and tooling.
 | Worker lifecycle | claim/load/finish capabilities, lease semantics, restricted role, restart/failure tests |
 | Flare schema or evidence | generation validator, `insights`/`insight_sources`, public DTO, evidence navigation tests |
 | GitHub connection | API/service/provider, `0009`, RLS, frontend Sources state, live GitHub smoke |
-| Text import | import API/service, `0010`–`0013`, chunk/job bounds, idempotency, frontend capture |
+| Text import/edit | import/item API and services, `0010`–`0014`, chunk bounds, version tokens, provenance, idempotency, frontend capture |
 | Analytics or queue operations | allowlists, owner checks, RLS, safe metadata, dry-run and retention behavior |
 | Database schema | new Alembic revision, `CURRENT_SCHEMA_REVISION`, migration scripts, both CI providers |
 | Deployment config | role-specific env examples, Compose, health/readiness, release checklist |

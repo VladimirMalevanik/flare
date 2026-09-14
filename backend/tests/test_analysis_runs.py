@@ -83,7 +83,7 @@ def test_idempotency_concurrency_and_snapshot(jobs, admin_url):
     assert len({r['id'] for r in responses}) == 1
     run_id = responses[0]['id']
     before = snapshot(admin_url, run_id)
-    ItemService(jobs[0].database, jobs[2][0], enqueue_analysis=False).create_note(
+    ItemService(jobs[0].database, jobs[2][0]).create_note(
         title='New', content='New goal: release next week.'
     )
     with psycopg.connect(admin_url) as c:
@@ -101,7 +101,7 @@ def test_idempotency_concurrency_and_snapshot(jobs, admin_url):
 
 def test_selection_bounds_determinism_and_isolation(jobs, admin_url):
     ai = replace(AISettings(), max_sources=2)
-    notes = ItemService(jobs[0].database, jobs[2][0], enqueue_analysis=False)
+    notes = ItemService(jobs[0].database, jobs[2][0])
     notes.create_note(title='Huge', content='x' * 5000)
     notes.create_note(title='Goal', content='Our goal is the MVP release. Deadline next week.')
     note = notes.create_note(title='Latest', content='Current project state: analysis is incomplete.')
@@ -232,7 +232,7 @@ def test_cookie_required_even_in_development_mode(jobs):
 
 
 def test_recent_200_and_current_version_snapshot(jobs, admin_url):
-    notes = ItemService(jobs[0].database, jobs[2][0], enqueue_analysis=False)
+    notes = ItemService(jobs[0].database, jobs[2][0])
     for number in range(201):
         notes.create_note(title=f'Note {number}', content=f'Project update {number}.')
     run = start(jobs)
