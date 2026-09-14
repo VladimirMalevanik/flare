@@ -139,8 +139,9 @@ Severity meanings:
 - **Precondition:** Production GitHub App uses the exact callback URL, requests user
   authorization during installation, has metadata read-only permission only, and has
   no webhooks. A verified owner/editor can install it on at least two repositories.
-- **Steps:** Start connection. Complete GitHub authorization. Confirm repository list.
-  Select one repository. Refresh and sign in again. Disconnect. Attempt to replay the
+- **Steps:** Connect GitHub → Install/Authorize → complete the callback → confirm the
+  real repository list → select one repository → refresh and confirm it persists →
+  disconnect → refresh and confirm it remains disconnected. Attempt to replay the
   callback state and select an unavailable repository ID.
 - **Expected:** State is workspace/user bound and single use. Only authorized
   repositories appear. One selection persists across refresh/login. Disconnect
@@ -153,7 +154,7 @@ Severity meanings:
 - **Precondition:** Production database is migrated and all three credential sets exist.
 - **Steps:** Call `/ready`. Connect separately as API, worker, and migration owner.
   Test tenant reads without context and direct worker table reads.
-- **Expected:** `/ready` succeeds only at migration `0015` with pgvector and forced
+- **Expected:** `/ready` succeeds only at migration `0016` with pgvector and forced
   RLS. API without context sees no tenant rows. Worker direct table reads fail while
   reviewed capabilities work. Runtime processes do not possess migration credentials.
 

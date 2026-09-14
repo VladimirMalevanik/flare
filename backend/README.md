@@ -104,7 +104,9 @@ Restrictive RLS дополнительно проверяет пользоват
 `EMAIL_VERIFICATION_TTL_SECONDS` и `EMAIL_VERIFICATION_RESEND_SECONDS` и должны
 быть положительными. В development/test verification выключена по умолчанию.
 Если включить её явно, `APP_PUBLIC_URL` должен быть localhost origin, а ссылка
-печатается локальным sender. SMTP-конфигурация принадлежит только API. Миграция
+печатается локальным sender. API использует SMTP для verification, а worker — для
+включённых email-уведомлений о scheduled Flares; оба процесса получают одинаковые
+`APP_PUBLIC_URL`, `SMTP_URL` и `EMAIL_FROM` через secret injection. Миграция
 `0008` помечает существующих пользователей подтверждёнными, поэтому rollout не
 блокирует уже созданные аккаунты.
 

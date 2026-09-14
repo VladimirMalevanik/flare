@@ -1,6 +1,6 @@
 # Flare Architecture
 
-This document describes the repository at migration head `0015`.
+This document describes the repository at migration head `0016`.
 
 Status labels used throughout:
 
@@ -118,7 +118,10 @@ flowchart LR
 8. Completion enqueues one `flare_generation_runs` record. The same worker claims
    that stage, calls Groq outside a database transaction, validates source IDs and
    exact quotes, and atomically writes typed `insights` and `insight_sources`.
-9. The frontend polls `GET /analysis-runs/{id}` and reloads `GET /flares` when the
+9. A successful scheduled generation with at least one Flare enqueues one durable
+   notification. When enabled, the worker loads only the verified account email,
+   Flare IDs, and titles, then sends one email through the existing SMTP transport.
+10. The frontend polls `GET /analysis-runs/{id}` and reloads `GET /flares` when the
    run completes. Evidence links open the matching Note in Vault.
 
 The request never calls Groq. Source writes remain committed independently from AI
@@ -197,7 +200,7 @@ membership, and requires owner/editor for writes. Viewer access is read-only.
 Tenant tables have enabled and forced PostgreSQL row-level security. Composite keys
 and foreign keys prevent cross-workspace relationships. The API connects as the
 restricted `flare_app` role without `SUPERUSER`, `BYPASSRLS`, role membership, or
-schema ownership. Readiness fails if the schema revision is not `0015`, required
+schema ownership. Readiness fails if the schema revision is not `0016`, required
 tenant tables lack forced RLS, or tenant rows are visible without context.
 
 Auth tables are intentionally outside tenant RLS because session lookup happens
@@ -215,6 +218,7 @@ or the worker.
 | Knowledge | `documents`, `document_versions`, `chunks` | Soft-deleted document, immutable published version, ordered evidence chunks |
 | Analysis | `analysis_jobs`, `analysis_job_sources`, `analysis_runs`, `analysis_schedules`, `analysis_daily_quotas`, `analysis_cycles`, `analysis_cycle_sources` | Durable extraction job, retention-safe daily quota, schedule, immutable T-30 snapshot, and public idempotent run |
 | Flares | `flare_generation_runs`, `insights`, `insight_sources` | Durable generation stage, typed Flare, and exact evidence quote |
+| Notifications | `scheduled_analysis_notifications` | Durable titles-only email outbox for successful scheduled Flare runs |
 | GitHub | `github_connection_states`, `github_connections` | One-time state and one selected repository per workspace |
 | Imports | `import_batches` | Idempotent bounded text-import status and canonical document link |
 | Analytics | `activity_events` | Bounded allowlisted product events without source bodies |
@@ -254,6 +258,10 @@ frontend image. The final address remains TBD.
   a 600-event actor/hour browser budget, and owner-only queue health/maintenance
   endpoints. Maintenance defaults to dry-run and includes bounded activity-event
   retention (90 days by default).
+- **Portable export:** verified workspace owners can download active Notes, imported
+  supported text, current visible Flares, evidence relationships, and safe source
+  metadata as Markdown and JSON in a streamed ZIP. Authentication records, secrets,
+  queue state, and other workspaces are excluded by construction and RLS.
 - **GitHub connection:** GitHub App install/user authorization, workspace- and
   user-bound single-use state, installation ownership verification, repository
   listing, selection of one repository, durable connection metadata, and disconnect.
@@ -326,9 +334,10 @@ required evidence without choosing RDS or Aurora.
 
 **Implemented.** API, worker, and migration dotenv roles are separate.
 The API may receive `DATABASE_URL`, SMTP credentials, and GitHub App credentials.
-The worker may receive `WORKER_DATABASE_URL` and `GROQ_API_KEY`. The migration
-process alone may receive `MIGRATION_DATABASE_URL`. The dotenv loader removes
-secrets that do not belong to the selected process role.
+The worker may receive `WORKER_DATABASE_URL`, `GROQ_API_KEY`, `APP_PUBLIC_URL`,
+`SMTP_URL`, and `EMAIL_FROM` so it can deliver scheduled-result notifications.
+The migration process alone may receive `MIGRATION_DATABASE_URL`. The dotenv
+loader removes secrets that do not belong to the selected process role.
 
 No backend secret belongs in a `NEXT_PUBLIC_*` variable or browser response. GitHub
 private keys, OAuth client secrets, SMTP URLs, database passwords, session tokens,
@@ -341,7 +350,7 @@ than a secret, but the server validates it before exposing it in Settings.
 **Implemented.** Alembic has one linear head:
 
 ```text
-0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0008 → 0009 → 0010 → 0011 → 0012 → 0013 → 0014 → 0015
+0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0008 → 0009 → 0010 → 0011 → 0012 → 0013 → 0014 → 0015 → 0016
 ```
 
 `0008` adds email verification and backfills existing users. `0009` adds GitHub
@@ -350,7 +359,8 @@ bounded queue maintenance, `0012` adds activity events and source types, `0013`
 adds import batches and import-safe chunk constraints, `0014` adds optimistic
 source versions and exact import provenance, and `0015` adds daily schedules,
 cycles, immutable source snapshots, and the database-enforced daily limit.
-Application readiness requires `0015`. CI tests both self-managed and Yandex-compatible upgrades,
+`0016` adds the scheduled-analysis email preference and durable notification outbox.
+Application readiness requires `0016`. CI tests both self-managed and Yandex-compatible upgrades,
 historical upgrade steps, repeat `upgrade head`, role
 ownership, RLS, preserved data, and worker isolation.
 
@@ -391,7 +401,7 @@ need owners and tooling.
 | --- | --- | --- |
 | Browser/frontend | Presentation, interaction, DTO validation, polling | Trusted identity, database access, provider secrets |
 | API | Auth, Origin checks, workspace selection, use-case orchestration | Groq calls during requests, migration credentials |
-| Worker | Lease processing, Groq calls, validated stage completion | General tenant browsing, API/SMTP/GitHub credentials |
+| Worker | Lease processing, Groq calls, validated stage completion, scheduled email delivery | General tenant browsing, API session or GitHub credentials |
 | Database | Durable state, constraints, RLS, atomic capabilities | External API calls |
 | Migration process | Schema and privileged role/function changes | Serving runtime traffic |
 | External providers | Groq inference, email transport, GitHub authorization | Flare workspace authorization or final persisted truth |
@@ -406,6 +416,8 @@ need owners and tooling.
 | Auth, cookies, or verification | auth API/service/models, migration history, server bootstrap, auth and isolation tests |
 | Workspace write/read behavior | service transaction boundary, RLS policies, composite keys, self-managed and Yandex tests |
 | Analyze selection, daily quota, schedule, or status | analysis API/service/models, schedule worker, `0015`, frontend controller/provider, idempotency and job tests |
+| Scheduled email | preference API, `0016` outbox capabilities, worker SMTP delivery, privacy and retry tests |
+| Workspace export | owner authorization, RLS transaction, field allowlist, ZIP service, isolation and secret-exclusion tests |
 | AI model, prompt, or bounds | central config, adapter, prompt/schema revision, worker retry metadata, current provider documentation |
 | Worker lifecycle | claim/load/finish capabilities, lease semantics, restricted role, restart/failure tests |
 | Flare schema or evidence | generation validator, `insights`/`insight_sources`, public DTO, evidence navigation tests |
@@ -420,9 +432,11 @@ need owners and tooling.
 **TBD / deferred.**
 
 - VPS provider, country, and exact size.
-- Reverse proxy and public domain layout.
-- SMTP provider and production sender/domain configuration.
-- Final email support address supplied with the production domain.
+- Reverse proxy and the root/www/app/api layout for the purchased `flare4u.tech` domain.
+- SMTP provider and production sender/domain configuration; see the
+  [provider decision](EMAIL_PROVIDER_DECISION.md) and [setup handoff](EMAIL_SETUP.md).
+- External routing of the approved `support@flare4u.tech` address to a verified
+  destination inbox.
 - Exact deployment, secret injection, observability, and rollback automation.
 - Exact AWS PostgreSQL service, engine/extension versions, network topology,
   authentication method, and production connection/pooling parameters.

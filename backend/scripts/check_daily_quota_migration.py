@@ -85,7 +85,7 @@ def main() -> None:
                 )
             return
 
-        assert revision == ("0015",), revision
+        assert revision == ("0016",), revision
         quotas = connection.execute(
             """SELECT q.local_date::text,q.mode,q.scheduled_for,q.created_at
                  FROM public.analysis_daily_quotas q
@@ -115,7 +115,7 @@ def main() -> None:
         connection.execute(
             "DELETE FROM public.workspaces WHERE id=%s", (WORKSPACE_ID,)
         )
-        print("PASS: 0014 -> 0015; legacy analysis run consumed its UTC daily slot")
+        print("PASS: 0014 -> 0016; legacy analysis run consumed its UTC daily slot")
 
 
 if __name__ == "__main__":

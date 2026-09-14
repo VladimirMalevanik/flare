@@ -1442,6 +1442,14 @@ blockquote {
 .schedule-actions p {
   margin-right: auto;
 }
+.import-guide-steps {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 20px;
+  padding-left: 24px;
+  color: var(--secondary);
+  line-height: 1.6;
+}
 .mobile-menu {
   display: none;
 }

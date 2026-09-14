@@ -120,6 +120,7 @@ function mapAnalysisSchedule(value: unknown): AnalysisSchedule {
   const timezone = stringField(dto, "timezone");
   const updatedAt = stringField(dto, "updatedAt");
   if (typeof dto.enabled !== "boolean"
+    || typeof dto.emailNotificationsEnabled !== "boolean"
     || !/^([01]\d|2[0-3]):[0-5]\d$/.test(localTime)
     || !timezone.trim()
     || dto.leadMinutes !== 30
@@ -128,6 +129,7 @@ function mapAnalysisSchedule(value: unknown): AnalysisSchedule {
   }
   return {
     enabled: dto.enabled,
+    emailNotificationsEnabled: dto.emailNotificationsEnabled,
     timezone,
     localTime,
     leadMinutes: 30,
@@ -393,6 +395,7 @@ export class ApiDataProvider implements FlareDataProvider {
 
   async updateAnalysisSchedule(input: {
     enabled: boolean;
+    emailNotificationsEnabled: boolean;
     timezone: string;
     localTime: string;
   }): Promise<AnalysisSchedule> {

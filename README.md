@@ -111,8 +111,8 @@ HttpOnly cookie-сессию. Workspace и права определяет се�
 открывать только `/auth/me`, logout и endpoints подтверждения/повторной отправки;
 Items, Vault, Analyze и Flares закрыты. Локальный Compose явно отключает эту
 проверку. Для ручной проверки установите `EMAIL_VERIFICATION_REQUIRED=true`:
-backend напечатает localhost-ссылку, не передавая SMTP или его секреты во
-frontend/worker.
+backend напечатает localhost-ссылку. SMTP никогда не передаётся во frontend;
+worker получает его только для включённых уведомлений о scheduled Flares.
 
 Email поддержки задаётся необязательным `SUPPORT_EMAIL` в runtime frontend.
 Settings показывает `mailto:` только для корректного адреса; до утверждения
@@ -176,6 +176,8 @@ Yandex в CI эмулирует подготовку пользователей 
 [текущая архитектура](docs/ARCHITECTURE.md),
 [готовность AWS PostgreSQL](docs/AWS_POSTGRESQL_READINESS.md),
 [решение по квотам Analyze](docs/ANALYZE_QUOTA_DECISION.md),
+[сравнение SMTP-провайдеров](docs/EMAIL_PROVIDER_DECISION.md),
+[настройка входящей и исходящей почты](docs/EMAIL_SETUP.md),
 [release checklist](docs/RELEASE_CHECKLIST.md),
 [release tests](docs/RELEASE_TESTS.md),
 [проект БД](backend/docs/database.md),

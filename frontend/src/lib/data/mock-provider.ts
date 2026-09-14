@@ -169,6 +169,7 @@ export class MockDataProvider implements FlareDataProvider {
   private dailyMode: DailyAnalysisStatus["mode"] = null;
   private schedule: AnalysisSchedule = {
     enabled: false,
+    emailNotificationsEnabled: true,
     timezone: "Europe/Moscow",
     localTime: "19:00",
     leadMinutes: 30,
@@ -232,6 +233,7 @@ export class MockDataProvider implements FlareDataProvider {
   }
   async updateAnalysisSchedule(input: {
     enabled: boolean;
+    emailNotificationsEnabled: boolean;
     timezone: string;
     localTime: string;
   }): Promise<AnalysisSchedule> {

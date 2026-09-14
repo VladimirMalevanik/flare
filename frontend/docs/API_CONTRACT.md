@@ -39,7 +39,7 @@ Logical operations expected by the interface:
 - `selectGitHubRepository(repositoryId) → GitHubConnection`
 - `disconnectGitHub() → void`
 - `getAnalysisSchedule() → AnalysisSchedule`
-- `updateAnalysisSchedule({ enabled, timezone, localTime }) → AnalysisSchedule`
+- `updateAnalysisSchedule({ enabled, emailNotificationsEnabled, timezone, localTime }) → AnalysisSchedule`
 - `getDailyAnalysisStatus() → DailyAnalysisStatus`
 
 Optional Item display fields remain `category`, `sourceLabel`, `author`, and
@@ -94,12 +94,22 @@ API mode never substitutes demo results.
 
 The database permits one analysis cycle per workspace local calendar date. Manual
 Analyze and the saved schedule share that slot; another key returns `409 daily_limit`.
-`GET/PUT /analysis-schedule` stores `enabled`, an IANA `timezone`, and `localTime`.
+`GET/PUT /analysis-schedule` stores `enabled`, `emailNotificationsEnabled`, an IANA
+`timezone`, and `localTime`. Email defaults on and is sent only after a successful
+scheduled run creates at least one Flare; the message contains titles and links only.
 `GET /analysis/daily-status` returns the cycle/run state and T-30 snapshot status.
 If a schedule is saved after today’s preparation deadline, its first run is tomorrow.
 Terminal failure keeps the slot consumed; bounded automatic retries remain in the
 same cycle. GitHub reports `ingestionSupported: false` until repository content
 ingestion is implemented.
+
+## Workspace export
+
+`GET /export` requires a verified workspace owner and returns a no-store ZIP download.
+It contains active current Notes/imported text and visible Flares as Markdown plus a
+machine-readable JSON copy. The server selects through the authenticated workspace
+transaction and exports only allowlisted source metadata; auth data, credentials,
+provider secrets, queue state, and other workspaces are absent.
 
 ## Analytics
 

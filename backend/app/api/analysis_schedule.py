@@ -28,6 +28,7 @@ class ScheduleRequest(BaseModel):
     enabled: bool
     timezone: str = Field(min_length=1, max_length=80)
     local_time: str = Field(alias="localTime", pattern=r"^\d{2}:\d{2}$")
+    email_notifications_enabled: bool = Field(default=True, alias="emailNotificationsEnabled")
 
 
 class ScheduleResponse(BaseModel):
@@ -37,6 +38,7 @@ class ScheduleResponse(BaseModel):
     timezone: str
     local_time: str = Field(alias="localTime")
     lead_minutes: Literal[30] = Field(alias="leadMinutes")
+    email_notifications_enabled: bool = Field(alias="emailNotificationsEnabled")
     next_refresh_at: datetime | None = Field(alias="nextRefreshAt")
     next_run_at: datetime | None = Field(alias="nextRunAt")
     updated_at: datetime = Field(alias="updatedAt")
@@ -107,6 +109,7 @@ def put_schedule(
             enabled=payload.enabled,
             timezone_name=payload.timezone,
             local_time_value=payload.local_time,
+            email_notifications_enabled=payload.email_notifications_enabled,
         )
         track_event_best_effort(
             AnalyticsService(database, user.identity),

@@ -136,6 +136,7 @@ class FakeRepository:
             local_time=values["local_time"],
             lead_minutes=30,
             updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+            email_notifications_enabled=values["email_notifications_enabled"],
         )
         return self.schedule
 
@@ -155,6 +156,7 @@ def test_default_schedule_is_disabled_and_put_exposes_next_window():
     assert default["enabled"] is False
     assert default["timezone"] == "UTC"
     assert default["localTime"] == "19:00"
+    assert default["emailNotificationsEnabled"] is True
     assert default["nextRunAt"] is None
 
     updated = service.put(enabled=True, timezone_name="Europe/Moscow", local_time_value="18:45")
@@ -162,6 +164,7 @@ def test_default_schedule_is_disabled_and_put_exposes_next_window():
         "enabled": True,
         "timezone_name": "Europe/Moscow",
         "local_time": time(18, 45),
+        "email_notifications_enabled": True,
     }
     assert updated["leadMinutes"] == 30
     assert updated["nextRunAt"] == datetime(2026, 1, 1, 15, 45, tzinfo=UTC)

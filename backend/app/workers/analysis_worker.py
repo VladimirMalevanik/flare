@@ -15,9 +15,13 @@ from app.services.flare_generation import FlareProcessor, PipelineProcessor
 from app.config import load_ai_settings
 from app.models.analysis_jobs import JobUnavailable, WorkerJobs
 from app.models.analysis_schedules import WorkerAnalysisSchedules
+from app.models.scheduled_notifications import ScheduledNotificationJobs
 from app.services.analysis_jobs import AnalysisProcessor
+from app.services.scheduled_email import ScheduledNotificationProcessor
+from app.services.smtp_email import SmtpEmailSender
 from app.workers.scheduler import DailyScheduleProcessor
 from app.workers.config import load_worker_settings
+from app.config import settings as application_settings
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +64,25 @@ async def run(*, once: bool = False) -> None:
             scheduler = DailyScheduleProcessor(
                 WorkerAnalysisSchedules(config.database_url), ai, flare, config
             )
-            await run_loop(PipelineProcessor(scheduler, processor, generation), stop, once=once)
+            email_sender = (
+                SmtpEmailSender(
+                    application_settings.smtp_url,
+                    application_settings.email_from,
+                )
+                if application_settings.smtp_url and application_settings.email_from
+                else None
+            )
+            notifications = ScheduledNotificationProcessor(
+                ScheduledNotificationJobs(config.database_url),
+                email_sender,
+                application_settings.app_public_url,
+                config,
+            )
+            await run_loop(
+                PipelineProcessor(scheduler, processor, generation, notifications),
+                stop,
+                once=once,
+            )
     finally:
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.remove_signal_handler(sig)
