@@ -1,6 +1,6 @@
 # Flare MVP implementation plan
 
-Agreed scope, 2026-09-07; implementation status updated 2026-09-13. This plan governs MVP scope; broader model-routing and storage options in earlier research are future work.
+Agreed scope, 2026-09-07; implementation status updated 2026-09-14. This plan governs MVP scope; broader model-routing and storage options in earlier research are future work.
 
 Related technical research and architecture:
 
@@ -15,11 +15,15 @@ Related technical research and architecture:
   persisted evidence-backed Flares, and Yandex-compatible migrations).
 - Email verification and the GitHub App connection flow are merged. GitHub activity
   ingestion is not implemented and the real GitHub handshake still needs live smoke.
-- Block 5 is merged: explicit Analyze, bounded current source selection,
-  immutable job sources, idempotent runs, status API, frontend polling and Compose worker.
-  New Notes and text imports also enqueue durable analysis automatically. Live Groq
-  acceptance requires a local worker key.
-- Voice and quota work remain outside this change.
+- Block 5 includes explicit Analyze and a persistent daily workspace schedule,
+  bounded immutable T-30 snapshots, one database-enforced run per local day,
+  idempotent runs, status API, frontend polling and one combined worker loop.
+  Note/import/edit writes remain separate from analysis. Live Groq acceptance
+  requires a worker key and deployed PostgreSQL.
+- Versioned editing and bounded CSV/TXT/Markdown import are implemented. Voice has
+  bounded recording, hardened media inspection, and immutable transcript persistence;
+  its consent-gated provider upload and shared quota accounting remain unfinished.
+  GitHub content ingestion and cloud acceptance also remain outside this change.
 
 See [Block 4 implementation](../backend/docs/flare-generation.md).
 
@@ -87,14 +91,22 @@ Validate citations against the exact evidence supplied to the model, including w
 
 ## Phase 5 — Analyze flow
 
-**Explicit Analyze remains the workspace-level MVP trigger.** Context accumulates
-until the user presses Analyze; a worker then analyzes a bounded workspace snapshot
-and new Flares appear. New Notes and bounded text imports also enqueue their own
-immutable source chunks for background extraction; HTTP requests never call Groq.
+**The user controls when analysis happens.** Context accumulates until an
+owner/editor presses Analyze or enables one daily workspace time. The manual action
+and schedule share one local-calendar-day slot. A worker freezes scheduled context
+30 minutes beforehand, analyzes the immutable snapshot, and generates Flares. Notes,
+edits, and bounded text imports only publish source chunks; HTTP requests never call
+Groq.
+
+Edits made after T-30 create a new immutable version and affect the next analysis,
+not the already frozen evidence. Explicit deletion is a privacy revocation: before
+provider output it invalidates the pinned evidence with `source_invalid`; the scheduled
+run produces no provider output and its durable daily quota remains consumed. The
+quota tombstone outlives queue/run retention, including a 25-hour DST fall-back day.
 
 Bound evidence by token budget using authorized project context without vector retrieval. Record the input versions used for a run. Frontend must show pending, completed, failed and quota-deferred outcomes through the existing data-provider layer.
 
-Leave room for daily, every-N-days, weekly and eventually proactive scheduling, but do not build scheduling now.
+Daily scheduling is implemented. Every-N-days, weekly and proactive schedules remain future options.
 
 ## Phase 6 — Audio MVP
 
@@ -129,7 +141,7 @@ Free → Developer should change configured budgets and provider account setting
 - GPT-OSS 120B routing, V3 fallback, Voyage, embeddings or a vector-retrieval dependency.
 - Telegram, GitHub, Gmail, App Reviews, Notion or Linear synchronization.
 - Redis/Celery unless required, fine-tuning or an autonomous agent framework.
-- Permanent audio storage, complex object storage for audio or automatic scheduled analysis.
+- Permanent audio storage or complex object storage for audio.
 
 Existing pgvector/schema capacity can remain unused; this scope does not require removing it.
 
@@ -142,15 +154,19 @@ Existing pgvector/schema capacity can remain unused; this scope does not require
 5. Real Flare persistence/API.
 6. Frontend real Flares.
 7. Analyze action.
-8. Audio upload and Whisper Turbo.
-9. Complete free-tier quota enforcement.
-10. End-to-end hardening/tests.
+8. Daily schedule and versioned source editing.
+9. Audio upload and Whisper Turbo.
+10. Complete provider quota enforcement and cloud end-to-end hardening.
 
 Phases 2–3 can be developed as isolated components; expose production analysis only once durable jobs and explicit Analyze are connected. Block 5 connects the explicit trigger to durable jobs; see [Analyze flow](../backend/docs/analyze.md).
 
 ## Definition of MVP
 
-A real user can register/login, enter a workspace, add notes/context, see it persisted after refresh, press Analyze, receive asynchronous analysis, see real Recommendation/Reminder/Warning Flares, inspect their evidence, and add a voice note with a saved transcript. Other workspaces remain inaccessible.
+A real user can register/login, enter a workspace, add/import/edit context, see it
+persisted after refresh, choose manual or daily analysis, receive asynchronous
+Recommendation/Reminder/Warning Flares, and inspect their evidence. Other workspaces
+remain inaccessible. A voice note with a saved transcript is still required to
+complete the original broader MVP definition.
 
 The system survives provider failures, retries safely, preserves raw text and successful transcripts, respects free-tier quotas, rejects fabricated evidence, and can move from Groq Free to Developer without architectural changes. Original audio follows the temporary retention policy above.
 
@@ -169,8 +185,10 @@ Settled for MVP: 20B only, explicit Analyze, Postgres worker preferred, no embed
 
 - **6A implemented:** real browser Blob recording and isolated Groq Whisper Turbo
   provider boundary with audio/transcript validation and mock-transport tests.
-- **6B pending teammate API/DB review:** FastAPI upload, server media duration
-  inspection and durable transcript persistence through the ordinary Note path.
-  Voice end-to-end is not ready; no automatic Analyze or permanent audio storage.
+- **6B partially implemented:** hardened server media-duration inspection and durable
+  immutable `audio` transcript persistence are covered. The authenticated upload,
+  explicit Groq disclosure/consent gate, and atomic provider quota/idempotency remain
+  required. Voice end-to-end is not enabled; no automatic Analyze or permanent audio
+  storage exists.
 
 See [voice boundary and 6B requirements](../backend/docs/voice-transcription.md).

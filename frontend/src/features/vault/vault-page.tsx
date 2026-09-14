@@ -1,48 +1,73 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { dataErrorMessage, dataProvider, type Item } from "@/lib/data";
+import {
+  dataErrorMessage,
+  dataProvider,
+  type Item,
+  type ItemType,
+  type UpdateItemInput,
+} from "@/lib/data";
 import { useWorkspace } from "@/components/workspace-context";
+import { useSession } from "@/components/auth-session";
 import { Icon, itemIcon } from "@/components/icons";
 import { Dialog } from "@/components/dialog";
-const category = (item: Item) =>
-  item.category ?? (item.type === "audio" ? "voice" : "note");
-const filters = [
+const PAGE_SIZE = 50;
+const PAGE_FETCH_SIZE = PAGE_SIZE + 1;
+type VaultFilter = "all" | "note" | "url" | "voice" | "file";
+const filters: { id: VaultFilter; label: string }[] = [
   { id: "all", label: "All" },
   { id: "note", label: "Notes" },
+  { id: "url", label: "Links" },
   { id: "voice", label: "Voice" },
   { id: "file", label: "Files" },
 ];
 export function VaultPage() {
   const params = useSearchParams();
+  const session = useSession();
   const { revision, refresh } = useWorkspace();
   const [items, setItems] = useState<Item[]>([]);
   const [selected, setSelected] = useState<Item | null>(null);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState<VaultFilter>("all");
   const [view, setView] = useState("grid");
-  const [sort, setSort] = useState("latest");
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [editSourceUrl, setEditSourceUrl] = useState("");
+  const [editError, setEditError] = useState("");
+  const listRequest = useRef(0);
+  const linkedItemId = params.get("item");
+  const itemType: ItemType | "all" = filter === "voice"
+    ? "audio"
+    : filter;
   useEffect(() => {
+    const request = ++listRequest.current;
     let live = true;
-    const itemId = params.get("item");
-    void Promise.all([
-      dataProvider.listItems(),
-      itemId ? dataProvider.getItem(itemId) : Promise.resolve(null),
-    ])
-      .then(([list, linkedItem]) => {
-        if (live) {
+    const timer = window.setTimeout(() => {
+      if (live && request === listRequest.current) setLoading(true);
+      void dataProvider.listItems({
+        query: query.trim() || undefined,
+        type: itemType,
+        limit: PAGE_FETCH_SIZE,
+      })
+      .then((list) => {
+        if (live && request === listRequest.current) {
           setError("");
-          setItems(list);
-          setSelected(linkedItem);
+          setItems(list.slice(0, PAGE_SIZE));
+          setHasMore(list.length > PAGE_SIZE);
         }
       })
       .catch((caught) => {
         if (live)
-          setError(
+          if (request === listRequest.current) setError(
             dataErrorMessage(
               caught,
               "Vault could not be loaded. Refresh to try again.",
@@ -50,14 +75,54 @@ export function VaultPage() {
           );
       })
       .finally(() => {
-        if (live) setLoading(false);
+        if (live && request === listRequest.current) setLoading(false);
       });
+    }, 200);
     return () => {
       live = false;
+      window.clearTimeout(timer);
     };
-  }, [revision, params]);
-  const matches = (i: Item, id: string) =>
-    id === "all" || category(i) === id || i.type === id;
+  }, [revision, query, itemType]);
+  useEffect(() => {
+    if (!linkedItemId) return;
+    let live = true;
+    void dataProvider.getItem(linkedItemId)
+      .then((item) => {
+        if (live) setSelected(item);
+      })
+      .catch((caught) => {
+        if (live) setError(dataErrorMessage(caught, "The linked item could not be loaded."));
+      });
+    return () => { live = false; };
+  }, [linkedItemId, revision]);
+  const loadMore = async () => {
+    const cursor = items.at(-1);
+    if (!cursor || loadingMore || !hasMore) return;
+    const request = ++listRequest.current;
+    setLoadingMore(true);
+    try {
+      const list = await dataProvider.listItems({
+        query: query.trim() || undefined,
+        type: itemType,
+        limit: PAGE_FETCH_SIZE,
+        beforeUpdatedAt: cursor.updatedAt,
+        beforeId: cursor.id,
+      });
+      if (request !== listRequest.current) return;
+      const page = list.slice(0, PAGE_SIZE);
+      setItems((current) => {
+        const known = new Set(current.map((item) => item.id));
+        return [...current, ...page.filter((item) => !known.has(item.id))];
+      });
+      setHasMore(list.length > PAGE_SIZE);
+    } catch (caught) {
+      if (request === listRequest.current) {
+        setError(dataErrorMessage(caught, "More Vault items could not be loaded."));
+      }
+    } finally {
+      if (request === listRequest.current) setLoadingMore(false);
+    }
+  };
   const openItem = (item: Item) => {
     void dataProvider.trackEvent({
       eventType: "item_viewed",
@@ -67,7 +132,51 @@ export function VaultPage() {
         sourceType: item.type,
       },
     });
+    setEditing(false);
     setSelected(item);
+  };
+  const beginEdit = () => {
+    if (!selected) return;
+    setEditTitle(selected.title);
+    setEditContent(selected.content);
+    setEditSourceUrl(selected.sourceUrl ?? "");
+    setError("");
+    setEditError("");
+    setEditing(true);
+  };
+  const saveEdit = async () => {
+    if (!selected || saving || !editTitle.trim() || !editContent.trim()) return;
+    setSaving(true);
+    setEditError("");
+    try {
+      const title = editTitle.trim();
+      const content = selected.type === "file" ? editContent : editContent.trim();
+      const sourceUrl = editSourceUrl.trim();
+      const changes: UpdateItemInput = {
+        type: selected.type,
+        expectedCurrentVersionId: selected.currentVersionId,
+        ...(title !== selected.title ? { title } : {}),
+        ...(content !== selected.content ? { content } : {}),
+        ...(selected.type === "url" && sourceUrl !== (selected.sourceUrl ?? "")
+          ? { sourceUrl }
+          : {}),
+      };
+      if (changes.title === undefined
+        && changes.content === undefined
+        && changes.sourceUrl === undefined) {
+        setEditing(false);
+        return;
+      }
+      const updated = await dataProvider.updateItem(selected.id, changes);
+      setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setSelected(updated);
+      setEditing(false);
+      refresh();
+    } catch (caught) {
+      setEditError(dataErrorMessage(caught, "The item could not be updated."));
+    } finally {
+      setSaving(false);
+    }
   };
   const deleteSelected = async () => {
     if (!selected || deleting) return;
@@ -85,25 +194,13 @@ export function VaultPage() {
       setDeleting(false);
     }
   };
-  const visible = items
-    .filter(
-      (i) =>
-        matches(i, filter) &&
-        `${i.title} ${i.content} ${i.sourceLabel ?? ""}`
-          .toLowerCase()
-          .includes(query.toLowerCase()),
-    )
-    .sort((a, b) =>
-      sort === "title"
-        ? a.title.localeCompare(b.title)
-        : b.createdAt.localeCompare(a.createdAt),
-    );
+  const visible = items;
   return (
     <section className="page vault-page">
       <header className="page-heading">
         <p className="eyebrow">
           <span className="dot green" />
-          PROJECT MEMORY · {items.length} ITEMS REMEMBERED
+          PROJECT MEMORY · {items.length} ITEMS LOADED
         </p>
         <h1>Vault</h1>
         <p>Everything Flare remembers about your project.</p>
@@ -122,15 +219,6 @@ export function VaultPage() {
           />
           <kbd>Esc</kbd>
         </label>
-        <select
-          className="button"
-          aria-label="Sort vault"
-          value={sort}
-          onChange={(e) => setSort(e.target.value)}
-        >
-          <option value="latest">Latest first</option>
-          <option value="title">Title A–Z</option>
-        </select>
         <div className="view-toggle">
           {["grid", "list"].map((v) => (
             <button
@@ -153,7 +241,6 @@ export function VaultPage() {
             className={`filter ${filter === f.id ? "selected" : ""}`}
           >
             {f.label}
-            <span>{items.filter((i) => matches(i, f.id)).length}</span>
           </button>
         ))}
       </div>
@@ -171,6 +258,7 @@ export function VaultPage() {
           <p>Try another keyword or filter, or capture something new.</p>
         </div>
       ) : (
+        <>
         <div className={`vault-grid ${view === "list" ? "list-view" : ""}`}>
           {visible.map((item) => (
             <article className="card memory-card" key={item.id}>
@@ -222,7 +310,7 @@ export function VaultPage() {
                 ) : (
                   <p>
                     {item.status === "processing"
-                      ? "Processing… Demo transcript available in item detail."
+                      ? "Processing…"
                       : item.content.slice(0, 220)}
                   </p>
                 )}
@@ -240,11 +328,29 @@ export function VaultPage() {
             </article>
           ))}
         </div>
+        {hasMore && (
+          <div className="form-actions">
+            <button
+              type="button"
+              className="button"
+              disabled={loadingMore}
+              onClick={() => void loadMore()}
+            >
+              {loadingMore ? "Loading…" : "Load more"}
+            </button>
+          </div>
+        )}
+        </>
       )}
       {selected && (
         <Dialog
           title={selected.title}
-          onClose={() => setSelected(null)}
+          onClose={() => {
+            if (!saving) {
+              setEditing(false);
+              setSelected(null);
+            }
+          }}
           className="item-sheet"
         >
           <header className="sheet-header">
@@ -257,11 +363,83 @@ export function VaultPage() {
             <button
               className="icon-button"
               aria-label="Close item"
-              onClick={() => setSelected(null)}
+              disabled={saving}
+              onClick={() => {
+                setEditing(false);
+                setSelected(null);
+              }}
             >
               <Icon name="close" />
             </button>
           </header>
+          {editing ? (
+            <form
+              className="item-edit-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveEdit();
+              }}
+            >
+              <label>
+                Title
+                <input
+                  value={editTitle}
+                  maxLength={300}
+                  required
+                  disabled={saving}
+                  onChange={(event) => setEditTitle(event.target.value)}
+                />
+              </label>
+              {selected.type === "url" && (
+                <label>
+                  URL
+                  <input
+                    type="url"
+                    value={editSourceUrl}
+                    maxLength={2048}
+                    required
+                    disabled={saving}
+                    onChange={(event) => setEditSourceUrl(event.target.value)}
+                  />
+                </label>
+              )}
+              <label>
+                {selected.type === "audio" ? "Transcript" : "Content"}
+                <textarea
+                  value={editContent}
+                  maxLength={200000}
+                  rows={12}
+                  required
+                  disabled={saving}
+                  onChange={(event) => setEditContent(event.target.value)}
+                />
+              </label>
+              <p className="muted meta">
+                Saving creates version {selected.versionNumber + 1}. Existing Flares keep their original evidence.
+              </p>
+              {editError && (
+                <p className="error-text meta" role="alert">{editError}</p>
+              )}
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="button"
+                  disabled={saving}
+                  onClick={() => setEditing(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="button primary"
+                  disabled={saving || !editTitle.trim() || !editContent.trim()}
+                >
+                  {saving ? "Saving…" : selected.type === "note" ? "Save new version" : "Replace source"}
+                </button>
+              </div>
+            </form>
+          ) : (
+          <>
           <section>
             <h3>Extracted Facts</h3>
             {selected.extractedFacts.length ? (
@@ -325,13 +503,23 @@ export function VaultPage() {
           <footer className="form-actions">
             <button
               type="button"
+              className="button primary"
+              disabled={session?.workspace.role === "viewer"}
+              onClick={beginEdit}
+            >
+              {selected.type === "note" ? "Edit note" : "Edit source"}
+            </button>
+            <button
+              type="button"
               className="button"
-              disabled={deleting}
+              disabled={deleting || session?.workspace.role === "viewer"}
               onClick={() => void deleteSelected()}
             >
               {deleting ? "Deleting…" : "Delete item"}
             </button>
           </footer>
+          </>
+          )}
         </Dialog>
       )}
     </section>

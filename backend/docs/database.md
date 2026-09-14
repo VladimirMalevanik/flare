@@ -39,15 +39,22 @@ tokens в БД представлены только SHA-256 digest. `metadata`/
 
 1. API проверяет session, verified-user boundary, membership и write role.
 2. Для Note/item path одна транзакция создаёт `documents`, ready
-   `document_versions`, immutable `chunks`, переключает `current_version_id` и
-   ставит анализ в очередь. Text import также атомарно создаёт `import_batches`,
-   bounded chunks и bounded jobs; одинаковый content hash deduplicated в workspace.
+   `document_versions`, immutable `chunks` и переключает `current_version_id`.
+   Text import также атомарно создаёт `import_batches` и bounded chunks; одинаковый
+   активный content hash deduplicated в workspace. Запись источника не запускает ИИ.
 3. `POST /analyze` отдельно выбирает ready chunks и атомарно сохраняет
    `analysis_runs`, `analysis_jobs` и `analysis_job_sources`.
 4. Worker обрабатывает pinned chunks и записывает результат, не удерживая DB
    connection во время Groq call.
 5. Успешная extraction stage создаёт `flare_generation_runs`; validated Flares и
    exact evidence сохраняются в `insights`/`insight_sources` одной транзакцией.
+
+`PATCH /items/{id}` принимает `expectedCurrentVersionId`, блокирует документ и
+публикует новую версию с номером N+1. Устаревший токен получает 409 и не может
+затереть параллельную правку. `updated_at` меняется на уровне БД. Старые версии и
+chunks остаются неизменяемыми. `import_batches.document_version_id` указывает на
+точный импортированный snapshot; после замены или soft-delete batch остаётся в
+истории, но перестаёт блокировать повторный импорт тех же байтов.
 
 Опубликованные версии и chunks защищены от обычной перезаписи. Job claim использует
 lease owner/token/expiry; bounded retry scheduling восстанавливает работу после
@@ -115,7 +122,10 @@ ingestion, URL fetching, binary file/audio ingestion и quota accounting не в
 Изменения опубликованной схемы оформляйте новыми миграциями. `db/schema.sql`
 принадлежит `0001` и после публикации не переписывается. Текущая linear chain:
 `0001` → `0002` → `0003` → `0004` → `0005` → `0006` → `0007` → `0008`
-→ `0009` → `0010` → `0011` → `0012` → `0013`. `0008` добавляет email verification;
-`0009` — GitHub connection tables; `0010`–`0013` — source types, queue maintenance,
-activity events и import batches. Readiness требует точную `0013`. Некоторые downgrade intentionally запрещены и
+→ `0009` → `0010` → `0011` → `0012` → `0013` → `0014` → `0015`. `0008` добавляет
+email verification; `0009` — GitHub connection tables; `0010`–`0013` — source
+types, queue maintenance, activity events и import batches; `0014` — optimistic
+versioned editing и точную import provenance; `0015` — ежедневные schedules/cycles
+и immutable source snapshots с DB-ограничением один цикл на local day. Readiness
+требует точную `0015`. Некоторые downgrade intentionally запрещены и
 требуют reviewed restore plan.

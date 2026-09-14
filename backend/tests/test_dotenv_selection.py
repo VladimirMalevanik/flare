@@ -27,6 +27,7 @@ def test_explicit_dotenv_is_authoritative(monkeypatch, tmp_path: Path):
     selected.write_text(
         "FLARE_PROCESS_ROLE=api\n"
         "DATABASE_URL=postgresql://selected\n"
+        "VOICE_GROQ_API_KEY=selected-api-voice-key\n"
         "FLARE_DATABASE_PROVIDER=yandex\n",
         encoding="utf-8",
     )
@@ -39,6 +40,7 @@ def test_explicit_dotenv_is_authoritative(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("MIGRATION_DATABASE_URL", "postgresql://owner")
     monkeypatch.setenv("WORKER_DATABASE_URL", "postgresql://worker")
     monkeypatch.setenv("GROQ_API_KEY", "ambient-key")
+    monkeypatch.setenv("VOICE_GROQ_API_KEY", "ambient-voice-key")
 
     environment.load_project_dotenv(allowed_roles={"api", "worker"})
 
@@ -47,6 +49,7 @@ def test_explicit_dotenv_is_authoritative(monkeypatch, tmp_path: Path):
     assert "MIGRATION_DATABASE_URL" not in environment.os.environ
     assert "WORKER_DATABASE_URL" not in environment.os.environ
     assert "GROQ_API_KEY" not in environment.os.environ
+    assert environment.os.environ["VOICE_GROQ_API_KEY"] == "selected-api-voice-key"
 
 
 def test_explicit_dotenv_must_exist(monkeypatch, tmp_path: Path):
@@ -104,6 +107,7 @@ def test_worker_process_scrubs_email_delivery_configuration(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql://api")
     monkeypatch.setenv("WORKER_DATABASE_URL", "postgresql://worker")
     monkeypatch.setenv("GROQ_API_KEY", "worker-key")
+    monkeypatch.setenv("VOICE_GROQ_API_KEY", "must-not-reach-worker")
     monkeypatch.setenv("SMTP_URL", "smtps://secret@smtp.test")
     monkeypatch.setenv("APP_PUBLIC_URL", "https://flare.test")
     monkeypatch.setenv("EMAIL_FROM", "Flare <private@flare.test>")
@@ -113,6 +117,7 @@ def test_worker_process_scrubs_email_delivery_configuration(monkeypatch):
 
     assert environment.os.environ["WORKER_DATABASE_URL"] == "postgresql://worker"
     assert environment.os.environ["GROQ_API_KEY"] == "worker-key"
+    assert "VOICE_GROQ_API_KEY" not in environment.os.environ
     assert "SMTP_URL" not in environment.os.environ
     assert "APP_PUBLIC_URL" not in environment.os.environ
     assert "EMAIL_FROM" not in environment.os.environ

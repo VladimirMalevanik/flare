@@ -60,13 +60,18 @@ class FlareProcessor:
 
 
 class PipelineProcessor:
-    """Alternate stage priority; each process_one still runs at most one attempt."""
-    def __init__(self, extraction, generation):
-        self.stages=[extraction,generation]
-        self.settings=extraction.settings
+    """Rotate stage priority; each process_one still runs at most one attempt."""
+    def __init__(self, *stages):
+        if not stages:
+            raise ValueError("At least one pipeline stage is required")
+        self.stages=list(stages)
+        self.settings=self.stages[0].settings
 
     async def process_one(self):
-        first,second=self.stages
-        self.stages.reverse()
-        result=await first.process_one()
-        return result if result is not None else await second.process_one()
+        for _ in range(len(self.stages)):
+            stage=self.stages.pop(0)
+            self.stages.append(stage)
+            result=await stage.process_one()
+            if result is not None:
+                return result
+        return None

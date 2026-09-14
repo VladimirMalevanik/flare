@@ -152,6 +152,9 @@ def test_callback_repository_selection_persistence_and_disconnect(github_environ
     assert selected.json()["repository"]["fullName"] == "acme/flare"
     assert selected.json()["repository"]["private"] is True
     with psycopg.connect(os.environ["TEST_DATABASE_URL"]) as connection:
+        workspace_id = connection.execute(
+            "SELECT workspace_id FROM github_connections WHERE installation_id = 9001"
+        ).fetchone()[0]
         persisted = connection.execute(
             """SELECT installation_id, account_login, authorized_user_id,
                       authorized_user_login, status, repository_id,
@@ -164,6 +167,21 @@ def test_callback_repository_selection_persistence_and_disconnect(github_environ
     assert client.get("/integrations/github").json() == {
         "status": "disconnected", "accountLogin": None, "repository": None,
     }
+    with psycopg.connect(os.environ["TEST_DATABASE_URL"]) as connection:
+        events = connection.execute(
+            """SELECT event_type, metadata FROM activity_events
+               WHERE workspace_id = %s AND event_type LIKE 'github_%%'
+               ORDER BY created_at, id""",
+            (workspace_id,),
+        ).fetchall()
+    assert [row[0] for row in events] == [
+        "github_connection_started",
+        "github_installation_authorized",
+        "github_repository_selected",
+        "github_disconnected",
+    ]
+    assert events[2][1] == {"private": True}
+    assert all("repository" not in metadata and "token" not in metadata for _, metadata in events)
 
 
 def test_state_is_hashed_workspace_bound_single_use_and_expiring(github_environment):

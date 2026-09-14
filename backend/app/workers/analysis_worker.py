@@ -14,7 +14,9 @@ from app.models.flare_runs import FlareRuns
 from app.services.flare_generation import FlareProcessor, PipelineProcessor
 from app.config import load_ai_settings
 from app.models.analysis_jobs import JobUnavailable, WorkerJobs
+from app.models.analysis_schedules import WorkerAnalysisSchedules
 from app.services.analysis_jobs import AnalysisProcessor
+from app.workers.scheduler import DailyScheduleProcessor
 from app.workers.config import load_worker_settings
 
 logger = logging.getLogger(__name__)
@@ -55,7 +57,10 @@ async def run(*, once: bool = False) -> None:
         async with GroqTextAnalyzer(ai) as analyzer, GroqFlareDetector(ai, flare) as detector:
             processor = AnalysisProcessor(WorkerJobs(config.database_url), analyzer, ai, config)
             generation = FlareProcessor(FlareRuns(config.database_url), detector, ai, flare, config)
-            await run_loop(PipelineProcessor(processor, generation), stop, once=once)
+            scheduler = DailyScheduleProcessor(
+                WorkerAnalysisSchedules(config.database_url), ai, flare, config
+            )
+            await run_loop(PipelineProcessor(scheduler, processor, generation), stop, once=once)
     finally:
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.remove_signal_handler(sig)

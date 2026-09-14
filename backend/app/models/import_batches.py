@@ -23,26 +23,30 @@ class ImportBatchRecord:
     file_hash: str
     status: str
     document_id: UUID | None
+    document_version_id: UUID | None
     row_count: int | None
     chunk_count: int
     analysis_jobs_queued: int
     created_at: datetime
     completed_at: datetime | None
+    superseded_at: datetime | None
 
 
 class ImportBatchRepository:
     """Keep import-batch SQL out of the HTTP layer.
 
     A ``processing`` row is intentionally created before the document.  The
-    surrounding transaction makes that row invisible until its document,
-    chunks and durable jobs have all been committed.  The unique hash key then
-    also makes concurrent retries return one canonical import.
+    surrounding transaction makes that row invisible until its document and
+    chunks have been committed. The active partial hash key makes concurrent
+    retries return one canonical import while allowing reimport after a source
+    is replaced or deleted.
     """
 
     _COLUMNS = """
         id, workspace_id, requested_by_user_id, format, file_name, file_type,
         file_size, file_hash, status, document_id, row_count, chunk_count,
-        analysis_jobs_queued, created_at, completed_at
+        analysis_jobs_queued, created_at, completed_at, document_version_id,
+        superseded_at
     """
 
     def __init__(self, connection: Connection):
@@ -65,7 +69,9 @@ class ImportBatchRepository:
                    (id, workspace_id, requested_by_user_id, format, file_name,
                     file_type, file_size, file_hash, status)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'processing')
-               ON CONFLICT (workspace_id, format, file_hash) DO NOTHING
+               ON CONFLICT (workspace_id, format, file_hash)
+                   WHERE superseded_at IS NULL
+               DO NOTHING
                RETURNING """
             + self._COLUMNS,
             (
@@ -90,7 +96,8 @@ class ImportBatchRepository:
     ) -> ImportBatchRecord | None:
         row = self._connection.execute(
             "SELECT " + self._COLUMNS + " FROM public.import_batches "
-            "WHERE workspace_id = %s AND format = %s AND file_hash = %s",
+            "WHERE workspace_id = %s AND format = %s AND file_hash = %s "
+            "AND superseded_at IS NULL",
             (workspace_id, format, file_hash),
         ).fetchone()
         return self._to_record(row) if row else None
@@ -107,6 +114,7 @@ class ImportBatchRepository:
         *,
         batch_id: UUID,
         document_id: UUID,
+        document_version_id: UUID,
         row_count: int | None,
         chunk_count: int,
         analysis_jobs_queued: int,
@@ -114,16 +122,34 @@ class ImportBatchRepository:
         row = self._connection.execute(
             """UPDATE public.import_batches
                    SET status = 'completed', document_id = %s,
-                       row_count = %s, chunk_count = %s,
+                       document_version_id = %s, row_count = %s, chunk_count = %s,
                        analysis_jobs_queued = %s, completed_at = now()
                  WHERE id = %s AND status = 'processing'
                RETURNING """
             + self._COLUMNS,
-            (document_id, row_count, chunk_count, analysis_jobs_queued, batch_id),
+            (
+                document_id,
+                document_version_id,
+                row_count,
+                chunk_count,
+                analysis_jobs_queued,
+                batch_id,
+            ),
         ).fetchone()
         if row is None:
             raise RuntimeError("Import batch could not be completed")
         return self._to_record(row)
+
+    def supersede_for_document(self, document_id: UUID) -> int:
+        rows = self._connection.execute(
+            """UPDATE public.import_batches
+                  SET superseded_at = now()
+                WHERE document_id = %s AND status = 'completed'
+                  AND superseded_at IS NULL
+                RETURNING id""",
+            (document_id,),
+        ).fetchall()
+        return len(rows)
 
     @staticmethod
     def _to_record(row: dict) -> ImportBatchRecord:

@@ -6,8 +6,8 @@ SELECT i.id,i.flare_type AS type,i.title,i.body AS statement,i.action,i.reason,i
        evidence.entries AS evidence
 FROM public.insights i
 JOIN LATERAL (
-    SELECT jsonb_agg(jsonb_build_object('itemId',d.id,'sourceTitle',d.title,
-        'sourceType',d.source_type,'excerpt',s.quote,'sourceUrl',d.source_url)
+    SELECT jsonb_agg(jsonb_build_object('itemId',d.id,'sourceTitle',v.snapshot_title,
+        'sourceType',d.source_type,'excerpt',s.quote,'sourceUrl',v.snapshot_source_url)
         ORDER BY s.ordinal,s.chunk_id) AS entries,
         count(*) AS total,
         count(*) FILTER(WHERE d.deleted_at IS NULL AND v.state='ready'

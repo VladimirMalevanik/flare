@@ -1,4 +1,5 @@
 """Authenticated enqueue/status only; no provider invocation in the API process."""
+import logging
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -12,12 +13,13 @@ from app.config import load_ai_settings
 from app.ai_engine.flare_config import load_flare_settings
 from app.models.database import Database, MembershipRequiredError, WritePermissionRequiredError
 from app.models.analysis_jobs import AnalysisJobs
-from app.models.analysis_runs import NoEligibleContext
+from app.models.analysis_runs import DailyLimitReached, NoEligibleContext
 from app.services.analysis_jobs import AnalysisJobService
 from app.services.auth_service import AuthenticatedUser
 from app.workers.config import load_worker_settings
 
 router = APIRouter(tags=['analysis'])
+logger = logging.getLogger(__name__)
 
 
 class EmptyRequest(BaseModel):
@@ -54,6 +56,8 @@ def failure(error):
         raise HTTPException(403, 'permission_denied') from None
     if isinstance(error, NoEligibleContext):
         raise HTTPException(422, 'no_eligible_context') from None
+    if isinstance(error, DailyLimitReached):
+        raise HTTPException(409, 'daily_limit') from None
     if isinstance(error, (psycopg.IntegrityError, psycopg.errors.InvalidParameterValue)):
         raise HTTPException(409, 'selection_changed') from None
     raise HTTPException(503, 'database_unavailable') from None
@@ -68,12 +72,17 @@ def analyze(payload: EmptyRequest, response: Response,
         generation = load_flare_settings().revision(jobs.ai)
         result = jobs.start_run(user.identity, idempotency_key, generation)
     except ValueError as error:
-        if isinstance(error, NoEligibleContext):
+        if isinstance(error, (NoEligibleContext, DailyLimitReached)):
             failure(error)
         raise HTTPException(503, 'configuration') from None
     except (psycopg.Error, MembershipRequiredError, WritePermissionRequiredError) as error:
         failure(error)
     response.status_code = 200 if result['status'] in ('completed', 'failed') else 202
+    logger.info(
+        "analysis_request status=accepted workspace_id=%s run_id=%s",
+        user.identity.workspace_id,
+        result["id"],
+    )
     return result
 
 

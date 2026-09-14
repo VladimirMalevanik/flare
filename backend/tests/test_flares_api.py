@@ -7,7 +7,9 @@ import psycopg
 import pytest
 from app.config import Settings
 from app.main import create_app
+from app.models.flare_runs import FlareRuns
 from app.services.auth_service import AuthService
+from app.services.item_service import ItemService
 from test_flare_runs import stage, jobs, admin_url, processor, Detector
 
 pytestmark=pytest.mark.integration
@@ -56,6 +58,51 @@ def test_real_flare_reads_auth_isolation_and_deletion(stage,jobs,admin_url):
         assert c.execute('SELECT count(*) FROM insights WHERE id=%s',(f['id'],)).fetchone()==(1,)
 
 
+def test_citation_keeps_the_version_title_and_url_after_source_edit(jobs):
+    queue, worker, users, _ = jobs
+    old_url = "https://example.com/original-research"
+    new_url = "https://example.com/current-research"
+    items = ItemService(queue.database, users[0])
+    item = items.create_item(
+        item_type="url",
+        title="Original research",
+        content="The launch depends on finishing the core analysis flow this week.",
+        source_url=old_url,
+    )
+    with queue.database.workspace_transaction(users[0]) as connection:
+        chunk_id = connection.execute(
+            """SELECT c.id FROM public.chunks c
+                 JOIN public.document_versions v ON v.id = c.document_version_id
+                WHERE v.document_id = %s""",
+            (item.id,),
+        ).fetchone()["id"]
+
+    parent = queue.enqueue(users[0], (chunk_id,), "citation-version-snapshot")
+    claim = worker.claim(uuid4(), 120)
+    assert claim.job_id == parent
+    assert worker.finish(claim, result={"observations": []}, metadata={}) == "completed"
+
+    updated = items.update_item(
+        item.id,
+        expected_current_version_id=item.current_version_id,
+        changes={"title": "Current research", "source_url": new_url},
+    ).item
+    assert updated.title == "Current research"
+    assert updated.source_url == new_url
+
+    runs = FlareRuns(worker._database_url)
+    run_stage = (runs, parent, chunk_id, users[0])
+    assert asyncio.run(processor(run_stage, Detector()).process_one()) == "completed"
+    with client_for(jobs) as client:
+        flare = client.get("/flares").json()[0]
+        evidence = next(row for row in flare["evidence"] if row["itemId"] == str(item.id))
+        assert evidence["sourceTitle"] == "Original research"
+        assert evidence["sourceUrl"] == old_url
+        current = client.get(f"/items/{item.id}").json()
+        assert current["title"] == "Current research"
+        assert current["sourceUrl"] == new_url
+
+
 def test_legacy_hidden_and_order_stable(stage,jobs,admin_url):
     from app.ai_engine.flare_config import FlareSettings
     from app.config import AISettings
@@ -79,7 +126,7 @@ def test_one_deleted_support_hides_multi_document_flare(stage, jobs, admin_url):
     from app.services.item_service import ItemService
     from test_flare_runs import metadata, TEXT
     queue, worker, users, _ = jobs
-    note = ItemService(queue.database, users[0], enqueue_analysis=False).create_note(
+    note = ItemService(queue.database, users[0]).create_note(
         title='Second support', content=TEXT
     )
     with queue.database.workspace_transaction(users[0]) as c:

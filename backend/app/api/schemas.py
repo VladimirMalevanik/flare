@@ -53,9 +53,48 @@ class CreateItemRequest(BaseModel):
             return self.source_url.strip()
         if self.type == "file" and self.file_name:
             return f"File upload metadata only: {self.file_name}"
-        if self.type == "audio":
-            return "Audio memo"
         return ""
+
+
+class UpdateItemRequest(BaseModel):
+    """Optimistic, type-aware replacement of an item's current snapshot."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    expected_current_version_id: UUID = Field(
+        serialization_alias="expectedCurrentVersionId",
+        validation_alias="expectedCurrentVersionId",
+    )
+    title: NonBlankTitle | None = None
+    # Imported text keeps significant leading/trailing whitespace. ItemService
+    # applies note/url normalization after it knows the persisted source type.
+    content: str | None = Field(default=None, min_length=1, max_length=200_000)
+    source_url: SourceUrl | None = Field(
+        default=None,
+        serialization_alias="sourceUrl",
+        validation_alias="sourceUrl",
+    )
+    file_name: FileName | None = Field(
+        default=None,
+        serialization_alias="fileName",
+        validation_alias="fileName",
+    )
+    file_size: int | None = Field(
+        default=None,
+        ge=0,
+        strict=True,
+        serialization_alias="fileSize",
+        validation_alias="fileSize",
+    )
+    file_type: FileType | None = Field(
+        default=None,
+        serialization_alias="fileType",
+        validation_alias="fileType",
+    )
+
+    def changes(self) -> dict[str, Any]:
+        fields = self.model_fields_set - {"expected_current_version_id"}
+        return {field: getattr(self, field) for field in fields}
 
 
 class ExtractedFactResponse(BaseModel):
@@ -75,7 +114,10 @@ class ItemResponse(BaseModel):
     file_size: int | None = Field(default=None, serialization_alias="fileSize")
     file_type: str | None = Field(default=None, serialization_alias="fileType")
     status: Literal["ready", "processing", "error"]
+    current_version_id: UUID = Field(serialization_alias="currentVersionId")
+    version_number: int = Field(serialization_alias="versionNumber")
     created_at: datetime = Field(serialization_alias="createdAt")
+    updated_at: datetime = Field(serialization_alias="updatedAt")
     extracted_facts: list[ExtractedFactResponse] = Field(
         default_factory=list,
         serialization_alias="extractedFacts",
@@ -106,7 +148,10 @@ class ItemResponse(BaseModel):
             file_size=metadata.get("fileSize"),
             file_type=metadata.get("fileType"),
             status=state_to_status[record.state],
+            current_version_id=record.current_version_id,
+            version_number=record.version_number,
             created_at=record.created_at,
+            updated_at=record.updated_at,
             extracted_facts=facts if isinstance(facts, list) else [],
             related_item_ids=related_ids if isinstance(related_ids, list) else [],
         )
@@ -150,6 +195,11 @@ class ImportResponse(BaseModel):
     format: Literal["csv", "txt", "md"]
     file_name: str = Field(serialization_alias="fileName")
     item: ItemResponse
+    source_version_id: UUID = Field(serialization_alias="sourceVersionId")
+    superseded_at: datetime | None = Field(
+        default=None,
+        serialization_alias="supersededAt",
+    )
     row_count: int | None = Field(serialization_alias="rowCount")
     chunk_count: int = Field(serialization_alias="chunkCount")
     analysis_jobs_queued: int = Field(serialization_alias="analysisJobsQueued")
@@ -168,12 +218,32 @@ class QueueSummary(BaseModel):
     oldest_processing_seconds: float | None = Field(serialization_alias="oldestProcessingSeconds")
 
 
+class AnalysisCycleSummary(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    scheduled: int
+    refreshing: int
+    ready: int
+    failed: int
+    due_refresh: int = Field(serialization_alias="dueRefresh")
+    due_run: int = Field(serialization_alias="dueRun")
+    stale_refreshing: int = Field(serialization_alias="staleRefreshing")
+    overdue: int
+    oldest_refresh_due_seconds: float | None = Field(
+        serialization_alias="oldestRefreshDueSeconds"
+    )
+    oldest_run_due_seconds: float | None = Field(
+        serialization_alias="oldestRunDueSeconds"
+    )
+
+
 class QueueHealthResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     as_of: datetime = Field(serialization_alias="asOf")
     analysis: QueueSummary
     flares: QueueSummary
+    cycles: AnalysisCycleSummary
     alerts: list[str]
 
 
@@ -195,6 +265,12 @@ class QueueMaintenanceRequest(BaseModel):
     flare_failed_retention_days: int = Field(
         default=14, ge=1, le=3650, alias="flareFailedRetentionDays"
     )
+    cycle_failed_retention_days: int = Field(
+        default=14, ge=1, le=3650, alias="cycleFailedRetentionDays"
+    )
+    activity_event_retention_days: int = Field(
+        default=90, ge=1, le=3650, alias="activityEventRetentionDays"
+    )
 
 
 class QueueBucketSummary(BaseModel):
@@ -211,8 +287,16 @@ class QueueMaintenanceResponse(BaseModel):
     after: QueueHealthResponse
     recovered_stale_analysis_jobs: int = Field(serialization_alias="recoveredStaleAnalysisJobs")
     recovered_stale_flare_runs: int = Field(serialization_alias="recoveredStaleFlareRuns")
+    recovered_stale_analysis_cycle_refreshes: int = Field(
+        serialization_alias="recoveredStaleAnalysisCycleRefreshes"
+    )
+    failed_stale_analysis_cycles: int = Field(
+        serialization_alias="failedStaleAnalysisCycles"
+    )
     analysis_jobs: QueueBucketSummary = Field(serialization_alias="analysisJobs")
     flare_generation_runs: QueueBucketSummary = Field(serialization_alias="flareGenerationRuns")
+    analysis_cycles: QueueBucketSummary = Field(serialization_alias="analysisCycles")
+    activity_events: QueueBucketSummary = Field(serialization_alias="activityEvents")
 
 
 class AnalyticsEventRequest(BaseModel):
@@ -224,15 +308,9 @@ class AnalyticsEventRequest(BaseModel):
         "capture_file_attached",
         "capture_voice_started",
         "capture_voice_stopped",
-        "item_created",
-        "item_deleted",
         "item_viewed",
         "flare_viewed",
-        "queue_health_requested",
-        "queue_maintenance_run",
-        "import_started",
-        "import_completed",
-        "import_failed",
+        "screen_opened",
     ] = Field(serialization_alias="eventType", validation_alias="eventType")
     target_type: str | None = Field(
         default=None,

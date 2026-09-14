@@ -183,15 +183,16 @@ def test_post_github_queue_analytics_and_import_migrations_keep_worker_isolated(
     queue = load_migration('0011_queue_ops_maintenance.py')
     analytics = load_migration('0012_activity_events_and_source_types.py')
     imports = load_migration('0013_import_batches.py')
+    editing = load_migration('0014_versioned_source_editing.py')
     operations = []
-    for migration in (queue, analytics, imports):
+    for migration in (queue, analytics, imports, editing):
         operation = FakeOp()
         monkeypatch.setattr(migration, 'op', operation)
         monkeypatch.setenv('FLARE_DATABASE_PROVIDER', provider)
         migration.upgrade()
         operations.append('\n'.join(operation.statements))
 
-    queue_sql, analytics_sql, import_sql = operations
+    queue_sql, analytics_sql, import_sql, editing_sql = operations
     assert all('CREATE ROLE' not in sql for sql in operations)
     assert 'queue_maintenance' in queue_sql
     assert 'GRANT EXECUTE ON FUNCTION public.queue_maintenance' in queue_sql
@@ -210,3 +211,67 @@ def test_post_github_queue_analytics_and_import_migrations_keep_worker_isolated(
     assert 'import_batches' in import_sql
     assert import_sql.count('FORCE ROW LEVEL SECURITY') == 1
     assert "GRANT SELECT, INSERT, UPDATE ON public.import_batches TO flare_app" in import_sql
+    assert "ADD COLUMN updated_at" in editing_sql
+    assert "UPDATE public.documents SET updated_at = created_at" in editing_sql
+    assert "CREATE INDEX documents_workspace_updated_active_idx" in editing_sql
+    assert (
+        editing_sql.index("ALTER TABLE public.documents NO FORCE ROW LEVEL SECURITY")
+        < editing_sql.index("UPDATE public.documents SET updated_at = created_at")
+        < editing_sql.index("ALTER TABLE public.documents FORCE ROW LEVEL SECURITY")
+    )
+    assert editing_sql.index("ADD COLUMN updated_at") < editing_sql.index(
+        "UPDATE public.documents SET updated_at = created_at"
+    ) < editing_sql.index("ALTER COLUMN updated_at SET NOT NULL")
+    assert "ADD COLUMN snapshot_title" in editing_sql
+    assert "ADD COLUMN snapshot_source_url" in editing_sql
+    assert "ADD COLUMN snapshot_metadata" in editing_sql
+    assert "CREATE TRIGGER document_versions_snapshot" in editing_sql
+    assert "ALTER TABLE public.import_batches NO FORCE ROW LEVEL SECURITY" in editing_sql
+    assert "ALTER TABLE public.import_batches FORCE ROW LEVEL SECURITY" in editing_sql
+    assert editing_sql.index("originImportBatchId") < editing_sql.index(
+        "SET snapshot_title = d.title"
+    )
+    assert (
+        editing_sql.index("DISABLE TRIGGER document_versions_immutable")
+        < editing_sql.index("SET snapshot_title = d.title")
+        < editing_sql.index("ENABLE TRIGGER document_versions_immutable")
+    )
+    assert (
+        editing_sql.index("ALTER TABLE public.import_batches NO FORCE ROW LEVEL SECURITY")
+        < editing_sql.index("UPDATE public.import_batches b")
+        < editing_sql.index("ALTER TABLE public.import_batches FORCE ROW LEVEL SECURITY")
+    )
+    assert "document_version_id" in editing_sql
+    assert "import_batches_active_hash_unique" in editing_sql
+    assert "superseded_at" in editing_sql
+    assert "item_updated" in editing_sql
+    assert "source_replaced" in editing_sql
+
+
+@pytest.mark.parametrize('provider,owner', [
+    ('self-managed', 'flare_job_executor'), ('yandex', 'flare_owner'),
+])
+def test_daily_schedule_migration_uses_execute_only_worker_capabilities(monkeypatch, provider, owner):
+    migration = load_migration('0015_daily_analysis_schedule.py')
+    operation = FakeOp()
+    monkeypatch.setattr(migration, 'op', operation)
+    monkeypatch.setenv('FLARE_DATABASE_PROVIDER', provider)
+    migration.upgrade()
+    sql = '\n'.join(operation.statements)
+    assert 'CREATE ROLE' not in sql
+    assert 'analysis_cycles_workspace_local_date_key UNIQUE (workspace_id, local_date)' in sql
+    assert sql.count('FORCE ROW LEVEL SECURITY') == 4
+    assert 'CREATE TABLE public.analysis_daily_quotas' in sql
+    assert "INSERT INTO public.analysis_daily_quotas" in sql
+    assert "(r.created_at AT TIME ZONE 'UTC')::date" in sql
+    assert "DISTINCT ON" in sql
+    assert sql.index("INSERT INTO public.analysis_daily_quotas") < sql.index(
+        "ALTER TABLE public.analysis_daily_quotas ENABLE ROW LEVEL SECURITY"
+    )
+    assert f'CREATE POLICY quota_executor ON public.analysis_daily_quotas TO {owner}' in sql
+    assert f'CREATE POLICY cycle_executor ON public.analysis_cycles TO {owner}' in sql
+    assert f'OWNER TO {owner}' in sql
+    assert 'GRANT EXECUTE ON FUNCTION public.claim_analysis_cycle_refresh' in sql
+    assert 'GRANT EXECUTE ON FUNCTION public.queue_operational_health()' in sql
+    assert 'TO flare_worker' in sql
+    assert 'GRANT SELECT ON public.analysis_cycles TO flare_worker' not in sql

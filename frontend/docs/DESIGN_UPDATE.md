@@ -14,7 +14,9 @@ Changed areas: shared shell/tokens, workspace state, modal/capture, Insights, Va
 
 Validation: lint, production build, isolated-browser tests for capture text/URL/file, persistence, search/filter/detail, evidence, theme switching, system theme, source settings, and mobile layouts. Physical microphone permission and real transcription require a manual/device or backend integration check.
 
-Voice fallback was also verified: pending microphone permission → explicit demo voice memo → saved processing item with demo transcript. The test environment did not provide a usable audio device; actual recording is not claimed as verified.
+Voice failure behavior is fail-closed: denied/unavailable microphone access creates
+no item, and the removed legacy Dashboard recorder can no longer save an invented
+transcript. A real device/provider acceptance check remains required.
 
 ## Changed and added files
 

@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.config import AISettings, Settings
 from app.models.database import WorkspaceIdentity
-from app.models.analysis_runs import AnalysisRuns
+from app.models.analysis_runs import AnalysisRuns, DailyLimitReached
 from app.services.analysis_jobs import AnalysisJobService, AnalysisProcessor
 from app.services.context_selection import select_context
 from app.ai_engine.prompts import build_bounded_request, request_size_bytes
@@ -83,7 +83,7 @@ def test_idempotency_concurrency_and_snapshot(jobs, admin_url):
     assert len({r['id'] for r in responses}) == 1
     run_id = responses[0]['id']
     before = snapshot(admin_url, run_id)
-    ItemService(jobs[0].database, jobs[2][0], enqueue_analysis=False).create_note(
+    ItemService(jobs[0].database, jobs[2][0]).create_note(
         title='New', content='New goal: release next week.'
     )
     with psycopg.connect(admin_url) as c:
@@ -101,19 +101,37 @@ def test_idempotency_concurrency_and_snapshot(jobs, admin_url):
 
 def test_selection_bounds_determinism_and_isolation(jobs, admin_url):
     ai = replace(AISettings(), max_sources=2)
-    notes = ItemService(jobs[0].database, jobs[2][0], enqueue_analysis=False)
+    notes = ItemService(jobs[0].database, jobs[2][0])
     notes.create_note(title='Huge', content='x' * 5000)
     notes.create_note(title='Goal', content='Our goal is the MVP release. Deadline next week.')
     note = notes.create_note(title='Latest', content='Current project state: analysis is incomplete.')
-    a, b = start(jobs, ai=ai), start(jobs, ai=ai)
-    assert a['id'] != b['id']
-    assert snapshot(admin_url,a['id']) == snapshot(admin_url,b['id'])
+    a = start(jobs, ai=ai)
     assert a['selectedChunkCount'] == 2
     with psycopg.connect(admin_url) as c:
         rows = c.execute('SELECT c.id,c.content,c.workspace_id FROM analysis_job_sources s JOIN chunks c ON c.id=s.chunk_id JOIN analysis_runs r ON r.analysis_job_id=s.job_id WHERE r.id=%s',(a['id'],)).fetchall()
         assert all(row[2] == jobs[2][0].workspace_id for row in rows)
     from app.ai_engine.analysis import Evidence
     assert request_size_bytes(build_bounded_request([Evidence(source_id=str(r[0]),content=r[1]) for r in rows], ai)) <= ai.max_input_bytes
+
+
+def test_recent_selection_prioritizes_an_edited_old_source_beyond_created_limit(jobs, admin_url):
+    items = ItemService(jobs[0].database, jobs[2][0])
+    old = items.create_note(title="Old roadmap", content="Original roadmap text.")
+    for index in range(200):
+        items.create_note(title=f"Newer {index}", content=f"Routine archive entry {index}.")
+    edited = items.update_item(
+        old.id,
+        expected_current_version_id=old.current_version_id,
+        changes={"content": "Current project decision: ship the edited roadmap this week."},
+    ).item
+    with jobs[0].database.workspace_transaction(jobs[2][0]) as connection:
+        edited_chunk = connection.execute(
+            "SELECT id FROM public.chunks WHERE document_version_id=%s",
+            (edited.current_version_id,),
+        ).fetchone()["id"]
+
+    run = start(jobs, ai=replace(AISettings(), max_sources=1))
+    assert snapshot(admin_url, run["id"]) == [(edited_chunk,)]
 
 
 def test_atomic_transaction_rollback(jobs, admin_url):
@@ -125,6 +143,8 @@ def test_atomic_transaction_rollback(jobs, admin_url):
     with psycopg.connect(admin_url) as c:
         assert c.execute('SELECT count(*) FROM analysis_jobs').fetchone() == (0,)
         assert c.execute('SELECT count(*) FROM analysis_runs').fetchone() == (0,)
+        assert c.execute('SELECT count(*) FROM analysis_cycles').fetchone() == (0,)
+        assert c.execute('SELECT count(*) FROM analysis_daily_quotas').fetchone() == (0,)
 
 
 def test_status_membership_and_stages(jobs, admin_url):
@@ -187,13 +207,13 @@ def test_register_notes_analyze_worker_flares_e2e(jobs, admin_url, empty):
         assert post(c,key).status_code==200
 
 
-def test_new_key_after_failure_creates_new_job(jobs):
+def test_terminal_failure_keeps_daily_slot_consumed(jobs):
     first=start(jobs)
     claim=jobs[1].claim(uuid4(),120)
     assert jobs[1].finish(claim,error='invalid_output')=='failed'
-    second=start(jobs)
-    assert second['id']!=first['id']
-    assert jobs[1].claim(uuid4(),120).job_id!=claim.job_id
+    with pytest.raises(DailyLimitReached):
+        start(jobs)
+    assert jobs[1].claim(uuid4(),120) is None
 
 
 def test_run_privileges_and_rls(jobs, admin_url):
@@ -232,14 +252,14 @@ def test_cookie_required_even_in_development_mode(jobs):
 
 
 def test_recent_200_and_current_version_snapshot(jobs, admin_url):
-    notes = ItemService(jobs[0].database, jobs[2][0], enqueue_analysis=False)
+    notes = ItemService(jobs[0].database, jobs[2][0])
     for number in range(201):
         notes.create_note(title=f'Note {number}', content=f'Project update {number}.')
     run = start(jobs)
     selected = snapshot(admin_url, run['id'])
     with psycopg.connect(admin_url) as c:
         eligible = c.execute('''SELECT ch.id FROM documents d JOIN chunks ch ON ch.document_version_id=d.current_version_id
-            WHERE d.workspace_id=%s ORDER BY d.created_at DESC,d.id DESC LIMIT 200''', (jobs[2][0].workspace_id,)).fetchall()
+            WHERE d.workspace_id=%s ORDER BY d.updated_at DESC,d.id DESC LIMIT 200''', (jobs[2][0].workspace_id,)).fetchall()
         assert set(selected).issubset(set(eligible))
         chunk = selected[0][0]
         document, old_version = c.execute('SELECT v.document_id,v.id FROM document_versions v JOIN chunks ch ON ch.document_version_id=v.id WHERE ch.id=%s', (chunk,)).fetchone()
@@ -249,7 +269,8 @@ def test_recent_200_and_current_version_snapshot(jobs, admin_url):
         c.execute("UPDATE document_versions SET state='ready' WHERE id=%s", (version,))
         c.execute('UPDATE documents SET current_version_id=%s WHERE id=%s', (version,document))
     assert snapshot(admin_url,run['id']) == selected
-    assert (chunk,) not in snapshot(admin_url,start(jobs)['id'])
+    with pytest.raises(DailyLimitReached):
+        start(jobs)
 
 
 def test_safe_database_failure(jobs, monkeypatch):

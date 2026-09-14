@@ -1,85 +1,87 @@
-# Block 6A: recording and Whisper boundary
+# Voice transcription
 
-Implemented: browser recording → in-memory Blob; separately, validated audio bytes
-→ `VoiceTranscriber` → official Groq SDK → validated `Transcript(text)`.
-There is no browser upload or saved voice Note yet. Block 6B waits for teammate
-API/DB review. Capture says recording is ready but unsaved; discard/close releases it.
-No mock transcription remains in Capture, including API mode.
+Flare now has the production safety pieces for the voice path: browser recording
+keeps one bounded Blob in memory, `FfprobeMediaInspector` checks the real media
+tracks and duration through stdin, and `VoiceTranscriptService` saves an already
+validated transcript as an immutable `audio` item and chunk in PostgreSQL. Source
+audio is never written to a file or database. Direct placeholder `audio` creation
+through `POST /items` is rejected, including in mock mode.
+
+The final HTTP/provider handoff is deliberately gated until the product owner
+explicitly authorizes sending recordings to Groq Whisper. The shipped application
+must show that disclosure before an upload and the API must verify the matching
+consent signal before reading a body or calling Groq. Until that gate is connected,
+recordings can be discarded but cannot produce a fake saved transcript.
 
 ## Configuration
 
-Backend environment, read on explicit factory invocation:
+Voice uses a distinct API-process credential. It may belong to the same Groq
+account as the analysis worker key, but a separate secret lets either path be
+rotated or revoked independently.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `GROQ_API_KEY` | required | Backend only; excluded from settings repr |
-| `VOICE_MODEL` | `whisper-large-v3-turbo` | Only accepted model; no fallback |
-| `VOICE_MAX_UPLOAD_BYTES` | `10485760` | 10 MiB maximum, configurable downward |
-| `VOICE_MAX_DURATION_SECONDS` | `300` | Five-minute target; maximum configurable target 600 |
-| `VOICE_PROVIDER_DEADLINE_SECONDS` | `45` | Overall async deadline and SDK HTTP timeout |
+| `VOICE_GROQ_API_KEY` | required for provider activation | API-only Groq credential |
+| `VOICE_MODEL` | `whisper-large-v3-turbo` | Only accepted voice model |
+| `VOICE_MAX_UPLOAD_BYTES` | `10485760` | Maximum recording size, capped at 10 MiB |
+| `VOICE_MAX_DURATION_SECONDS` | `300` | Maximum measured duration, hard cap 600 seconds |
+| `VOICE_UPLOAD_DEADLINE_SECONDS` | `15` | Planned total body-read deadline, hard cap 60 seconds |
+| `VOICE_MEDIA_INSPECTION_TIMEOUT_SECONDS` | `8` | ffprobe deadline, hard cap 30 seconds |
+| `VOICE_PROVIDER_DEADLINE_SECONDS` | `45` | Provider/SDK deadline, hard cap 120 seconds |
+| `VOICE_MAX_TRANSCRIPT_CHARS` | `30000` | Transcript bound, hard cap 200,000 characters |
+| `VOICE_FFPROBE_PATH` | `ffprobe` | Operator-controlled executable path |
 
-Five minutes suits short capture memos. Ten MiB accommodates compressed browser
-recording while bounding memory and upload costs; it deliberately constrains large
-uncompressed WAV files. Transcript limit is 30,000 characters by default, within
-the existing Note contract's 200,000-character bound. No per-user quotas.
-Browser recording stops at five minutes and rejects chunks exceeding 10 MiB.
-These browser checks are UX limits, not server security enforcement.
+The backend image installs ffprobe. Inspection receives the bounded bytes over
+stdin with stderr discarded, checks that every reported stream is audio, requires
+a finite positive duration, and rejects media longer than the configured limit.
+It allows only the `pipe` protocol, a small container/codec allowlist, at most two
+streams and 500 probe packets, and caps machine-readable output at 64 KiB. Playlist,
+URL and local-file protocols cannot be followed. It never trusts a browser-supplied
+duration, MIME label or container signature alone.
 
-**Duration is not enforced by the 6A provider boundary.** No client duration is
-accepted as evidence. Before exposing any upload route, 6B must inspect actual media
-server-side and enforce `max_duration_seconds`. Container signatures are shallow
-checks, not proof of valid audio, duration, codec or absence of video tracks. No
-ffmpeg/parser dependency was added.
+## Existing provider boundary
 
-## Contract and safety
+`AudioInput(content, filename, content_type)` validates nonempty bounded bytes, a
+restricted basename, MIME/extension agreement, and the WEBM, WAV, MP3, M4A/MP4 or
+OGG container signature before networking. Browser codec parameters are narrowly
+accepted. The Groq adapter replaces the supplied filename with a fixed safe name,
+uses the official Groq origin, disables proxy-environment trust and redirects,
+sets `max_retries=0`, and validates a nonempty bounded text response.
 
-`AudioInput(content: bytes, filename: str, content_type: str)` derives `size` from
-bytes. Validation happens before networking: nonempty bounded bytes, a restricted
-basename, MIME/extension agreement and container signature. WEBM, WAV, MP3,
-M4A/MP4 and OGG are accepted. MIME codec parameters are narrowly allowed for browser
-recordings. User filenames never become paths and are replaced with a fixed
-`recording.<extension>` in multipart. No arbitrary URL or server-side URL fetch.
+Provider errors have stable codes and never retain provider bodies or exception
+text. The adapter writes neither audio nor transcript to logs. It is intentionally
+separate from `VoiceTranscriptService`, so the provider call completes before the
+short PostgreSQL transaction begins.
 
-SDK uses the official Groq origin, `max_retries=0`, no proxy environment or redirects,
-and `audio.transcriptions.create` with `response_format=json`. Text must be a string,
-nonempty after trim and within budget; no LLM rewriting or metadata is retained.
-Provider body/exception is not attached to `VoiceError`. Existing status taxonomy is
-reused; retryability is information for future orchestration, never an adapter retry.
-SDK debug logging is disabled, matching the text boundary.
+## Browser behavior
 
-Audio stays in caller-owned memory. No temporary file, audio storage or DB write is
-created; filesystem cleanup tests therefore do not apply. Callers must release audio
-references after completion/cancellation; Python does not guarantee memory erasure.
+`VoiceRecorder` stops at five minutes, rejects accumulated chunks above 10 MiB,
+stops microphone tracks on success, error, cancel and component disposal, and
+ignores stale callbacks. These are UX limits; the server-side byte, timeout and
+ffprobe checks remain authoritative.
 
-## Required 6B integration after review
+The old Dashboard recorder which saved invented demo transcripts was removed.
+File actions now open the shared bounded import flow. The microphone action is
+disabled and labelled as coming soon until the consent-gated provider handoff is
+enabled, so the shipped UI does not record audio it cannot save. Mock mode rejects
+attempts to manufacture an audio item. Vault already lists existing `audio` items
+and opens their stored transcript; transcript edits publish another immutable version
+through the ordinary item-edit path.
 
-1. Agree authenticated FastAPI multipart upload route and frontend data-provider
-   transport with teammate. Bound reads while receiving, before accumulating a Blob
-   or body in server memory; enforce Origin and workspace membership normally.
-2. Inspect media and enforce actual server-side duration before provider invocation.
-3. Pass validated bytes to this boundary and persist transcript through the reviewed
-   ordinary Note creation path, preserving workspace RLS and immutable versions.
-4. Own cancellation/retry policy and temporary audio lifecycle in orchestration:
-   audio → transcription → durable Note commit → delete/release source audio.
-   Also clean up on terminal errors and timeout; never make audio permanent history.
-5. Connect ready Blob to this transport; refresh Vault only after durable Note success.
-   Add upload/auth/persistence/cleanup integration tests. Do not invoke Analyze.
+Analytics stores only bounded action names and IDs: voice start/stop in the browser,
+`capture_submitted` after a durable item exists, and the server-owned `item_created`
+outcome with `item_type=audio`. Audio and transcript text are not analytics fields.
 
-No changes here to routes, Database, migrations, Item persistence, auth or workers.
-
-## Verification and optional smoke
+## Verification
 
 ```sh
-PYTHONPATH=backend python -m pytest -q backend/tests/test_voice.py
-node --test frontend/tests/*.test.cjs
-python backend/scripts/smoke_groq_voice.py memo.webm --content-type audio/webm --live
+PYTHONPATH=backend python -m pytest -q \
+  backend/tests/test_voice.py \
+  backend/tests/test_voice_media_inspection.py \
+  backend/tests/test_voice_service.py
+node --test frontend/tests/voice-recorder.test.cjs
 ```
 
-Smoke loads the existing worker environment before checking the key. An explicit
-`FLARE_DOTENV_PATH` must select a file with `FLARE_PROCESS_ROLE=worker`; API and
-migration files are rejected. API credentials and Compose remain unchanged.
-Smoke requires a locally provided worker key. It prints transcript
-and model to the terminal and never stores them; avoid redirecting sensitive output.
-It is not run by automated tests. The original local file remains owned by the user.
-
-SDK reference: https://github.com/groq/groq-python/blob/main/_autodocs/api-reference/audio.md
+The opt-in local provider smoke remains separate from the web product. It requires
+`--live`, a worker-selected dotenv file and a local audio path. It prints the
+transcript, so it must not be redirected into retained logs.

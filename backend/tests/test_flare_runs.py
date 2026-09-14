@@ -44,7 +44,7 @@ class Detector:
 @pytest.fixture
 def stage(jobs):
     queue,worker,users,_=jobs
-    note=ItemService(queue.database,users[0],enqueue_analysis=False).create_note(title='Goal',content=TEXT)
+    note=ItemService(queue.database,users[0]).create_note(title='Goal',content=TEXT)
     with queue.database.workspace_transaction(users[0]) as conn:
         chunk=conn.execute('SELECT c.id FROM chunks c JOIN document_versions v ON v.id=c.document_version_id WHERE v.document_id=%s',(note.id,)).fetchone()['id']
     parent=queue.enqueue(users[0],(chunk,),'test-stage1')
@@ -183,7 +183,7 @@ def test_atomic_stage1_rollback(jobs,admin_url):
 
 def test_semantic_order_not_uuid(jobs,admin_url):
     queue,_,users,_=jobs
-    ItemService(queue.database,users[0],enqueue_analysis=False).create_note(title='Other',content='Other note')
+    ItemService(queue.database,users[0]).create_note(title='Other',content='Other note')
     with queue.database.workspace_transaction(users[0]) as c:
         rows=c.execute('SELECT c.id,v.document_id FROM chunks c JOIN document_versions v ON v.id=c.document_version_id ORDER BY c.id').fetchall()
     with psycopg.connect(admin_url) as c:

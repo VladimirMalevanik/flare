@@ -16,7 +16,7 @@ alembic upgrade head
 export FLARE_ENV=development
 export FLARE_DEV_MODE=false
 export CORS_ORIGINS=http://localhost:3000
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --no-access-log
 ```
 
 Frontend использует `/api` через same-origin Next.js rewrite.
@@ -46,16 +46,20 @@ PostgreSQL пользователи `flare_owner`, `flare_app`, `flare_worker` �
 | `GET /auth/me` | `{user: {id, email, name, emailVerified}, workspace: {id, name, role}}` |
 | `POST /auth/verify-email` | `{token}` → одноразовое подтверждение email |
 | `POST /auth/resend-verification` | `{email}` → нейтральный 202 без раскрытия аккаунта |
-| `POST /items` | `{type: "note" | "url" | "file" | "audio", ...}` → документ, готовая версия, chunk и задача анализа |
-| `GET /items` | Поиск: `query`, `type`, `limit` |
+| `POST /items` | `{type: "note" | "url" | "file", ...}` → документ и готовая версия; прямые audio-placeholder записи отклоняются |
+| `GET /items` | Поиск: `query`, `type`, `limit`; keyset-страницы: парные `beforeUpdatedAt` + `beforeId` |
 | `GET /items/{id}` | Активная заметка своего workspace |
+| `PATCH /items/{id}` | `{expectedCurrentVersionId, title?, content?, sourceUrl?, fileName?, fileSize?, fileType?}` → новая immutable версия; stale token → 409; ИИ не запускается |
 | `DELETE /items/{id}` | Soft delete; опубликованная версия и chunk сохраняются |
-| `POST /imports` | `{format: "csv" | "txt" | "md", fileName, fileSize, content}` → документ, import batch и задачи анализа |
+| `POST /imports` | `{format: "csv" | "txt" | "md", fileName, fileSize, content}` → документ и import batch с `sourceVersionId`/`supersededAt`; `analysisJobsQueued` всегда 0 |
 | `GET /imports/{id}` | Статус и canonical item одного текстового импорта |
-| `POST /analytics/events` | Разрешённое действие продукта → `202`, без содержимого источника |
+| `POST /analytics/events` | Только UI-действие из клиентского allowlist → `202`, без содержимого источника; реальные item/Flare targets проверяются, лимит — 600 событий на actor/час |
 | `GET /analytics/events` | Сводка частоты действий workspace за 1–720 часов |
-| `GET /ops/queue` | Только owner: состояние jobs, flare runs и признаки зависания |
-| `POST /ops/queue/maintenance` | Только owner: dry-run/очистка старых задач и возврат просроченных leases |
+| `GET/PUT /analysis-schedule` | IANA timezone + `HH:MM`; snapshot источников начинается за 30 минут |
+| `GET /analysis/daily-status` | Дневной slot, refresh/snapshot/run state и честный статус GitHub ingestion |
+| `POST /analyze` | Ручной анализ; тот же DB-slot «не чаще одного раза за local day» |
+| `GET /ops/queue` | Только owner: jobs, flare runs, дневные cycles, backlog/failure/stale/overdue alerts |
+| `POST /ops/queue/maintenance` | Только owner: dry-run, bounded recovery и retention для очередей, дневных cycles и activity events (90 дней по умолчанию) |
 | `POST /integrations/github/start` | Запускает GitHub App installation flow; callback, выбор repo и disconnect живут под тем же префиксом |
 
 Пароль при регистрации: 8–128 символов; имя: 1–100. Email обрезается по краям
@@ -64,6 +68,12 @@ PostgreSQL пользователи `flare_owner`, `flare_app`, `flare_worker` �
 409 — регистрация не завершена (включая занятый email); 422 — неверный payload.
 Ответы auth/items/imports/analytics/ops/integrations имеют `Cache-Control: no-store`;
 ошибки валидации не отражают пароль.
+
+Uvicorn access log отключён во всех задокументированных командах запуска. Вместо
+него middleware пишет только HTTP method, шаблон route, status и duration; raw URL,
+query string, request/response body и текст исключения в этот лог не попадают.
+На cloud ingress/CDN его собственный access log также должен быть настроен без
+query string: приложение не может очистить лог, записанный до передачи запроса ему.
 
 ## Сессии и авторизация
 
@@ -136,9 +146,9 @@ editing не реализован. TLS/reverse-proxy deployment проверяе
 
 ## Durable jobs
 
-Новая заметка или текстовый импорт в той же транзакции добавляет durable job для
-immutable chunks. API возвращает сохранённый источник сразу; worker обрабатывает
-очередь отдельно и требует только свою DB-роль и `GROQ_API_KEY`. Явный Analyze
+Создание, импорт и редактирование сохраняют immutable chunks, но не добавляют
+analysis job. Анализ запускается только отдельным пользовательским действием или
+согласованным расписанием; worker требует свою DB-роль и `GROQ_API_KEY`. Явный Analyze
 остаётся для отдельного ограниченного прогона. Схема, роли, настройка, команда
 запуска и проверки: [docs/analysis-jobs.md](docs/analysis-jobs.md) и
 [docs/analyze.md](docs/analyze.md).
@@ -148,8 +158,8 @@ immutable chunks. API возвращает сохранённый источни
 Migration 0006 adds a separate durable generation stage after completed analysis.
 The same worker alternates extraction/generation attempts. Authenticated
 `GET /flares` and `GET /flares/{id}` expose typed, evidence-backed records.
-New sources now enqueue analysis through the ingestion path; generation still
-only starts after completed analysis.
+Source writes do not enqueue analysis; generation starts only after a separately
+requested analysis has completed.
 See [generation configuration, security and checks](docs/flare-generation.md).
 
 ## GitHub App connection

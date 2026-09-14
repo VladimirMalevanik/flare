@@ -9,7 +9,6 @@ from app.api.routes import _database
 from app.models.database import Database, MembershipRequiredError
 from app.services.auth_service import AuthenticatedUser
 from app.services.insight_service import FlareService, FlareNotFound
-from app.services.analytics_service import AnalyticsService
 
 
 class EvidenceResponse(BaseModel):
@@ -39,20 +38,7 @@ def service(
     return FlareService(db, user.identity)
 
 
-def _analytics_service(
-    user: Annotated[AuthenticatedUser, Depends(verified_user)],
-    db: Annotated[Database, Depends(_database)],
-) -> AnalyticsService:
-    return AnalyticsService(db, user.identity)
-
 router=APIRouter(prefix='/flares',tags=['flares'])
-
-
-def _track_event_safely(analytics: AnalyticsService, **event: object) -> None:
-    try:
-        analytics.track_event(**event)
-    except Exception:
-        return
 
 
 @router.get('',response_model=list[FlareResponse])
@@ -68,17 +54,9 @@ def list_flares(flares: Annotated[FlareService,Depends(service)],
 def get_flare(
     flare_id: UUID,
     flares: Annotated[FlareService,Depends(service)],
-    analytics: Annotated[AnalyticsService, Depends(_analytics_service)],
 ):
     try:
-        flare = flares.get(flare_id)
-        _track_event_safely(
-            analytics,
-            event_type="flare_viewed",
-            target_type="flare",
-            target_id=str(flare["id"]),
-        )
-        return flare
+        return flares.get(flare_id)
     except FlareNotFound:
         raise HTTPException(404,'Flare not found') from None
     except MembershipRequiredError:

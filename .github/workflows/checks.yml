@@ -50,8 +50,11 @@ jobs:
       - run: alembic -c backend/alembic.ini upgrade 0005
       - run: alembic -c backend/alembic.ini upgrade 0007
       - run: python backend/scripts/check_email_verification_migration.py prepare
+      - run: alembic -c backend/alembic.ini upgrade 0014
+      - run: python backend/scripts/check_daily_quota_migration.py prepare
       - run: alembic -c backend/alembic.ini upgrade head
       - run: python backend/scripts/check_email_verification_migration.py verify
+      - run: python backend/scripts/check_daily_quota_migration.py verify
       - run: alembic -c backend/alembic.ini upgrade head
       - if: matrix.database_provider == 'self-managed'
         run: psql -h 127.0.0.1 -U postgres -d flare -v ON_ERROR_STOP=1 -f backend/db/configure-worker.sql

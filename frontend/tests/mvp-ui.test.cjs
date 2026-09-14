@@ -50,10 +50,12 @@ for (const draft of ['A project note', 'https://example.com/context']) {
     assert.equal(requests[0].sourceUrl, undefined);
   });
 }
-test('Capture accepts bounded text files and keeps microphone and keyboard submission', () => {
+test('Capture accepts bounded text files, keeps keyboard submission, and gates voice', () => {
   const { tree, requests, messages } = capture('A note');
   assert.equal(tree.find(n => n.props?.['aria-label'] === 'Add file').props.disabled, false);
-  assert.ok(tree.find(n => n.props?.['aria-label'] === 'Start recording'));
+  const voice = tree.find(n => n.props?.['aria-label'] === 'Voice transcription coming soon');
+  assert.ok(voice);
+  assert.equal(voice.props.disabled, true);
   assert.equal(tree.filter(n => n.type === 'input' && n.props.type === 'file').length, 1);
   let prevented = 0;
   const file = { name: 'context.csv', size: 25, type: 'text/csv' };

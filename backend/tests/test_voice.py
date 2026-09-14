@@ -106,17 +106,27 @@ def test_deadline():
 
 @pytest.mark.parametrize('changes', [{'model': 'whisper-large-v3'}, {'model': 'openai/gpt-oss-20b'},
     {'api_key': None}, {'max_upload_bytes': 0}, {'max_duration_seconds': 601},
-    {'provider_deadline_seconds': float('nan')}, {'max_transcript_chars': 200001}])
+    {'provider_deadline_seconds': float('nan')}, {'upload_deadline_seconds': 61},
+    {'media_inspection_timeout_seconds': 31}, {'ffprobe_path': ''},
+    {'max_transcript_chars': 200001}])
 def test_configuration(changes):
     with pytest.raises(VoiceError, match='configuration'):
         execute(lambda _: pytest.fail('Network'), settings=replace(SETTINGS, **changes))
 
 
 def test_environment(monkeypatch):
+    monkeypatch.setenv('VOICE_GROQ_API_KEY', 'voice-only-key')
     monkeypatch.setenv('VOICE_MAX_UPLOAD_BYTES', '1000')
     monkeypatch.setenv('VOICE_MAX_DURATION_SECONDS', '240')
-    assert load_voice_settings().max_upload_bytes == 1000
-    assert load_voice_settings().max_duration_seconds == 240
+    monkeypatch.setenv('VOICE_UPLOAD_DEADLINE_SECONDS', '12')
+    monkeypatch.setenv('VOICE_MEDIA_INSPECTION_TIMEOUT_SECONDS', '7')
+    configured = load_voice_settings()
+    assert configured.api_key == 'voice-only-key'
+    assert configured.max_upload_bytes == 1000
+    assert configured.max_duration_seconds == 240
+    assert configured.upload_deadline_seconds == 12
+    assert configured.media_inspection_timeout_seconds == 7
+    assert 'voice-only-key' not in repr(configured)
     monkeypatch.setenv('VOICE_PROVIDER_DEADLINE_SECONDS', 'bad')
     with pytest.raises(ValueError, match='Invalid voice configuration'):
         load_voice_settings()

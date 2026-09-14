@@ -45,8 +45,8 @@ Severity meanings:
 - **Steps:** Capture a uniquely titled Note. Open Vault, search for it, open it, and
   refresh the page.
 - **Expected:** The Note appears once with the correct body and remains after refresh.
-  It is backed by a ready immutable version and chunk in the same workspace, and a
-  durable analysis job is queued without calling Groq in the request.
+  It is backed by a ready immutable version and chunk in the same workspace. No
+  analysis cycle, daily quota, or job is created until manual or scheduled Analyze.
 
 ## RT-05 — Note soft deletion
 
@@ -153,7 +153,7 @@ Severity meanings:
 - **Precondition:** Production database is migrated and all three credential sets exist.
 - **Steps:** Call `/ready`. Connect separately as API, worker, and migration owner.
   Test tenant reads without context and direct worker table reads.
-- **Expected:** `/ready` succeeds only at migration `0013` with pgvector and forced
+- **Expected:** `/ready` succeeds only at migration `0015` with pgvector and forced
   RLS. API without context sees no tenant rows. Worker direct table reads fail while
   reviewed capabilities work. Runtime processes do not possess migration credentials.
 
@@ -174,18 +174,23 @@ Severity meanings:
   another name, refresh Vault, and request both batch results. Try a malformed CSV,
   mismatched extension, binary-like text, and an over-limit body.
 - **Expected:** The first import creates one canonical document, bounded chunks, and
-  bounded durable jobs atomically. The duplicate resolves to that document. Invalid
-  inputs return safe validation errors and create no partial rows.
+  exact batch/version provenance atomically, without creating an analysis cycle or
+  job. The duplicate resolves to that document. Invalid inputs return safe validation
+  errors and create no partial rows.
 
 ## RT-18 — Queue operations and safe analytics
 
 - **Severity:** P1
 - **Precondition:** Owner and viewer memberships exist; one controlled stale lease exists.
 - **Steps:** Read queue health as owner and viewer. Run default maintenance, then apply
-  stale recovery with explicit bounds. Request the analytics summary.
+  stale recovery with explicit bounds and delete a controlled activity event older
+  than the configured retention. Request the analytics summary; try a view event for
+  a nonexistent item and exceed the per-actor browser-event budget in a disposable workspace.
 - **Expected:** Only the owner can inspect or mutate queue state. Default maintenance
-  is dry-run. Applied recovery affects only eligible workspace rows. Analytics contains
-  allowlisted event names and bounded metadata, never imported or captured source text.
+  is dry-run. Applied recovery and retention affect only eligible workspace rows.
+  Analytics contains allowlisted event names and bounded metadata, never imported or
+  captured source text. Fake targets are rejected and excess telemetry is dropped
+  without breaking the product action.
 
 ## RT-19 — Email support configuration
 
@@ -221,12 +226,38 @@ Severity meanings:
   no database URL, credential, SQL detail, or demo data is exposed. Both recover after
   connectivity returns without data loss.
 
+## RT-22 — Daily schedule, shared quota, and T-30 snapshot
+
+- **Severity:** P0
+- **Precondition:** Use two disposable verified owner/editor workspaces. The worker
+  is running, its clock is correct, and one schedule can be set far enough ahead to
+  observe the T-30 boundary. Database evidence may be inspected with the migration
+  owner; do not use production customer content.
+- **Steps:** In workspace A, create eligible source text and submit manual Analyze
+  with key K1. Replay K1, then submit a different key K2 on the same local date.
+  Change the schedule timezone so the displayed local date changes while less than
+  20 hours have elapsed, and retry K2. In workspace B, enable a daily schedule and
+  save distinctive source text before T-30. Observe the cycle at T-30, record its
+  pinned chunk IDs/count, then edit that source and attempt manual Analyze before
+  the scheduled run. Let the scheduled run finish. In the disposable database,
+  apply the normal retention cleanup to the detailed terminal rows and inspect the
+  corresponding `analysis_daily_quotas` row.
+- **Expected:** Both K1 calls identify one logical run and one job. K2 returns exact
+  HTTP `409` body `{"detail":"daily_limit"}` both on the original local date and
+  after the timezone change. Workspace B reserves the same shared slot at T-30; the manual
+  attempt also returns `409 daily_limit`. Its scheduled run is created once from the
+  recorded immutable snapshot, so the later edit does not replace pinned evidence.
+  Removing retention-eligible job/run/cycle detail does not remove the daily quota
+  tombstone or reopen that local date. After the next workspace local date begins
+  and at least 20 hours have passed since the prior promised run time, a new slot is
+  available.
+
 ## Deferred from this release suite
 
-Voice is excluded until upload, server-side media inspection, durable transcript
-persistence, and cleanup are implemented. Quota behavior is excluded because shared
-quota accounting is not implemented; that gap remains a production decision and
-release risk; see `ANALYZE_QUOTA_DECISION.md`. Full project-history semantics are not
-guaranteed: Analyze selects a bounded set from recent Notes using keyword and recency
-signals. Do not interpret a passing RT-06 as proof of full durable project memory.
-GitHub activity ingestion is excluded because only connection metadata is implemented.
+Voice is excluded until its consent-gated upload/provider handoff and cleanup are
+implemented. Media inspection and transcript persistence have isolated coverage.
+Plan-based allowances beyond the implemented one workspace analysis per local day
+are excluded. Full project-history semantics are not guaranteed: Analyze selects a
+bounded set from recent eligible sources using keyword and recency signals. Do not
+interpret a passing RT-06 as proof of full durable project memory. GitHub activity
+ingestion is excluded because only connection metadata is implemented.

@@ -1,4 +1,5 @@
 from uuid import uuid4
+import logging
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,6 +14,39 @@ def test_health_does_not_require_database():
     response = TestClient(app).get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_raw_uvicorn_access_logger_is_disabled():
+    assert logging.getLogger("uvicorn.access").disabled is True
+
+
+def test_http_log_uses_route_template_and_omits_url_secrets(caplog):
+    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
+        response = TestClient(app).get(
+            "/health?code=PRIVATE_OAUTH_CODE&query=PRIVATE_NOTE_BODY"
+        )
+
+    assert response.status_code == 200
+    messages = [record.getMessage() for record in caplog.records if record.name == "uvicorn.error"]
+    assert len(messages) == 1
+    assert "method=GET" in messages[0]
+    assert "route=/health" in messages[0]
+    assert "status=200" in messages[0]
+    assert "duration_ms=" in messages[0]
+    assert "PRIVATE_OAUTH_CODE" not in messages[0]
+    assert "PRIVATE_NOTE_BODY" not in messages[0]
+
+
+def test_http_log_does_not_echo_an_unmatched_path(caplog):
+    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
+        response = TestClient(app).get("/PRIVATE_PATH_TOKEN?state=PRIVATE_STATE")
+
+    assert response.status_code == 404
+    messages = [record.getMessage() for record in caplog.records if record.name == "uvicorn.error"]
+    assert len(messages) == 1
+    assert "route=unmatched" in messages[0]
+    assert "PRIVATE_PATH_TOKEN" not in messages[0]
+    assert "PRIVATE_STATE" not in messages[0]
 
 
 def test_readiness_fails_without_configuration(monkeypatch):

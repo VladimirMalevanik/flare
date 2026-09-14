@@ -9,7 +9,8 @@ interface ExtractedFact { id: string; text: string }
 interface Item {
   id: string; type: ItemType; title: string; content: string;
   sourceUrl?: string; fileName?: string; fileSize?: number;
-  status: ItemStatus; createdAt: string;
+  status: ItemStatus; createdAt: string; updatedAt: string;
+  currentVersionId: string; versionNumber: number;
   extractedFacts: ExtractedFact[]; relatedItemIds: string[];
 }
 interface Evidence { itemId: string; sourceTitle: string; sourceType: ItemType; excerpt: string; sourceUrl?: string | null }
@@ -22,9 +23,10 @@ interface Insight {
 
 Logical operations expected by the interface:
 
-- `listItems({ query?, type?, limit? }) → Item[]`
+- `listItems({ query?, type?, limit?, beforeUpdatedAt?, beforeId? }) → Item[]`; оба cursor-поля передаются вместе
 - `getItem(id) → Item | null`
 - `createItem({ type, title?, content?, sourceUrl?, fileName?, fileSize?, status? }) → Item`
+- `updateItem(id, { expectedCurrentVersionId, title, content, ...typeFields }) → Item`
 - `importTextFile({ format: "csv" | "txt" | "md", fileName, fileType?, fileSize, content }) → ImportResult`
 - `deleteItem(id) → void`
 - `listInsights() → Insight[]`
@@ -36,6 +38,9 @@ Logical operations expected by the interface:
 - `listGitHubRepositories() → GitHubRepository[]`
 - `selectGitHubRepository(repositoryId) → GitHubConnection`
 - `disconnectGitHub() → void`
+- `getAnalysisSchedule() → AnalysisSchedule`
+- `updateAnalysisSchedule({ enabled, timezone, localTime }) → AnalysisSchedule`
+- `getDailyAnalysisStatus() → DailyAnalysisStatus`
 
 Optional Item display fields remain `category`, `sourceLabel`, `author`, and
 `fileType`. The internal names `Insight`, `listInsights`, and `getInsight` remain;
@@ -43,7 +48,9 @@ the public Flare types are Reminder, Warning and Recommendation. Legacy Discover
 records are not converted into Recommendations.
 
 The REST adapter uses `GET /items`, `GET /items/:id`, `POST /items`,
-`DELETE /items/:id`, and `POST /imports`. Text imports are bounded to CSV, TXT
+`PATCH /items/:id`, `DELETE /items/:id`, and `POST /imports`. Every real edit
+publishes a new immutable version; the optimistic version token prevents lost
+updates. Text imports are bounded to CSV, TXT
 and Markdown and send text rather than a browser-local file path. The server
 stores the source as an ordinary Item, preserving its chunks for citations.
 Sources can connect a GitHub App installation and persist a selected repository;
@@ -62,9 +69,8 @@ API mode.
   where the source is loaded through `GET /items/{itemId}`.
 - Any deleted supporting document hides the entire Flare. Untyped legacy insights
   are excluded. Internal run IDs, raw responses, errors and reasoning are absent.
-- Saving a source and importing text enqueue durable analysis automatically in the
-  same server-side transaction. Explicit Analyze still selects and pins a separate
-  bounded context.
+- Saving, importing, or editing a source never starts AI. Manual Analyze and the
+  workspace daily schedule select and pin bounded context separately.
 
 ## Analyze (Block 5)
 
@@ -85,6 +91,35 @@ codes only. Polling backs off from 1 to 10 seconds, stops after 40 polls or five
 minutes, and cancels on navigation. Check status resumes an existing run; retry
 after terminal failure uses a new key. An uncertain POST retries the same key.
 API mode never substitutes demo results.
+
+The database permits one analysis cycle per workspace local calendar date. Manual
+Analyze and the saved schedule share that slot; another key returns `409 daily_limit`.
+`GET/PUT /analysis-schedule` stores `enabled`, an IANA `timezone`, and `localTime`.
+`GET /analysis/daily-status` returns the cycle/run state and T-30 snapshot status.
+If a schedule is saved after today’s preparation deadline, its first run is tomorrow.
+Terminal failure keeps the slot consumed; bounded automatic retries remain in the
+same cycle. GitHub reports `ingestionSupported: false` until repository content
+ingestion is implemented.
+
+## Analytics
+
+`POST /analytics/events` accepts only browser interaction events used by this UI:
+`capture_started`, `capture_submitted`, `capture_file_attached`,
+`capture_voice_started`, `capture_voice_stopped`, `item_viewed`, `flare_viewed`,
+and `screen_opened`. Each event has a fixed target and bounded enum/integer
+metadata; note/file text, titles, URLs, filenames, OAuth values and provider
+payloads are not valid analytics fields. Server outcomes such as item creation,
+imports, analysis, scheduling, queue maintenance and GitHub authorization cannot
+be submitted through the client endpoint. Any workspace member, including a
+viewer, may record these UI interactions under their authenticated actor ID.
+The server verifies referenced item/Flare IDs inside that workspace and ignores
+events beyond 600 accepted browser events per actor in a rolling hour. These
+best-effort limits never block the product action that the event describes.
+
+Flare views are counted in the browser when the evidence panel opens. The detail
+GET does not record another view, and the same panel load is deduplicated. Closing
+and reopening the panel records a new view. Capture opening is emitted by the
+shared Capture component, including when opened from the empty Flares state.
 
 ## Authentication (Block 1)
 

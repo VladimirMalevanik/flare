@@ -8,20 +8,18 @@ from hashlib import sha256
 from typing import Iterable, Literal
 from uuid import UUID, uuid4
 
-from app.config import AISettings, load_ai_settings
 from app.models.database import Database, WorkspaceIdentity
 from app.models.import_batches import ImportBatchRecord, ImportBatchRepository, ImportFormat
 from app.models.tables import ItemRecord, ItemRepository
-from app.workers.config import WorkerSettings, load_worker_settings, pipeline_revision
 
 
 # The API accepts JSON text for its first version.  Keeping this bound modest
-# makes the full transaction, database storage and follow-up analysis work
-# predictable until object storage and streamed uploads are introduced.
+# makes the full transaction and database storage predictable until object
+# storage and streamed uploads are introduced.
 MAX_IMPORT_BYTES = 200_000
 MAX_IMPORT_ROWS = 20_000
 MAX_IMPORT_CHUNKS = 2_000
-MAX_IMPORT_ANALYSIS_JOBS = 1_000
+IMPORT_CHUNK_TARGET_BYTES = 4_000
 
 
 class ImportValidationError(ValueError):
@@ -99,28 +97,13 @@ class ImportService:
         file_size: int,
         content: str,
     ) -> ImportResult:
-        ai = load_ai_settings()
-        worker = load_worker_settings()
-        worker.validate(ai)
-        prepared = self._prepare(
+        prepared = self.prepare_content(
             format=format,
             file_name=file_name,
             file_type=file_type,
             file_size=file_size,
             content=content,
-            ai=ai,
         )
-        job_groups = _analysis_groups(
-            (chunk.content for chunk in prepared.chunks),
-            max_sources=min(ai.max_sources, 100),
-            max_bytes=ai.max_input_bytes,
-        )
-        if len(job_groups) > MAX_IMPORT_ANALYSIS_JOBS:
-            raise ImportValidationError(
-                "too_many_analysis_jobs",
-                "Import would exceed the 1000-job safety limit; split the file into smaller files",
-            )
-
         with self._database.workspace_transaction(self._identity, write=True) as connection:
             batches = ImportBatchRepository(connection)
             batch_id = uuid4()
@@ -142,20 +125,47 @@ class ImportService:
                 )
                 if existing is None or existing.document_id is None or existing.status != "completed":
                     raise ImportUnavailableError("Import batch is unavailable")
-                item = ItemRepository(connection).get_active(existing.document_id)
-                if item is None:
-                    raise ImportUnavailableError("Imported item is unavailable")
-                return ImportResult(batch=existing, item=item, created=False)
+                repository = ItemRepository(connection)
+                current = repository.get_active(existing.document_id)
+                if current is not None and current.content == prepared.content:
+                    if existing.document_version_id is None:
+                        raise ImportUnavailableError("Import batch is unavailable")
+                    historical = repository.get_version(
+                        existing.document_id,
+                        existing.document_version_id,
+                    )
+                    if historical is None:
+                        raise ImportUnavailableError("Import batch is unavailable")
+                    return ImportResult(batch=existing, item=historical, created=False)
+
+                # A deleted or replaced source no longer represents these bytes.
+                # Retain its exact historical batch/version link, deactivate it
+                # for deduplication, then create a new active import.
+                batches.supersede_for_document(existing.document_id)
+                inserted = batches.insert_pending(
+                    batch_id=batch_id,
+                    workspace_id=self._identity.workspace_id,
+                    requested_by_user_id=self._identity.user_id,
+                    format=prepared.format,
+                    file_name=prepared.file_name,
+                    file_type=prepared.file_type,
+                    file_size=prepared.file_size,
+                    file_hash=prepared.file_hash,
+                )
+                if inserted is None:
+                    raise ImportUnavailableError("Import batch is unavailable")
 
             item_id, version_id = uuid4(), uuid4()
             repository = ItemRepository(connection)
+            item_title = _title_from_file_name(prepared.file_name)
+            item_metadata = _document_metadata(prepared, batch_id)
             repository.insert_document(
                 item_id=item_id,
                 workspace_id=self._identity.workspace_id,
-                title=_title_from_file_name(prepared.file_name),
+                title=item_title,
                 item_type="file",
                 source_url=None,
-                metadata=_document_metadata(prepared, batch_id),
+                metadata=item_metadata,
             )
             repository.insert_version(
                 version_id=version_id,
@@ -163,6 +173,9 @@ class ImportService:
                 document_id=item_id,
                 content_hash=prepared.content_hash,
                 parser_version=f"import-{prepared.format}-v1",
+                snapshot_title=item_title,
+                snapshot_source_url=None,
+                snapshot_metadata=item_metadata,
             )
             chunk_ids: list[UUID] = []
             for ordinal, chunk in enumerate(prepared.chunks):
@@ -177,19 +190,13 @@ class ImportService:
                     locator=chunk.locator,
                 )
             repository.publish_version(document_id=item_id, version_id=version_id)
-            self._enqueue_analysis_groups(
-                connection,
-                chunk_ids=chunk_ids,
-                groups=job_groups,
-                ai=ai,
-                worker=worker,
-            )
             completed = batches.mark_completed(
                 batch_id=batch_id,
                 document_id=item_id,
+                document_version_id=version_id,
                 row_count=prepared.row_count,
                 chunk_count=len(chunk_ids),
-                analysis_jobs_queued=len(job_groups),
+                analysis_jobs_queued=0,
             )
             item = repository.get_active(item_id)
             if item is None:
@@ -201,20 +208,24 @@ class ImportService:
             batch = ImportBatchRepository(connection).get(batch_id)
             if batch is None or batch.document_id is None or batch.status != "completed":
                 raise ImportNotFoundError
-            item = ItemRepository(connection).get_active(batch.document_id)
+            if batch.document_version_id is None:
+                raise ImportNotFoundError
+            item = ItemRepository(connection).get_version(
+                batch.document_id,
+                batch.document_version_id,
+            )
             if item is None:
                 raise ImportNotFoundError
             return ImportResult(batch=batch, item=item, created=False)
 
-    def _prepare(
-        self,
+    @staticmethod
+    def prepare_content(
         *,
         format: ImportFormat,
         file_name: str,
         file_type: str | None,
         file_size: int,
         content: str,
-        ai: AISettings,
     ) -> PreparedImport:
         normalized_name = _validate_file_name(file_name, format)
         normalized_type = _validate_file_type(file_type, format)
@@ -243,7 +254,7 @@ class ImportService:
             raise ImportValidationError("empty_file", "content must contain UTF-8 text")
         content_hash = sha256(text.encode("utf-8")).hexdigest()
         file_hash = sha256(raw_bytes).hexdigest()
-        target_bytes = _chunk_target(ai)
+        target_bytes = IMPORT_CHUNK_TARGET_BYTES
 
         if format == "csv":
             records = _parse_csv(text)
@@ -275,23 +286,6 @@ class ImportService:
             row_count=row_count,
             chunks=tuple(chunks),
         )
-
-    def _enqueue_analysis_groups(
-        self,
-        connection,
-        *,
-        chunk_ids: list[UUID],
-        groups: tuple[tuple[int, ...], ...],
-        ai: AISettings,
-        worker: WorkerSettings,
-    ) -> None:
-        revision = pipeline_revision(ai)
-        for group in groups:
-            selected = [chunk_ids[index] for index in group]
-            connection.execute(
-                "SELECT public.enqueue_analysis_job(%s, %s, %s)",
-                (selected, revision, worker.max_attempts),
-            )
 
 
 def _utf8_bytes(content: str) -> bytes:
@@ -335,14 +329,6 @@ def _validate_file_type(file_type: str | None, format: ImportFormat) -> str | No
 def _reject_binary_text(content: str) -> None:
     if "\x00" in content or any(ord(char) < 32 and char not in "\t\n\r" for char in content):
         raise ImportValidationError("binary_content", "content must be UTF-8 text, not binary data")
-
-
-def _chunk_target(ai: AISettings) -> int:
-    max_sources = min(ai.max_sources, 100)
-    # Aim for five useful sources per model request under default settings. A
-    # later grouping pass is authoritative for the exact byte/source bounds.
-    target = max(1, ai.max_input_bytes // min(max_sources, 5))
-    return min(target, ai.max_input_bytes)
 
 
 def _parse_csv(text: str) -> tuple[CsvRecord, ...]:
@@ -544,34 +530,6 @@ def _split_exact(text: str, max_bytes: int) -> Iterable[str]:
         start = end
 
 
-def _analysis_groups(
-    contents: Iterable[str],
-    *,
-    max_sources: int,
-    max_bytes: int,
-) -> tuple[tuple[int, ...], ...]:
-    if max_sources < 1 or max_bytes < 1:
-        raise ImportValidationError("invalid_analysis_limit", "LLM analysis limits must be positive")
-    groups: list[tuple[int, ...]] = []
-    current: list[int] = []
-    current_bytes = 0
-    for index, content in enumerate(contents):
-        size = _byte_length(content)
-        if not content or size > max_bytes:
-            raise ImportValidationError(
-                "invalid_analysis_limit",
-                "Imported chunks must fit within the configured LLM input byte limit",
-            )
-        if current and (len(current) >= max_sources or current_bytes + size > max_bytes):
-            groups.append(tuple(current))
-            current, current_bytes = [], 0
-        current.append(index)
-        current_bytes += size
-    if current:
-        groups.append(tuple(current))
-    return tuple(groups)
-
-
 def _byte_length(value: str) -> int:
     return len(value.encode("utf-8"))
 
@@ -586,7 +544,7 @@ def _document_metadata(prepared: PreparedImport, batch_id: UUID) -> dict[str, ob
         "sourceType": "file",
         "fileName": prepared.file_name,
         "fileSize": prepared.file_size,
-        "importBatchId": str(batch_id),
+        "originImportBatchId": str(batch_id),
         "importFormat": prepared.format,
     }
     if prepared.file_type:

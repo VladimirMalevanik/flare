@@ -7,26 +7,20 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.api.auth import verified_user
 from app.api.routes import _database, _raise_http_error
 from app.api.schemas import (
+    AnalysisCycleSummary,
     QueueHealthResponse,
     QueueMaintenanceRequest,
     QueueMaintenanceResponse,
     QueueSummary,
 )
 from app.models.database import Database, WorkspaceIdentity, MembershipRequiredError
-from app.services.analytics_service import AnalyticsService
+from app.services.analytics_service import AnalyticsService, track_event_best_effort
 from app.api.routes import _analytics_service
 from app.services.auth_service import AuthenticatedUser
 from app.services.ops_service import QueueHealth, QueueMaintenance, QueueService
 
 
 router = APIRouter(prefix="/ops", tags=["ops"])
-
-
-def _track_event_safely(analytics: AnalyticsService, **event: object) -> None:
-    try:
-        analytics.track_event(**event)
-    except Exception:
-        return
 
 
 def _owner_required(
@@ -67,6 +61,18 @@ def _to_schema(health: QueueHealth) -> QueueHealthResponse:
             oldest_pending_seconds=health.flares.oldest_pending_seconds,
             oldest_processing_seconds=health.flares.oldest_processing_seconds,
         ),
+        cycles=AnalysisCycleSummary(
+            scheduled=health.cycles.scheduled,
+            refreshing=health.cycles.refreshing,
+            ready=health.cycles.ready,
+            failed=health.cycles.failed,
+            due_refresh=health.cycles.due_refresh,
+            due_run=health.cycles.due_run,
+            stale_refreshing=health.cycles.stale_refreshing,
+            overdue=health.cycles.overdue,
+            oldest_refresh_due_seconds=health.cycles.oldest_refresh_due_seconds,
+            oldest_run_due_seconds=health.cycles.oldest_run_due_seconds,
+        ),
     )
 
 
@@ -78,6 +84,10 @@ def _to_maintenance_schema(maintenance: QueueMaintenance) -> QueueMaintenanceRes
         after=_to_schema(maintenance.after),
         recovered_stale_analysis_jobs=maintenance.recovered_stale_analysis_jobs,
         recovered_stale_flare_runs=maintenance.recovered_stale_flare_runs,
+        recovered_stale_analysis_cycle_refreshes=(
+            maintenance.recovered_stale_analysis_cycle_refreshes
+        ),
+        failed_stale_analysis_cycles=maintenance.failed_stale_analysis_cycles,
         analysis_jobs={
             "candidates": maintenance.analysis_jobs_candidates,
             "deleted": maintenance.analysis_jobs_deleted,
@@ -85,6 +95,14 @@ def _to_maintenance_schema(maintenance: QueueMaintenance) -> QueueMaintenanceRes
         flare_generation_runs={
             "candidates": maintenance.flare_generation_runs_candidates,
             "deleted": maintenance.flare_generation_runs_deleted,
+        },
+        analysis_cycles={
+            "candidates": maintenance.analysis_cycles_candidates,
+            "deleted": maintenance.analysis_cycles_deleted,
+        },
+        activity_events={
+            "candidates": maintenance.activity_events_candidates,
+            "deleted": maintenance.activity_events_deleted,
         },
     )
 
@@ -96,7 +114,7 @@ def queue_health(
     analytics: Annotated[AnalyticsService, Depends(_analytics_service)],
 ) -> QueueHealthResponse:
     try:
-        _track_event_safely(analytics, event_type="queue_health_requested")
+        track_event_best_effort(analytics, event_type="queue_health_requested")
         return _to_schema(op_service.queue_health())
     except MembershipRequiredError as error:
         _raise_http_error(error)
@@ -121,9 +139,11 @@ def queue_maintenance(
                 analysis_failed_retention_days=request.analysis_failed_retention_days,
                 flare_completed_retention_days=request.flare_completed_retention_days,
                 flare_failed_retention_days=request.flare_failed_retention_days,
+                cycle_failed_retention_days=request.cycle_failed_retention_days,
+                activity_event_retention_days=request.activity_event_retention_days,
             ),
         )
-        _track_event_safely(
+        track_event_best_effort(
             analytics,
             event_type="queue_maintenance_run",
             metadata={
@@ -134,6 +154,8 @@ def queue_maintenance(
                 "analysis_failed_retention_days": request.analysis_failed_retention_days,
                 "flare_completed_retention_days": request.flare_completed_retention_days,
                 "flare_failed_retention_days": request.flare_failed_retention_days,
+                "cycle_failed_retention_days": request.cycle_failed_retention_days,
+                "activity_event_retention_days": request.activity_event_retention_days,
             },
         )
         return result

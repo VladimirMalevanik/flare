@@ -1,6 +1,7 @@
 """Explicit local-file Whisper smoke; never run by CI, never writes to DB."""
 import argparse
 import asyncio
+from dataclasses import replace
 import json
 import os
 from pathlib import Path
@@ -28,7 +29,9 @@ def main():
     from app.ai_engine.groq_voice_adapter import GroqVoiceTranscriber
 
     async def run():
-        settings = load_voice_settings()
+        # The explicit local smoke runs under the worker secret boundary. The
+        # web API uses the separate VOICE_GROQ_API_KEY deployment secret.
+        settings = replace(load_voice_settings(), api_key=os.environ['GROQ_API_KEY'])
         # Bounded read, even when the file grows after selection.
         with args.audio.open('rb') as source:
             content = source.read(settings.max_upload_bytes + 1)

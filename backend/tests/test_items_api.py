@@ -10,7 +10,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.ai_engine.voice import Transcript
 from app.main import create_app
+from app.models.database import WorkspaceIdentity
+from app.services.voice_service import VoiceTranscriptService
 
 
 pytestmark = pytest.mark.integration
@@ -109,6 +112,18 @@ class ApiEnvironment:
                 (ids,),
             )
             connection.execute(
+                "DELETE FROM public.analysis_cycle_sources WHERE workspace_id = ANY(%s)",
+                (ids,),
+            )
+            connection.execute(
+                "DELETE FROM public.analysis_cycles WHERE workspace_id = ANY(%s)",
+                (ids,),
+            )
+            connection.execute(
+                "DELETE FROM public.analysis_schedules WHERE workspace_id = ANY(%s)",
+                (ids,),
+            )
+            connection.execute(
                 "UPDATE public.documents SET current_version_id = NULL "
                 "WHERE workspace_id = ANY(%s)",
                 (ids,),
@@ -192,7 +207,10 @@ def test_note_is_persisted_atomically_and_survives_app_restart(api_environment):
         "title": "Interview result",
         "content": "Founders want cited answers.",
         "status": "ready",
+        "currentVersionId": item["currentVersionId"],
+        "versionNumber": 1,
         "createdAt": item["createdAt"],
+        "updatedAt": item["updatedAt"],
         "extractedFacts": [],
         "relatedItemIds": [],
     }
@@ -215,7 +233,7 @@ def test_note_is_persisted_atomically_and_survives_app_restart(api_environment):
     assert development_user == (False, workspace_id)
 
 
-def test_url_file_and_audio_items_are_stored_with_type_metadata_and_parser_version(api_environment):
+def test_url_and_file_items_are_stored_with_type_metadata_and_parser_version(api_environment):
     workspace_id, user_id = uuid4(), f"api-test|{uuid4()}"
     with api_environment.client(workspace_id=workspace_id, user_id=user_id) as client:
         url = _create_item(
@@ -234,13 +252,8 @@ def test_url_file_and_audio_items_are_stored_with_type_metadata_and_parser_versi
             file_type="application/pdf",
             content=None,
         )
-        audio = _create_item(
-            client,
-            type="audio",
-            title="Kickoff memo",
-        )
 
-    for item, expected_version in ((url, "ingest-url-v1"), (file, "ingest-file-v1"), (audio, "ingest-audio-v1")):
+    for item, expected_version in ((url, "ingest-url-v1"), (file, "ingest-file-v1")):
         item_id = UUID(item["id"])
         item_type = item["type"]
         persisted = api_environment.fetchone_admin(
@@ -250,7 +263,7 @@ def test_url_file_and_audio_items_are_stored_with_type_metadata_and_parser_versi
                       d.metadata->>'fileName' AS metadata_file_name,
                       d.metadata->>'fileType' AS metadata_file_type,
                       d.metadata->>'fileSize' AS metadata_file_size,
-                      aj.id AS analysis_job_id, aj.requested_by_user_id
+                      aj.id AS analysis_job_id
                FROM public.documents d
                JOIN public.document_versions v ON v.document_id = d.id AND v.id = d.current_version_id
                JOIN public.chunks c ON c.document_version_id = v.id
@@ -260,12 +273,11 @@ def test_url_file_and_audio_items_are_stored_with_type_metadata_and_parser_versi
             (workspace_id, item_id),
         )
         assert persisted is not None
-        source_type, source_url, parser_version, chunk_id, metadata_source_type, metadata_source_url, metadata_file_name, metadata_file_type, metadata_file_size, job_id, requested_by = persisted
+        source_type, source_url, parser_version, chunk_id, metadata_source_type, metadata_source_url, metadata_file_name, metadata_file_type, metadata_file_size, job_id = persisted
         assert source_type == item_type
         assert parser_version == expected_version
         assert metadata_source_type == item_type
-        assert requested_by == user_id
-        assert chunk_id is not None and job_id is not None
+        assert chunk_id is not None and job_id is None
 
         if item_type == "url":
             assert source_url == "https://example.com/product"
@@ -275,14 +287,72 @@ def test_url_file_and_audio_items_are_stored_with_type_metadata_and_parser_versi
             assert metadata_file_name == "spec.pdf"
             assert metadata_file_type == "application/pdf"
             assert metadata_file_size == "2048"
-        else:
-            assert source_url is None
-            assert metadata_source_url is None
-
         with api_environment.client(workspace_id=workspace_id, user_id=user_id) as fresh_client:
             response = fresh_client.get(f"/items/{item_id}")
             assert response.status_code == 200
             assert response.json()["id"] == str(item_id)
+
+
+def test_direct_audio_placeholder_creation_is_rejected(api_environment):
+    with api_environment.client() as client:
+        response = client.post(
+            "/items",
+            json={
+                "type": "audio",
+                "title": "Fake memo",
+                "content": "Demo transcript",
+            },
+        )
+        assert response.status_code == 422
+        assert response.json()["detail"] == "Voice memos must contain a validated transcript"
+        assert client.get("/items", params={"type": "audio"}).json() == []
+
+
+def test_validated_voice_transcript_is_versioned_visible_and_contains_no_audio_bytes(
+    api_environment,
+):
+    workspace_id, user_id = uuid4(), f"voice-api-test|{uuid4()}"
+    transcript = "Founders want a daily evidence-backed summary."
+    with api_environment.client(workspace_id=workspace_id, user_id=user_id) as client:
+        saved = VoiceTranscriptService(
+            client.app.state.database,
+            WorkspaceIdentity(workspace_id, user_id),
+        ).persist(
+            Transcript(transcript),
+            media_type="audio/webm",
+            upload_size=1_234,
+        )
+        response = client.get("/items", params={"type": "audio"})
+        assert response.status_code == 200
+        assert response.json()[0]["id"] == str(saved.id)
+        assert response.json()[0]["content"] == transcript
+
+    persisted = api_environment.fetchone_admin(
+        """SELECT d.source_type, d.metadata, v.parser_version,
+                  v.snapshot_metadata, c.content,
+                  count(e.id) FILTER (WHERE e.event_type = 'item_created')
+             FROM public.documents d
+             JOIN public.document_versions v ON v.id = d.current_version_id
+             JOIN public.chunks c ON c.document_version_id = v.id
+             LEFT JOIN public.activity_events e
+               ON e.workspace_id = d.workspace_id AND e.target_id = d.id
+            WHERE d.workspace_id = %s AND d.id = %s
+            GROUP BY d.source_type, d.metadata, v.parser_version,
+                     v.snapshot_metadata, c.content""",
+        (workspace_id, saved.id),
+    )
+    assert persisted[0] == "audio"
+    assert persisted[1] == {
+        "sourceType": "audio",
+        "fileName": "voice-memo.webm",
+        "fileSize": 1_234,
+        "fileType": "audio/webm",
+    }
+    assert persisted[2] == "ingest-audio-v1"
+    assert persisted[3] == persisted[1]
+    assert persisted[4] == transcript
+    assert persisted[5] == 1
+    assert "\u001aE" not in str(persisted)
 
     with api_environment.client(workspace_id=workspace_id, user_id=user_id) as client:
         assert client.get("/ops/queue").status_code == 200
@@ -302,6 +372,58 @@ def test_list_supports_search_type_and_limit(api_environment):
         assert client.get("/items", params={"query": "   "}).status_code == 422
         assert client.get("/items", params={"type": "file"}).json() == []
         assert client.get("/items", params={"limit": 1}).json() == [second]
+        next_page = client.get(
+            "/items",
+            params={
+                "beforeUpdatedAt": second["updatedAt"],
+                "beforeId": second["id"],
+            },
+        )
+        assert next_page.status_code == 200
+        assert next_page.json() == [first]
+        assert client.get(
+            "/items", params={"beforeUpdatedAt": second["updatedAt"]}
+        ).status_code == 422
+        assert client.get(
+            "/items",
+            params={"beforeUpdatedAt": "2026-09-14T12:00:00", "beforeId": second["id"]},
+        ).status_code == 422
+
+
+def test_keyset_pages_enumerate_more_than_one_hundred_items(api_environment):
+    with api_environment.client() as client:
+        created = [
+            _create_note(
+                client,
+                title=f"History {index:03d}",
+                content=f"Historical source number {index:03d}",
+            )
+            for index in range(105)
+        ]
+
+        collected: list[dict] = []
+        params: dict[str, object] = {"limit": 37}
+        while True:
+            response = client.get("/items", params=params)
+            assert response.status_code == 200, response.text
+            page = response.json()
+            collected.extend(page)
+            if len(page) < 37:
+                break
+            cursor = page[-1]
+            params = {
+                "limit": 37,
+                "beforeUpdatedAt": cursor["updatedAt"],
+                "beforeId": cursor["id"],
+            }
+
+        assert len(collected) == 105
+        assert len({item["id"] for item in collected}) == 105
+        assert {item["id"] for item in collected} == {item["id"] for item in created}
+        oldest = created[0]
+        assert client.get(
+            "/items", params={"query": oldest["title"], "limit": 1}
+        ).json() == [oldest]
 
 
 def test_missing_title_is_derived_from_the_first_content_line(api_environment):
@@ -354,6 +476,164 @@ def test_delete_is_soft_and_hides_the_item(api_environment):
     assert stored == (True, 1, 1)
 
 
+def test_patch_publishes_immutable_version_and_rejects_stale_writer(api_environment):
+    workspace_id = uuid4()
+    with api_environment.client(workspace_id=workspace_id) as client:
+        original = _create_note(
+            client,
+            title="Interview v1",
+            content="Customers need a faster setup.",
+        )
+        response = client.patch(
+            f"/items/{original['id']}",
+            json={
+                "expectedCurrentVersionId": original["currentVersionId"],
+                "title": "Interview v2",
+                "content": "Customers need setup guidance and cited answers.",
+            },
+        )
+        assert response.status_code == 200, response.text
+        updated = response.json()
+        assert updated["id"] == original["id"]
+        assert updated["title"] == "Interview v2"
+        assert updated["content"] == "Customers need setup guidance and cited answers."
+        assert updated["versionNumber"] == 2
+        assert updated["currentVersionId"] != original["currentVersionId"]
+        assert updated["updatedAt"] >= original["updatedAt"]
+
+        stale = client.patch(
+            f"/items/{original['id']}",
+            json={
+                "expectedCurrentVersionId": original["currentVersionId"],
+                "content": "A stale browser must not overwrite v2.",
+            },
+        )
+        assert stale.status_code == 409
+        assert "reload" in stale.json()["detail"]
+
+    persisted = api_environment.fetchone_admin(
+        """SELECT
+                  (SELECT count(*) FROM public.document_versions v
+                    WHERE v.document_id = d.id),
+                  (SELECT array_agg(v.version_number ORDER BY v.version_number)
+                     FROM public.document_versions v WHERE v.document_id = d.id),
+                  (SELECT array_agg(v.state ORDER BY v.version_number)
+                     FROM public.document_versions v WHERE v.document_id = d.id),
+                  (SELECT array_agg(c.content ORDER BY v.version_number, c.ordinal)
+                     FROM public.document_versions v
+                     JOIN public.chunks c ON c.document_version_id = v.id
+                    WHERE v.document_id = d.id),
+                  (SELECT count(*) FROM public.analysis_jobs j
+                    WHERE j.workspace_id = d.workspace_id),
+                  (SELECT count(*) FROM public.activity_events e
+                    WHERE e.workspace_id = d.workspace_id AND e.target_id = d.id
+                      AND e.event_type = 'item_updated'),
+                  (SELECT count(*) FROM public.activity_events e
+                    WHERE e.workspace_id = d.workspace_id AND e.target_id = d.id
+                      AND e.event_type = 'source_replaced')
+             FROM public.documents d
+            WHERE d.workspace_id = %s AND d.id = %s""",
+        (workspace_id, UUID(original["id"])),
+    )
+    assert persisted[:5] == (
+        2,
+        [1, 2],
+        ["ready", "ready"],
+        ["Customers need a faster setup.", "Customers need setup guidance and cited answers."],
+        0,
+    )
+    assert persisted[5:] == (1, 1)
+
+
+def test_patch_title_only_copies_source_and_noop_is_idempotent(api_environment):
+    with api_environment.client() as client:
+        original = _create_note(client, title="Old title", content="Stable source")
+        renamed = client.patch(
+            f"/items/{original['id']}",
+            json={
+                "expectedCurrentVersionId": original["currentVersionId"],
+                "title": "New title",
+            },
+        )
+        assert renamed.status_code == 200, renamed.text
+        renamed_item = renamed.json()
+        assert renamed_item["versionNumber"] == 2
+        assert renamed_item["content"] == original["content"]
+
+        noop = client.patch(
+            f"/items/{original['id']}",
+            json={
+                "expectedCurrentVersionId": renamed_item["currentVersionId"],
+                "title": "New title",
+            },
+        )
+        assert noop.status_code == 200
+        assert noop.json() == renamed_item
+
+
+def test_file_title_edit_preserves_file_metadata_and_is_not_a_source_replacement(api_environment):
+    workspace_id = uuid4()
+    with api_environment.client(workspace_id=workspace_id) as client:
+        original = _create_item(
+            client,
+            type="file",
+            title="Original spec",
+            file_name="spec.pdf",
+            file_size=2_048,
+            file_type="application/pdf",
+        )
+        renamed = client.patch(
+            f"/items/{original['id']}",
+            json={
+                "expectedCurrentVersionId": original["currentVersionId"],
+                "title": "Renamed spec",
+            },
+        )
+        assert renamed.status_code == 200, renamed.text
+        assert renamed.json()["fileSize"] == 2_048
+
+    persisted = api_environment.fetchone_admin(
+        """SELECT d.metadata->>'fileSize',
+                  count(e.id) FILTER (WHERE e.event_type='source_replaced')
+             FROM public.documents d
+             LEFT JOIN public.activity_events e
+               ON e.workspace_id=d.workspace_id AND e.target_id=d.id
+            WHERE d.workspace_id=%s AND d.id=%s
+            GROUP BY d.metadata""",
+        (workspace_id, UUID(original["id"])),
+    )
+    assert persisted == ("2048", 0)
+
+
+def test_patch_is_tenant_safe_and_validates_type_specific_fields(api_environment):
+    workspace_a, workspace_b = uuid4(), uuid4()
+    with api_environment.client(workspace_id=workspace_a) as client_a:
+        note = _create_note(client_a)
+        missing_changes = client_a.patch(
+            f"/items/{note['id']}",
+            json={"expectedCurrentVersionId": note["currentVersionId"]},
+        )
+        assert missing_changes.status_code == 422
+        invalid_field = client_a.patch(
+            f"/items/{note['id']}",
+            json={
+                "expectedCurrentVersionId": note["currentVersionId"],
+                "sourceUrl": "https://example.com",
+            },
+        )
+        assert invalid_field.status_code == 422
+
+    with api_environment.client(workspace_id=workspace_b) as client_b:
+        hidden = client_b.patch(
+            f"/items/{note['id']}",
+            json={
+                "expectedCurrentVersionId": note["currentVersionId"],
+                "content": "Cross-workspace overwrite",
+            },
+        )
+        assert hidden.status_code == 404
+
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -391,6 +671,13 @@ def test_each_request_rechecks_membership_and_write_role(api_environment):
         assert client.post(
             "/items",
             json={"type": "note", "content": "Viewer write"},
+        ).status_code == 403
+        assert client.patch(
+            f"/items/{item['id']}",
+            json={
+                "expectedCurrentVersionId": item["currentVersionId"],
+                "content": "Viewer edit",
+            },
         ).status_code == 403
         assert client.delete(f"/items/{item['id']}").status_code == 403
 

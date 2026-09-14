@@ -12,7 +12,7 @@ from app.models.database import (
     MembershipRequiredError,
     WritePermissionRequiredError,
 )
-from app.services.analytics_service import AnalyticsService
+from app.services.analytics_service import AnalyticsService, track_event_best_effort
 from app.services.auth_service import AuthenticatedUser
 from app.services.import_service import (
     ImportNotFoundError,
@@ -48,11 +48,15 @@ def _analytics_service(
 
 
 def _response(result: ImportResult) -> ImportResponse:
+    if result.batch.document_version_id is None:
+        raise RuntimeError("Completed import has no source version")
     return ImportResponse(
         id=result.batch.id,
         format=result.batch.format,
         file_name=result.batch.file_name,
         item=ItemResponse.from_record(result.item),
+        source_version_id=result.batch.document_version_id,
+        superseded_at=result.batch.superseded_at,
         row_count=result.batch.row_count,
         chunk_count=result.batch.chunk_count,
         analysis_jobs_queued=result.batch.analysis_jobs_queued,
@@ -61,16 +65,12 @@ def _response(result: ImportResult) -> ImportResponse:
 
 def _track_safely(analytics: AnalyticsService, event_type: str, *, batch_id: UUID | None = None) -> None:
     """Product telemetry must not make a successful import unavailable."""
-    try:
-        analytics.track_event(
-            event_type=event_type,
-            target_type="import",
-            target_id=str(batch_id) if batch_id else None,
-        )
-    except Exception:
-        # The event sink is intentionally best-effort during staged migration
-        # deploys. It receives no source content or other sensitive metadata.
-        return
+    track_event_best_effort(
+        analytics,
+        event_type=event_type,
+        target_type="import",
+        target_id=str(batch_id) if batch_id else None,
+    )
 
 
 @router.post(

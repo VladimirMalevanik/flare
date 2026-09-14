@@ -1,6 +1,6 @@
 import type { Item } from "@/lib/data/types";
 
-export const seedItems: Item[] = [
+const rawSeedItems: Array<Omit<Item, "currentVersionId" | "versionNumber" | "updatedAt">> = [
   { id: "interview-14", type: "audio", title: "Customer Interview #14 – Loom Founder", content: "Yeah, honestly when our engineering lead tried setting up the Slack bot, it kept asking for OAuth scope re-authorization three times. He spent 18 minutes on it before just closing the tab. If you can make that one-click, we would have upgraded our 40 seats immediately.", status: "ready", createdAt: "2026-09-04T08:00:00.000Z", extractedFacts: [{ id: "f1", text: "Onboarding took more than 15 minutes because Slack setup required repeated authorization." }, { id: "f2", text: "The team preferred monthly billing during procurement freezes." }, { id: "f3", text: "Audit log export was required by the security team." }], relatedItemIds: ["onboarding-note", "sales-log"] },
   { id: "pricing-url", type: "url", title: "competitor-pricing-tier-update.com", content: "A competitor introduced a lower entry tier and clarified annual pricing on its public pricing page.", sourceUrl: "https://example.com/competitor-pricing-tier-update", status: "ready", createdAt: "2026-09-04T07:00:00.000Z", extractedFacts: [{ id: "f4", text: "The new entry tier targets teams evaluating annual contracts." }], relatedItemIds: ["sales-log"] },
   { id: "onboarding-note", type: "note", title: "Why churn spiked in onboarding step 3", content: "Analytics showed 41% of self-serve accounts drop off at the Connect Slack step. Session recordings point to confusion around OAuth scopes.", status: "ready", createdAt: "2026-09-04T05:00:00.000Z", extractedFacts: [{ id: "f5", text: "41% of self-serve accounts drop off at Connect Slack." }], relatedItemIds: ["interview-14", "support-ticket"] },
@@ -8,3 +8,10 @@ export const seedItems: Item[] = [
   { id: "sales-log", type: "note", title: "Sales Objection Log — October", content: "Three enterprise prospects cited SOC2 Type II as a blocker before a pilot could begin.", status: "ready", createdAt: "2026-09-02T12:00:00.000Z", extractedFacts: [{ id: "f7", text: "SOC2 is cited before enterprise pilots." }], relatedItemIds: ["interview-14"] },
   { id: "support-ticket", type: "note", title: "Intercom Escalation #4092", content: "Can someone walk me through workspace creation? I get an ambiguous error when inviting external contractors.", status: "ready", createdAt: "2026-09-01T12:00:00.000Z", extractedFacts: [], relatedItemIds: ["onboarding-note"] }
 ];
+
+export const seedItems: Item[] = rawSeedItems.map((item) => ({
+  ...item,
+  currentVersionId: `${item.id}-version-1`,
+  versionNumber: 1,
+  updatedAt: item.createdAt,
+}));

@@ -197,8 +197,9 @@ def test_cross_tenant_parent_reference_is_rejected(db, tenants):
         with db.transaction():
             db.execute(
                 """INSERT INTO public.document_versions
-                   (workspace_id, document_id, version_number, content_hash, parser_version)
-                   VALUES (%s, %s, 2, %s, 'v1')""",
+                   (workspace_id, document_id, version_number, content_hash,
+                    parser_version, snapshot_title, snapshot_metadata)
+                   VALUES (%s, %s, 2, %s, 'v1', 'Blocked', '{}'::jsonb)""",
                 (a["workspace"], b["document"], "a" * 64),
             )
     with pytest.raises(InsufficientPrivilege):
@@ -214,11 +215,25 @@ def test_cross_tenant_parent_reference_is_rejected(db, tenants):
             )
 
 
-@pytest.mark.parametrize("operation", ("update_version", "delete_version", "update_chunk", "delete_chunk", "append_chunk"))
+@pytest.mark.parametrize(
+    "operation",
+    (
+        "update_version",
+        "update_snapshot_title",
+        "delete_version",
+        "update_chunk",
+        "delete_chunk",
+        "append_chunk",
+    ),
+)
 def test_ready_snapshots_are_immutable(db, tenants, operation):
     a = tenants[0]
     statements = {
         "update_version": ("UPDATE public.document_versions SET state = 'processing' WHERE id = %s", (a["version"],)),
+        "update_snapshot_title": (
+            "UPDATE public.document_versions SET snapshot_title = 'Relabeled' WHERE id = %s",
+            (a["version"],),
+        ),
         "delete_version": ("DELETE FROM public.document_versions WHERE id = %s", (a["version"],)),
         "update_chunk": ("UPDATE public.chunks SET content = 'Changed' WHERE id = %s", (a["chunk"],)),
         "delete_chunk": ("DELETE FROM public.chunks WHERE id = %s", (a["chunk"],)),
@@ -255,6 +270,35 @@ def test_citation_keeps_original_snapshot_after_new_publication(db, tenants):
         (a["insight"],),
     ).fetchone()
     assert row == (a["version"], "Alpha evidence v1")
+
+
+def test_legacy_version_insert_freezes_the_parent_projection(db, tenants):
+    a = tenants[0]
+    db.execute(
+        """UPDATE public.documents
+              SET title = 'Original label', source_url = 'https://example.com/original',
+                  metadata = '{"sourceType":"file","fileName":"original.txt"}'::jsonb
+            WHERE id = %s""",
+        (a["document"],),
+    )
+    version_id, _ = add_version(db, a["workspace"], a["document"], 2)
+    db.execute(
+        """UPDATE public.documents
+              SET title = 'Current label', source_url = 'https://example.com/current',
+                  metadata = '{"sourceType":"file","fileName":"current.txt"}'::jsonb
+            WHERE id = %s""",
+        (a["document"],),
+    )
+    assert db.execute(
+        """SELECT snapshot_title, snapshot_source_url,
+                  snapshot_metadata->>'fileName'
+             FROM public.document_versions WHERE id = %s""",
+        (version_id,),
+    ).fetchone() == (
+        "Original label",
+        "https://example.com/original",
+        "original.txt",
+    )
 
 
 def test_retrieval_uses_only_current_ready_active_sources(db, tenants):

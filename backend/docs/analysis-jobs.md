@@ -1,10 +1,11 @@
 # Block 3: durable analysis jobs
 
-`POST /items` now creates documents for all supported input types and enqueues
-durable analysis jobs for the new chunks when AI/worker configuration is valid.
-Invalid configuration never rolls back ordinary item capture. The Block 2 analyzer remains a
-pure `Evidence[]` component. Block 4 adds a separate [Flare generation stage](flare-generation.md)
-after completion; extraction still persists only `TextAnalysis` on its job.
+`POST /items`, `PATCH /items/{id}` and `POST /imports` persist source versions
+without enqueuing analysis. A user action or schedule later calls the existing
+durable enqueue path with a chosen source snapshot. The Block 2 analyzer remains
+a pure `Evidence[]` component. Block 4 adds a separate
+[Flare generation stage](flare-generation.md) after completion; extraction still
+persists only `TextAnalysis` on its job.
 
 ## Schema and dedupe
 
@@ -141,9 +142,9 @@ python -m app.workers.analysis_worker          # SIGINT/SIGTERM finish current j
 python -m app.workers.analysis_worker --once   # at most one job; may call Groq
 ```
 
-Trusted ingestion services call `public.enqueue_analysis_job` inside the same
-transaction that creates immutable chunks: `ItemService` handles `/items`, and
-`ImportService` handles `/imports`. Authentication and source selection remain
+The analysis service calls `public.enqueue_analysis_job` only after an explicit
+or scheduled insight request has selected immutable chunks. Item capture/import/
+editing never calls this function. Authentication and source selection remain
 server-owned; database authorization is repeated by the function.
 
 ## Checks and limits

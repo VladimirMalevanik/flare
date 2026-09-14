@@ -25,6 +25,7 @@ from app.services.github_service import (
     GitHubRepositoryUnavailable,
     InvalidGitHubState,
 )
+from app.services.analytics_service import AnalyticsService, track_event_best_effort
 
 router = APIRouter(prefix="/integrations/github", tags=["integrations"])
 
@@ -83,6 +84,13 @@ def service(
     return GitHubConnectionService(database, user.identity, configured, client)
 
 
+def analytics_service(
+    user: Annotated[AuthenticatedUser, Depends(session_user)],
+    database: Annotated[Database, Depends(_database)],
+) -> AnalyticsService:
+    return AnalyticsService(database, user.identity)
+
+
 def repository_response(repository: GitHubRepository) -> GitHubRepositoryResponse:
     return GitHubRepositoryResponse(
         id=repository.id,
@@ -122,9 +130,16 @@ def provider_failure() -> None:
 def start_connection(
     payload: EmptyRequest,
     connection: Annotated[GitHubConnectionService, Depends(service)],
+    analytics: Annotated[AnalyticsService, Depends(analytics_service)],
 ):
     try:
-        return {"authorizationUrl": connection.start()}
+        authorization_url = connection.start()
+        track_event_best_effort(
+            analytics,
+            event_type="github_connection_started",
+            target_type="github_connection",
+        )
+        return {"authorizationUrl": authorization_url}
     except (MembershipRequiredError, WritePermissionRequiredError):
         raise HTTPException(403, "Workspace write permission is required") from None
     except psycopg.Error:
@@ -134,6 +149,7 @@ def start_connection(
 @router.get("/callback", response_class=RedirectResponse)
 def callback(
     connection: Annotated[GitHubConnectionService, Depends(service)],
+    analytics: Annotated[AnalyticsService, Depends(analytics_service)],
     configured: Annotated[GitHubSettings, Depends(github_settings)],
     installation_id: Annotated[int, Query(gt=0)],
     state: Annotated[str, Query(min_length=32, max_length=128)],
@@ -143,6 +159,11 @@ def callback(
     del setup_action
     try:
         connection.complete(state, installation_id, code)
+        track_event_best_effort(
+            analytics,
+            event_type="github_installation_authorized",
+            target_type="github_connection",
+        )
     except InvalidGitHubState:
         raise HTTPException(400, "Invalid or expired GitHub connection state") from None
     except (MembershipRequiredError, WritePermissionRequiredError):
@@ -185,9 +206,17 @@ def repositories(connection: Annotated[GitHubConnectionService, Depends(service)
 def select_repository(
     payload: RepositorySelectionRequest,
     connection: Annotated[GitHubConnectionService, Depends(service)],
+    analytics: Annotated[AnalyticsService, Depends(analytics_service)],
 ):
     try:
-        return connection_response(connection.select_repository(payload.repositoryId))
+        record = connection.select_repository(payload.repositoryId)
+        track_event_best_effort(
+            analytics,
+            event_type="github_repository_selected",
+            target_type="github_connection",
+            metadata={"private": bool(record.repository_private)},
+        )
+        return connection_response(record)
     except GitHubConnectionNotFound:
         raise HTTPException(404, "GitHub is not connected") from None
     except GitHubRepositoryUnavailable:
@@ -201,9 +230,17 @@ def select_repository(
 
 
 @router.delete("", status_code=204)
-def disconnect(connection: Annotated[GitHubConnectionService, Depends(service)]):
+def disconnect(
+    connection: Annotated[GitHubConnectionService, Depends(service)],
+    analytics: Annotated[AnalyticsService, Depends(analytics_service)],
+):
     try:
         connection.disconnect()
+        track_event_best_effort(
+            analytics,
+            event_type="github_disconnected",
+            target_type="github_connection",
+        )
     except (MembershipRequiredError, WritePermissionRequiredError):
         raise HTTPException(403, "Workspace write permission is required") from None
     except psycopg.Error:

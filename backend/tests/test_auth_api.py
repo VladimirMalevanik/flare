@@ -54,7 +54,7 @@ def test_foreign_items_and_forged_identity_headers(client, auth):
     foreign_email, foreign_token = account(auth)
     foreign = auth.current(foreign_token)
     from app.services.item_service import ItemService
-    other_item = ItemService(auth.database, foreign.identity, enqueue_analysis=False).create_note(
+    other_item = ItemService(auth.database, foreign.identity).create_note(
         title='Foreign', content='Foreign secret'
     )
     headers = {'X-Workspace-Id': str(foreign.workspace_id), 'X-User-Id': foreign.user_id}
