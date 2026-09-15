@@ -20,16 +20,16 @@ from app.services.voice_service import VoiceTranscriptService
 
 router = APIRouter(prefix="/voice", tags=["voice"])
 
-_MEDIA_EXTENSIONS = {
-    "audio/webm": "webm",
-    "audio/wav": "wav",
-    "audio/x-wav": "wav",
-    "audio/wave": "wav",
-    "audio/mpeg": "mp3",
-    "audio/mp3": "mp3",
-    "audio/mp4": "m4a",
-    "audio/x-m4a": "m4a",
-    "audio/ogg": "ogg",
+_MEDIA_TYPES = {
+    "audio/webm": ("webm", "audio/webm"),
+    "audio/wav": ("wav", "audio/wav"),
+    "audio/x-wav": ("wav", "audio/wav"),
+    "audio/wave": ("wav", "audio/wav"),
+    "audio/mpeg": ("mp3", "audio/mpeg"),
+    "audio/mp3": ("mp3", "audio/mpeg"),
+    "audio/mp4": ("m4a", "audio/mp4"),
+    "audio/x-m4a": ("m4a", "audio/mp4"),
+    "audio/ogg": ("ogg", "audio/ogg"),
 }
 
 
@@ -69,15 +69,6 @@ def _voice_error(error: VoiceError) -> HTTPException:
         return HTTPException(status_code=429, detail="Voice transcription is temporarily busy")
     if error.code == "timeout":
         return HTTPException(status_code=504, detail="Voice transcription timed out")
-    if error.code in {
-        "configuration",
-        "provider_auth",
-        "network",
-        "provider_server",
-        "provider_transient",
-        "provider_failure",
-    }:
-        return HTTPException(status_code=503, detail="Voice transcription is temporarily unavailable")
     return HTTPException(status_code=503, detail="Voice transcription is temporarily unavailable")
 
 
@@ -105,9 +96,10 @@ async def transcribe_voice(
 
     content_type = request.headers.get("content-type", "")
     base_type = content_type.split(";", 1)[0].strip().lower()
-    extension = _MEDIA_EXTENSIONS.get(base_type)
-    if extension is None:
+    media = _MEDIA_TYPES.get(base_type)
+    if media is None:
         raise HTTPException(status_code=415, detail="Unsupported voice recording type")
+    extension, persisted_media_type = media
 
     content = await _read_bounded_audio(
         request,
@@ -137,7 +129,7 @@ async def transcribe_voice(
             max_upload_bytes=settings.max_upload_bytes,
         ).persist(
             transcript,
-            media_type=base_type,
+            media_type=persisted_media_type,
             upload_size=len(content),
         )
     except MediaInspectionError as error:
