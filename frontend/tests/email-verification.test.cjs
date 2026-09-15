@@ -131,9 +131,11 @@ test("registration routes a verification-required account to the pending page", 
       email: "new@flare.test",
       password: "password",
       name: "New User",
+      legalAccepted: "on",
     },
   });
   assert.deepEqual(navigations, ["/verify-email?pending=1"]);
+  assert.equal(tree.find((node) => node.props?.name === "legalAccepted").props.required, true);
 });
 
 test("login verification error offers an enumeration-safe resend", async () => {

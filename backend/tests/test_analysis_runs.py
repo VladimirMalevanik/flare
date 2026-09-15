@@ -172,7 +172,10 @@ def test_status_membership_and_stages(jobs, admin_url):
 def test_register_notes_analyze_worker_flares_e2e(jobs, admin_url, empty):
     cfg = Settings(database_url=None,cors_origins=['http://testserver'],environment='test')
     with TestClient(create_app(cfg,database=jobs[0].database),headers={'Origin':'http://testserver'}) as c:
-        assert c.post('/auth/register',json={'email':f'{uuid4()}@jobs-test.invalid','password':'a-long-test-password','name':'Analyze Test'}).status_code == 201
+        assert c.post('/auth/register',json={
+            'email':f'{uuid4()}@jobs-test.invalid','password':'a-long-test-password','name':'Analyze Test',
+            'termsAccepted':True,'privacyAccepted':True,
+        }).status_code == 201
         me = c.get('/auth/me').json()
         jobs[2].append(WorkspaceIdentity(UUID(me['workspace']['id']),me['user']['id']))
         for text in (TEXT, 'The deadline is this week.', 'We decided to finish the MVP before adding integrations.'):

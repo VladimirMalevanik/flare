@@ -135,7 +135,10 @@ shared Capture component, including when opened from the empty Flares state.
 
 Browser requests use same-origin `/api`, rewritten to FastAPI; server session
 bootstrap uses `API_INTERNAL_URL`. Set that URL at both build and runtime.
-`POST /auth/register` accepts `{email, password, name}` and may set a limited
+`POST /auth/register` accepts
+`{email, password, name, termsAccepted: true, privacyAccepted: true}`. Both
+acceptance fields are required and migration `0017` records the current Terms and
+Privacy versions atomically with the account. Registration may set a limited
 HttpOnly session while email verification is pending. `POST /auth/login`
 accepts `{email, password}` and returns the stable code
 `email_verification_required` for a correct but unverified account.

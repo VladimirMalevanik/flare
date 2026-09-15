@@ -131,7 +131,7 @@ def main(*, verify_analysis_runs=False):
                 run(migrate + ['head'], env=env)
                 with psycopg.connect(dsn) as conn:
                     assert snapshot(conn) == preserved
-                    assert conn.execute('SELECT version_num FROM alembic_version').fetchone() == ('0016',)
+                    assert conn.execute('SELECT version_num FROM alembic_version').fetchone() == ('0017',)
                     assert conn.execute('SELECT count(*) FROM github_connection_states').fetchone() == (0,)
                     assert conn.execute('SELECT count(*) FROM github_connections').fetchone() == (0,)
                     assert conn.execute('SELECT count(*) FROM activity_events').fetchone() == (0,)
@@ -156,7 +156,7 @@ def main(*, verify_analysis_runs=False):
                     assert not conn.execute(
                         "SELECT has_table_privilege('flare_worker','analysis_cycles','SELECT')"
                     ).fetchone()[0]
-                print(f'PASS ({args.provider}): 0007 -> 0016; all existing data preserved; repeat upgrade; email, GitHub, analytics, import provenance, daily-analysis RLS and worker isolation')
+                print(f'PASS ({args.provider}): 0007 -> 0017; all existing data preserved; repeat upgrade; email, GitHub, analytics, import provenance, daily-analysis RLS, legal acceptance and worker isolation')
             print(f'PASS ({args.provider}): 0005 -> 0006; eleven tables preserved; historical ordinals preserved; repeat startup; legacy identity/RLS; old-parent enqueue; atomic handoff')
         finally:
             run([binary('pg_ctl'), '-D', data, '-m', 'fast', '-w', 'stop'])

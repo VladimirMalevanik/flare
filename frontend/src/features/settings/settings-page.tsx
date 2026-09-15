@@ -572,6 +572,15 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
             <span className="muted">Not configured</span>
           )}
         </SettingRow>
+        <SettingRow
+          title="Legal"
+          description="Review how Flare handles your data and the terms for using the service."
+        >
+          <span className="legal-inline-links">
+            <Link className="button" href="/privacy">Privacy</Link>
+            <Link className="button" href="/terms">Terms</Link>
+          </span>
+        </SettingRow>
       </SettingsSection>
     </section>
   );

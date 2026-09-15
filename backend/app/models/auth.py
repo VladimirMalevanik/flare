@@ -33,6 +33,12 @@ class AuthRepository:
                VALUES (%s,%s,%s,%s,%s)""",
             (user_id, email, password_hash, name, workspace_id),
         )
+        self.connection.execute(
+            """INSERT INTO public.auth_legal_acceptances(
+                   user_id,terms_version,privacy_version
+               ) VALUES (%s,%s,%s)""",
+            (user_id, "2026-09-15", "2026-09-15"),
+        )
 
     def insert_session(
         self, token_hash: str, user_id: str, workspace_id, lifetime: int

@@ -14,6 +14,10 @@ def test_health_does_not_require_database():
     response = TestClient(app).get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert response.headers["permissions-policy"] == "camera=(), geolocation=(), microphone=(self)"
 
 
 def test_raw_uvicorn_access_logger_is_disabled():

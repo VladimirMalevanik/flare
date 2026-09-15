@@ -25,6 +25,7 @@ def test_missing_or_invalid_ai_config_never_calls_provider_for_notes(auth, monke
     with TestClient(create_app(settings), headers={'Origin': 'http://testserver'}) as client:
         assert client.post('/auth/register', json={
             'email': f'{uuid4()}@auth-test.invalid', 'password': 'a-long-test-password', 'name': 'Test',
+            'termsAccepted': True, 'privacyAccepted': True,
         }).status_code == 201
         created = client.post('/items', json={'type': 'note', 'content': 'No AI required.'})
         assert created.status_code == 201

@@ -80,6 +80,7 @@ def github_environment():
             emails.append(email)
             response = client.post("/auth/register", json={
                 "email": email, "password": "password", "name": "GitHub Test",
+                "termsAccepted": True, "privacyAccepted": True,
             })
             assert response.status_code == 201, response.text
         return client, provider

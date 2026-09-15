@@ -1,6 +1,6 @@
 """Cookie authentication endpoints and server-owned identity dependencies."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -47,6 +47,8 @@ class LoginRequest(BaseModel):
 class RegisterRequest(LoginRequest):
     password: str = Field(min_length=8, max_length=128)
     name: str = Field(min_length=1, max_length=100)
+    termsAccepted: Literal[True]
+    privacyAccepted: Literal[True]
 
     @field_validator("name")
     @classmethod

@@ -111,6 +111,16 @@ def create_app(
         try:
             response = await call_next(request)
             response_status = response.status_code
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            response.headers["Permissions-Policy"] = (
+                "camera=(), geolocation=(), microphone=(self)"
+            )
+            if configured.secure_cookies:
+                response.headers["Strict-Transport-Security"] = (
+                    "max-age=31536000; includeSubDomains"
+                )
             return response
         finally:
             route = request.scope.get("route")

@@ -122,11 +122,11 @@ ingestion, URL fetching, binary file/audio ingestion и quota accounting не в
 Изменения опубликованной схемы оформляйте новыми миграциями. `db/schema.sql`
 принадлежит `0001` и после публикации не переписывается. Текущая linear chain:
 `0001` → `0002` → `0003` → `0004` → `0005` → `0006` → `0007` → `0008`
-→ `0009` → `0010` → `0011` → `0012` → `0013` → `0014` → `0015` → `0016`. `0008` добавляет
+→ `0009` → `0010` → `0011` → `0012` → `0013` → `0014` → `0015` → `0016` → `0017`. `0008` добавляет
 email verification; `0009` — GitHub connection tables; `0010`–`0013` — source
 types, queue maintenance, activity events и import batches; `0014` — optimistic
 versioned editing и точную import provenance; `0015` — ежедневные schedules/cycles
-и immutable source snapshots с DB-ограничением один цикл на local day; `0016`
-добавляет durable outbox для email о scheduled Flares. Readiness требует точную
-`0016`. Некоторые downgrade intentionally запрещены и
+и immutable source snapshots с DB-ограничением один цикл на local day; `0016` —
+durable outbox для email о scheduled Flares; `0017` хранит версии Terms и Privacy,
+явно принятые при регистрации. Readiness требует точную `0017`. Некоторые downgrade intentionally запрещены и
 требуют reviewed restore plan.

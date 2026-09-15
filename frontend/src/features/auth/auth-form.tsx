@@ -31,7 +31,13 @@ export function AuthForm({ register = false }: { register?: boolean }) {
       const result = await authRequest(register ? "register" : "login", {
         email,
         password: data.get("password"),
-        ...(register ? { name: data.get("name") } : {}),
+        ...(register
+          ? {
+              name: data.get("name"),
+              termsAccepted: data.get("legalAccepted") === "on",
+              privacyAccepted: data.get("legalAccepted") === "on",
+            }
+          : {}),
       });
       if (register && result.emailVerificationRequired) {
         window.location.replace("/verify-email?pending=1");
@@ -142,6 +148,20 @@ export function AuthForm({ register = false }: { register?: boolean }) {
               Use at least 8 characters.
             </p>
           )}
+          {register && (
+            <label className="legal-consent">
+              <input
+                name="legalAccepted"
+                type="checkbox"
+                required
+                disabled={pending}
+              />
+              <span>
+                I agree to the <Link href="/terms">Terms of Service</Link> and
+                acknowledge the <Link href="/privacy">Privacy Policy</Link>.
+              </span>
+            </label>
+          )}
           {notice && <p role="status">{notice}</p>}
           {error && (
             <p className="auth-error" role="alert">
@@ -172,6 +192,10 @@ export function AuthForm({ register = false }: { register?: boolean }) {
             {register ? "Sign in" : "Create account"}
           </Link>
         </p>
+        <nav className="auth-legal-links" aria-label="Legal">
+          <Link href="/privacy">Privacy</Link>
+          <Link href="/terms">Terms</Link>
+        </nav>
       </section>
     </main>
   );
