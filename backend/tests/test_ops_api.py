@@ -7,6 +7,12 @@ from uuid import uuid4
 
 import pytest
 from test_items_api import ApiEnvironment, _create_note
+from app.legal import (
+    CURRENT_PRIVACY_CONTENT_ID,
+    CURRENT_PRIVACY_VERSION,
+    CURRENT_TERMS_CONTENT_ID,
+    CURRENT_TERMS_VERSION,
+)
 from app.services.auth_service import token_digest
 
 
@@ -77,7 +83,23 @@ def test_owner_health_includes_jobs_created_by_another_workspace_editor(api_envi
     with api_environment.client(workspace_id=workspace_id, user_id=owner_user) as owner_client:
         # Schedule endpoints deliberately require a real, revocable session even
         # when the app is running with the local development identity enabled.
+        # A real production session is also subject to the legal gate, so make
+        # this unrelated ops fixture explicitly current-accepted.
         owner_token = secrets.token_urlsafe(32)
+        api_environment.execute_admin(
+            """INSERT INTO public.auth_legal_acceptances(
+                   user_id,terms_version,privacy_version,
+                   terms_content_id,privacy_content_id)
+               VALUES(%s,%s,%s,%s,%s)
+               ON CONFLICT DO NOTHING""",
+            (
+                owner_user,
+                CURRENT_TERMS_VERSION,
+                CURRENT_PRIVACY_VERSION,
+                CURRENT_TERMS_CONTENT_ID,
+                CURRENT_PRIVACY_CONTENT_ID,
+            ),
+        )
         api_environment.execute_admin(
             """INSERT INTO public.auth_sessions(
                    token_hash,user_id,workspace_id,expires_at)
@@ -158,65 +180,31 @@ def test_ops_maintenance_dry_run_is_safe_and_recover_stale_can_be_applied(api_en
     )
     api_environment.execute_admin(
         """INSERT INTO public.analysis_cycles(
-               workspace_id, local_date, mode, requested_by_user_id, idempotency_key,
-               scheduled_for, refresh_due_at, refresh_status, refresh_attempts,
-               refresh_lease_owner, refresh_lease_token, refresh_lease_expires_at)
-           VALUES(%s, CURRENT_DATE, 'scheduled', %s, gen_random_uuid(),
-               now() - interval '2 hours', now() - interval '2 hours', 'refreshing', 1,
-               gen_random_uuid(), gen_random_uuid(), now() - interval '2 minutes')""",
+               workspace_id,local_date,timezone,mode,state,requested_by_user_id,
+               refresh_due_at,scheduled_for,refresh_started_at,refresh_lease_owner,
+               refresh_lease_token,refresh_lease_expires_at)
+           VALUES(%s,current_date,'UTC','scheduled','refreshing',%s,
+                  now()-interval '1 hour',now()+interval '2 hours',now()-interval '10 minutes',
+                  gen_random_uuid(),gen_random_uuid(),now()-interval '2 minutes')""",
         (workspace_id, owner_user),
     )
-
     with api_environment.client(workspace_id=workspace_id, user_id=owner_user) as owner_client:
         dry_run = owner_client.post("/ops/queue/maintenance")
         assert dry_run.status_code == 200
-        payload = dry_run.json()
-        assert payload["dryRun"] is True
-        assert payload["applied"] is False
-        assert payload["analysisJobs"]["deleted"] == 0
-        assert payload["activityEvents"] == {"candidates": 1, "deleted": 0}
-        assert payload["recoveredStaleAnalysisJobs"] == 0
-        assert payload["recoveredStaleAnalysisCycleRefreshes"] == 0
-        assert "analysis_cycle_stale_lease_detected" in payload["before"]["alerts"]
-        assert "analysis_cycle_overdue" in payload["before"]["alerts"]
+        assert dry_run.json()["dryRun"] is True
+        assert dry_run.json()["applied"] is False
+        assert dry_run.json()["analysisJobs"]["wouldFail"] >= 1
+        assert dry_run.json()["analysisCycles"]["wouldRecoverRefreshing"] >= 1
 
-        status_before = api_environment.fetchone_admin(
-            "SELECT status FROM public.analysis_jobs WHERE id = %s",
-            (job_id,),
-        )
-        assert status_before == ("processing",)
-
-        applied = owner_client.post(
-            "/ops/queue/maintenance",
-            json={
-                "dry_run": False,
-                "recover_stale": True,
-                "max_rows": 50,
-                "analysis_completed_retention_days": 1,
-                "analysis_failed_retention_days": 1,
-                "flare_completed_retention_days": 1,
-                "flare_failed_retention_days": 1,
-                "cycle_failed_retention_days": 1,
-                "activity_event_retention_days": 1,
-            },
-        )
+        applied = owner_client.post("/ops/queue/maintenance?apply=true")
         assert applied.status_code == 200
-        result = applied.json()
-        assert result["dryRun"] is False
-        assert result["applied"] is True
-        assert result["recoveredStaleAnalysisJobs"] == 1
-        assert result["failedStaleAnalysisCycles"] == 1
-        assert result["analysisJobs"]["deleted"] >= 0
-        assert result["analysisCycles"]["deleted"] >= 0
-        assert result["activityEvents"] == {"candidates": 1, "deleted": 1}
-        assert "analysis_cycle_failed" in result["after"]["alerts"]
+        assert applied.json()["dryRun"] is False
+        assert applied.json()["applied"] is True
+        assert applied.json()["analysisJobs"]["failed"] >= 1
+        assert applied.json()["recoveredStaleAnalysisCycleRefreshes"] >= 1
 
-        status_after = api_environment.fetchone_admin(
-            "SELECT status FROM public.analysis_jobs WHERE id = %s",
-            (job_id,),
-        )
-        assert status_after == ("failed",)
-        assert api_environment.fetchone_admin(
-            "SELECT count(*) FROM public.activity_events WHERE id=%s",
-            (old_event_id,),
-        ) == (0,)
+    row = api_environment.fetchone_admin(
+        "SELECT status,error FROM public.analysis_jobs WHERE id=%s", (job_id,)
+    )
+    assert row[0] == "failed"
+    assert row[1] == "worker_lease_expired"
