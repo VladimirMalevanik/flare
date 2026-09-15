@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.models.auth import AuthRepository
 from app.models.database import MembershipRequiredError
 from app.services.auth_service import (
     AuthService,
@@ -56,6 +57,12 @@ class RegisterRequest(LoginRequest):
         if not value.strip():
             raise ValueError("Name is required")
         return value.strip()
+
+
+class LegalAcceptanceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    termsAccepted: Literal[True]
+    privacyAccepted: Literal[True]
 
 
 class VerifyEmailRequest(BaseModel):
@@ -121,7 +128,7 @@ def current_user(request: Request) -> AuthenticatedUser:
                     (user_id,),
                 ).fetchone()
             return AuthenticatedUser(
-                user_id, workspace_id, "", name, membership["role"], name, True
+                user_id, workspace_id, "", name, membership["role"], name, True, True
             )
         except MembershipRequiredError:
             raise HTTPException(403, "Workspace membership is required") from None
@@ -142,6 +149,12 @@ def verified_user(
             403,
             "email_verification_required",
             "Verify your email to continue.",
+        )
+    if not user.legal_accepted:
+        raise auth_error(
+            403,
+            "legal_acceptance_required",
+            "Review and accept the current Terms of Service and Privacy Policy to continue.",
         )
     return user
 
@@ -218,6 +231,7 @@ def me(
             "email": user.email,
             "name": user.name,
             "emailVerified": user.email_verified,
+            "legalAccepted": user.legal_accepted,
         },
         "workspace": {
             "id": str(user.workspace_id),
@@ -225,6 +239,20 @@ def me(
             "role": user.role,
         },
     }
+
+
+@router.post("/accept-legal")
+def accept_legal(
+    payload: LegalAcceptanceRequest,
+    request: Request,
+    user: Annotated[AuthenticatedUser, Depends(current_user)],
+):
+    database = request.app.state.database
+    if database is None:
+        raise HTTPException(503, "Database is unavailable")
+    with database.connection() as connection, connection.transaction():
+        AuthRepository(connection).accept_current_legal(user.user_id)
+    return {"ok": True}
 
 
 @router.post("/logout", status_code=204)
