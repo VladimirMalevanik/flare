@@ -33,7 +33,8 @@ function capture(draft) {
     '@/components/workspace-context': { useWorkspace: () => ({ captureOpen: true, draft, captureOrbSize: 'medium', openCapture() {}, closeCapture() {}, setDraft() {}, refresh() {} }) },
     '@/lib/data': { dataProvider: { async createItem(input) { requests.push(input); return { id: 'saved' }; }, async importTextFile() { return { item: { id: 'imported' } }; }, async trackEvent() {} }, dataErrorMessage: () => 'error' },
     '@/lib/storage/preferences': {},
-    './use-voice-capture': { useVoiceCapture: () => ({ state: 'idle', cancel() {}, start() {}, stop() {} }) },
+    '@/lib/voice': { async transcribeVoice() { return { id: 'voice-saved' }; } },
+    './use-voice-capture': { useVoiceCapture: () => ({ state: 'idle', recording: null, error: '', cancel() {}, start() {}, stop() {} }) },
   };
   return { tree: nodes(load('../src/features/capture/capture.tsx', mocks).Capture()), requests, messages };
 }
@@ -50,12 +51,14 @@ for (const draft of ['A project note', 'https://example.com/context']) {
     assert.equal(requests[0].sourceUrl, undefined);
   });
 }
-test('Capture accepts bounded text files, keeps keyboard submission, and gates voice', () => {
+test('Capture accepts bounded text files, keeps keyboard submission, and gates conflicting voice input', () => {
   const { tree, requests, messages } = capture('A note');
   assert.equal(tree.find(n => n.props?.['aria-label'] === 'Add file').props.disabled, false);
-  const voice = tree.find(n => n.props?.['aria-label'] === 'Voice transcription coming soon');
+  const voice = tree.find(n => n.props?.['aria-label'] === 'Record a voice memo');
   assert.ok(voice);
   assert.equal(voice.props.disabled, true);
+  const emptyVoice = capture('').tree.find(n => n.props?.['aria-label'] === 'Record a voice memo');
+  assert.equal(emptyVoice.props.disabled, false);
   assert.equal(tree.filter(n => n.type === 'input' && n.props.type === 'file').length, 1);
   let prevented = 0;
   const file = { name: 'context.csv', size: 25, type: 'text/csv' };
@@ -80,12 +83,14 @@ test('Capture preserves a UTF-8 BOM so file size and uploaded bytes agree', () =
   assert.equal(Buffer.byteLength(bomText, 'utf8'), 4);
 });
 test('Sources loads through provider with headings outside grids and margin-safe labels', async () => {
-  const { seedSources } = load('../src/mocks/sources.ts', {});
+  const { sourceCatalog } = load('../src/lib/data/source-catalog.ts', {
+    './types': {},
+  });
   const state = [];
   let cursor = 0, effect, calls = 0;
-  const providerSources = seedSources.map(s => ({ ...s, name: `Provider: ${s.name}` }));
+  const providerSources = sourceCatalog.map(s => ({ ...s, name: `Provider: ${s.name}` }));
   const { SourcesPage } = load('../src/features/sources/sources-page.tsx', {
-     'react/jsx-runtime': jsx, '@/components/icons': { Icon: 'icon' },
+    'react/jsx-runtime': jsx, '@/components/icons': { Icon: 'icon' },
     react: {
       useState(initial) { const index = cursor++; if (!(index in state)) state[index] = initial; return [state[index], value => { state[index] = value; }]; },
       useEffect(fn) { effect = fn; },
@@ -100,16 +105,18 @@ test('Sources loads through provider with headings outside grids and margin-safe
   cursor = 0;
   const tree = nodes(SourcesPage());
   assert.ok(tree.some(n => n.type === 'h3' && n.props.children === 'Provider: Manual capture'));
+  assert.ok(tree.some(n => n.type === 'h3' && n.props.children === 'Provider: Voice'));
   assert.ok(tree.filter(n => n.props?.className === 'eyebrow muted').every(n => n.type === 'p'));
   cleanup();
   const groups = tree.filter(n => n.props?.className === 'source-group');
   assert.equal(groups.length, 2);
   const grids = tree.filter(n => n.props?.className === 'source-grid');
   assert.equal(grids.length, 2);
-  assert.equal(grids[0].props.children.length, 1);
+  assert.equal(grids[0].props.children.length, 2);
   for (const grid of grids) assert.ok(grid.props.children.every(n => n.type === 'article'));
-  assert.equal(seedSources[0].scope, 'Notes, links, and text imports');
-  assert.equal(seedSources[0].channels.join(','), 'Notes,Links,CSV,TXT,Markdown');
-  assert.ok(seedSources.slice(1).every(s => s.status === 'coming-soon'));
+  assert.equal(sourceCatalog[0].scope, 'Notes, links, and text imports');
+  assert.equal(sourceCatalog[0].channels.join(','), 'Notes,Links,CSV,TXT,Markdown');
+  assert.equal(sourceCatalog.find(s => s.id === 'voice').status, 'ready');
+  assert.ok(sourceCatalog.filter(s => !['manual-capture', 'voice'].includes(s.id)).every(s => s.status === 'coming-soon'));
   assert.ok(nodes(grids[1]).filter(n => n.type === 'button').every(n => n.props.disabled));
 });

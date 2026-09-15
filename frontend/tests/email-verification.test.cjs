@@ -19,6 +19,14 @@ function load(relative, mocks = {}, globals = {}) {
     exports,
     require(name) {
       if (name in mocks) return mocks[name];
+      if (name === "@/lib/support") {
+        return {
+          DEFAULT_SUPPORT_EMAIL: "support@flare4u.tech",
+          supportMailto(subject) {
+            return `mailto:support@flare4u.tech?subject=${encodeURIComponent(subject)}`;
+          },
+        };
+      }
       throw Error(`Unexpected import ${name}`);
     },
     ...globals,
@@ -131,9 +139,12 @@ test("registration routes a verification-required account to the pending page", 
       email: "new@flare.test",
       password: "password",
       name: "New User",
+      legalAccepted: "on",
     },
   });
   assert.deepEqual(navigations, ["/verify-email?pending=1"]);
+  assert.equal(tree.find((node) => node.props?.name === "legalAccepted").props.required, true);
+  assert.ok(tree.some((node) => String(node.props?.href).startsWith("mailto:support@flare4u.tech")));
 });
 
 test("login verification error offers an enumeration-safe resend", async () => {
@@ -189,7 +200,7 @@ test("login verification error offers an enumeration-safe resend", async () => {
   assert.equal(calls[1][1].email, "user@flare.test");
 });
 
-test("verification page covers pending, success, invalid, and resend states", async () => {
+test("verification page covers pending, success, invalid, resend, and support states", async () => {
   for (const succeeds of [true, false]) {
     const hooks = hookHarness();
     const calls = [];
@@ -231,6 +242,7 @@ test("verification page covers pending, success, invalid, and resend states", as
           node.props?.children === (succeeds ? "Email verified" : "Link unavailable"),
       ),
     );
+    assert.ok(tree.some((node) => String(node.props?.href).startsWith("mailto:support@flare4u.tech")));
     assert.equal(calls[0][0], "verify-email");
     if (!succeeds) {
       const resend = tree.find(

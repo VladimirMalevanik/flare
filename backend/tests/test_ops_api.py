@@ -7,6 +7,12 @@ from uuid import uuid4
 
 import pytest
 from test_items_api import ApiEnvironment, _create_note
+from app.legal import (
+    CURRENT_PRIVACY_CONTENT_ID,
+    CURRENT_PRIVACY_VERSION,
+    CURRENT_TERMS_CONTENT_ID,
+    CURRENT_TERMS_VERSION,
+)
 from app.services.auth_service import token_digest
 
 
@@ -77,7 +83,23 @@ def test_owner_health_includes_jobs_created_by_another_workspace_editor(api_envi
     with api_environment.client(workspace_id=workspace_id, user_id=owner_user) as owner_client:
         # Schedule endpoints deliberately require a real, revocable session even
         # when the app is running with the local development identity enabled.
+        # A real session is also subject to the legal gate, so this unrelated
+        # ops fixture explicitly accepts the current reviewed documents.
         owner_token = secrets.token_urlsafe(32)
+        api_environment.execute_admin(
+            """INSERT INTO public.auth_legal_acceptances(
+                   user_id,terms_version,privacy_version,
+                   terms_content_id,privacy_content_id)
+               VALUES(%s,%s,%s,%s,%s)
+               ON CONFLICT DO NOTHING""",
+            (
+                owner_user,
+                CURRENT_TERMS_VERSION,
+                CURRENT_PRIVACY_VERSION,
+                CURRENT_TERMS_CONTENT_ID,
+                CURRENT_PRIVACY_CONTENT_ID,
+            ),
+        )
         api_environment.execute_admin(
             """INSERT INTO public.auth_sessions(
                    token_hash,user_id,workspace_id,expires_at)

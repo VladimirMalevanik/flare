@@ -40,7 +40,7 @@ PostgreSQL пользователи `flare_owner`, `flare_app`, `flare_worker` �
 
 | Endpoint | JSON / результат |
 | --- | --- |
-| `POST /auth/register` | `{email, password, name}` → 201, ограниченная cookie; один workspace с ролью owner |
+| `POST /auth/register` | `{email, password, name, termsAccepted: true, privacyAccepted: true}` → 201, versioned legal acceptance, ограниченная cookie; один workspace с ролью owner |
 | `POST /auth/login` | `{email, password}` → 200, новая cookie; неподтверждённый email → `email_verification_required` |
 | `POST /auth/logout` | → 204, отзыв текущей сессии и удаление cookie |
 | `GET /auth/me` | `{user: {id, email, name, emailVerified}, workspace: {id, name, role}}` |

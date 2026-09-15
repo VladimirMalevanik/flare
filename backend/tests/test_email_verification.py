@@ -203,6 +203,8 @@ def register(client: TestClient):
         "email": f"{uuid4()}@auth-test.invalid",
         "password": "long-secret-password",
         "name": "Verification User",
+        "termsAccepted": True,
+        "privacyAccepted": True,
     }
     response = client.post("/auth/register", json=payload)
     assert response.status_code == 201, response.text
@@ -294,6 +296,8 @@ def test_http_registration_delivery_failure_is_stable_and_recoverable(auth):
         "email": f"{uuid4()}@auth-test.invalid",
         "password": "long-secret-password",
         "name": "Delivery Recovery",
+        "termsAccepted": True,
+        "privacyAccepted": True,
     }
     with TestClient(
         create_app(configured, email_sender=sender),

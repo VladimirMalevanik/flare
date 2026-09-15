@@ -19,6 +19,7 @@ from app.api.analysis_schedule import router as analysis_schedule_router
 from app.api.github import router as github_router
 from app.api.imports import router as imports_router
 from app.api.export import router as export_router
+from app.api.voice import router as voice_router
 from app.api import ops
 from app.config import Settings, settings
 from app.models.database import Database, WorkspaceIdentity
@@ -96,7 +97,7 @@ def create_app(
         response = await call_next(request)
         if request.url.path.startswith((
             "/auth", "/items", "/imports", "/flares", "/analyze", "/analysis-runs",
-            "/integrations", "/ops", "/analytics",
+            "/integrations", "/ops", "/analytics", "/voice",
             "/analysis-schedule", "/analysis/daily-status",
             "/export",
         )):
@@ -111,6 +112,16 @@ def create_app(
         try:
             response = await call_next(request)
             response_status = response.status_code
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            response.headers["Permissions-Policy"] = (
+                "camera=(), geolocation=(), microphone=(self)"
+            )
+            if configured.secure_cookies:
+                response.headers["Strict-Transport-Security"] = (
+                    "max-age=31536000; includeSubDomains"
+                )
             return response
         finally:
             route = request.scope.get("route")
@@ -141,6 +152,7 @@ def create_app(
     application.include_router(analysis_schedule_router)
     application.include_router(github_router)
     application.include_router(export_router)
+    application.include_router(voice_router)
     application.include_router(ops.router)
     application.include_router(analytics_router)
     application.include_router(router)

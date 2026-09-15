@@ -9,6 +9,7 @@ import {
   authRequest,
   type Session,
 } from "@/lib/auth/session";
+import { DEFAULT_SUPPORT_EMAIL, supportMailto } from "@/lib/support";
 
 type VerificationState = "pending" | "awaiting" | "success" | "invalid";
 
@@ -127,6 +128,8 @@ export function VerifyEmail({
           {(state === "awaiting" || state === "invalid") && (
             <Link href="/login">Back to sign in</Link>
           )}
+          <a href={supportMailto("Flare email verification help")}>Contact support</a>
+          <p className="muted auth-support-email">{DEFAULT_SUPPORT_EMAIL}</p>
         </div>
       </section>
     </main>

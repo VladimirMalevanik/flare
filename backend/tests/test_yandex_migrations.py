@@ -306,3 +306,17 @@ def test_release_followup_migration_keeps_private_notifications_behind_capabilit
         'finish_scheduled_flare_notification(uuid,uuid,text,double precision)',
     ):
         assert f'GRANT EXECUTE ON FUNCTION public.{signature} TO flare_worker' in sql
+
+
+def test_legal_acceptance_migration_is_private_and_immutable(monkeypatch):
+    migration = load_migration('0017_legal_acceptances.py')
+    operation = FakeOp()
+    monkeypatch.setattr(migration, 'op', operation)
+    migration.upgrade()
+    sql = '\n'.join(operation.statements)
+    assert 'CREATE TABLE public.auth_legal_acceptances' in sql
+    assert 'REFERENCES public.auth_users(id) ON DELETE CASCADE' in sql
+    assert 'REVOKE ALL ON public.auth_legal_acceptances FROM PUBLIC' in sql
+    assert 'GRANT SELECT, INSERT ON public.auth_legal_acceptances TO flare_app' in sql
+    assert 'UPDATE ON public.auth_legal_acceptances' not in sql
+    assert 'DELETE ON public.auth_legal_acceptances' not in sql

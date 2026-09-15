@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSession } from "@/components/auth-session";
 import { apiBaseUrl, authRequest } from "@/lib/auth/session";
 import { Icon } from "@/components/icons";
-import { Dialog } from "@/components/dialog";
 import {
   useWorkspace,
   type CaptureOrbSize,
@@ -46,7 +45,6 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
     updateProfile,
   } = useWorkspace();
   const [settings, setSettings] = useState(defaults);
-  const [billingOpen, setBillingOpen] = useState(false);
   const [analysisSchedule, setAnalysisSchedule] = useState<AnalysisSchedule | null>(null);
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduleEmailNotifications, setScheduleEmailNotifications] = useState(true);
@@ -222,50 +220,6 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
         </div>
         {session && <button className="button" onClick={logout} disabled={loggingOut}>{loggingOut ? "Signing out…" : "Sign out"}</button>}
       </SettingsSection>
-      <SettingsSection
-        title="Plan & Billing"
-        subtitle="Demo only. No payments or subscriptions are connected."
-        icon="file"
-      >
-        <SettingRow title="Current plan" description="Not configured">
-          <span className="badge">Mock</span>
-        </SettingRow>
-        <SettingRow title="Billing status" description="Not connected">
-          <button className="button" onClick={() => setBillingOpen(true)}>
-            Manage billing
-          </button>
-        </SettingRow>
-        <SettingRow
-          title="Payment method"
-          description="No payment method on file"
-        >
-          <span className="muted">—</span>
-        </SettingRow>
-        <SettingRow title="Invoices" description="No invoices yet">
-          <span className="muted">—</span>
-        </SettingRow>
-      </SettingsSection>
-      {billingOpen && (
-        <Dialog title="Manage billing" onClose={() => setBillingOpen(false)}>
-          <header className="sheet-header">
-            <h2>Manage billing</h2>
-            <button
-              className="icon-button"
-              aria-label="Close billing"
-              onClick={() => setBillingOpen(false)}
-            >
-              <Icon name="close" />
-            </button>
-          </header>
-          <p>
-            Billing is not connected in this demo. There is no active
-            subscription, saved payment method, or invoice history.
-          </p>
-          <p className="muted">
-            No payment details are collected and no charges can be made.
-          </p>
-        </Dialog>
-      )}
       <SettingsSection
         title="Appearance & Theme"
         subtitle="Customize how Flare looks on your display."
@@ -476,7 +430,7 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
         </SettingRow>
         <SettingRow
           title="Workspace data retention"
-          description="Saved preference; automatic deletion is not enabled in this demo."
+          description="Saved preference; automatic deletion is not enabled."
         >
           <select
             aria-label="Data retention"
@@ -571,6 +525,15 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
           ) : (
             <span className="muted">Not configured</span>
           )}
+        </SettingRow>
+        <SettingRow
+          title="Legal"
+          description="Review how Flare handles your data and the terms for using the service."
+        >
+          <span className="legal-inline-links">
+            <Link className="button" href="/privacy">Privacy</Link>
+            <Link className="button" href="/terms">Terms</Link>
+          </span>
         </SettingRow>
       </SettingsSection>
     </section>

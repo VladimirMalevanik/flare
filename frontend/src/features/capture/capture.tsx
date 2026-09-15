@@ -11,6 +11,7 @@ import {
   type ImportFormat,
 } from "@/lib/data";
 import { readLocal, writeLocal } from "@/lib/storage/preferences";
+import { transcribeVoice } from "@/lib/voice";
 import { useVoiceCapture } from "./use-voice-capture";
 
 const ORB_POSITION_KEY = "flare-orb-position-v1";
@@ -149,7 +150,7 @@ export function Capture() {
   }, [captureOpen]);
 
   const attach = (next: File | undefined) => {
-    if (!next || voiceIsland || busy) return;
+    if (!next || voiceIsland || voice.recording || busy) return;
     const format = importFormatForFile(next);
     if (!format) {
       setError("Flare can import CSV, TXT, and Markdown files.");
@@ -306,6 +307,31 @@ export function Capture() {
     }
   };
 
+  const submitVoice = async () => {
+    if (busy || voice.state !== "ready" || !voice.recording) return;
+    setBusy(true);
+    setError("");
+    try {
+      const item = await transcribeVoice(voice.recording);
+      refresh();
+      setSaved(item.id);
+      setDraft("");
+      setFile(null);
+      void dataProvider.trackEvent({
+        eventType: "capture_submitted",
+        targetType: "item",
+        targetId: item.id,
+        metadata: { sourceType: "audio" },
+      });
+      voice.cancel();
+      closeCapture();
+    } catch (caught) {
+      setError(dataErrorMessage(caught, "Voice transcription failed. Try again."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const stage = voiceIsland
     ? "voice"
     : captureOpen
@@ -427,7 +453,7 @@ export function Capture() {
                 placeholder="Type a note or import a text file…"
                 rows={3}
                 value={draft}
-                disabled={busy}
+                disabled={busy || !!voice.recording}
                 onChange={(event) => setDraft(event.target.value)}
                 onPaste={(event) => {
                   const pastedFile = event.clipboardData.files[0];
@@ -467,9 +493,22 @@ export function Capture() {
               )}
             </div>
             {voice.recording && (
-              <div className="capture-hint" role="status">
-                Recording ready. Transcription is not available yet. Audio has not been saved.
-                <button className="text-button" onClick={voice.cancel}>Discard recording</button>
+              <div className="capture-hint voice-ready" role="status">
+                <p>
+                  Voice transcription currently uses English. Your recording will be sent to our transcription provider only when you choose Transcribe &amp; save. Flare stores the transcript, not the source audio.
+                </p>
+                <div className="form-actions">
+                  <button
+                    className="button primary"
+                    disabled={busy}
+                    onClick={() => void submitVoice()}
+                  >
+                    {busy ? "Transcribing…" : "Transcribe & save"}
+                  </button>
+                  <button className="text-button" disabled={busy} onClick={voice.cancel}>
+                    Discard recording
+                  </button>
+                </div>
               </div>
             )}
             {voice.error && (
@@ -486,16 +525,21 @@ export function Capture() {
               <button
                 className="icon-button"
                 aria-label="Add file"
-                disabled={busy || voiceIsland}
+                disabled={busy || voiceIsland || !!voice.recording}
                 onClick={() => fileInput.current?.click()}
               >
                 <Icon name="file" />
               </button>
               <button
                 className="icon-button"
-                aria-label="Voice transcription coming soon"
-                title="Voice transcription coming soon"
-                disabled
+                aria-label="Record a voice memo"
+                title="Record a voice memo (English transcription)"
+                disabled={busy || voiceIsland || !!voice.recording || !!file || !!draft.trim()}
+                onClick={() => {
+                  setError("");
+                  void dataProvider.trackEvent({ eventType: "capture_voice_started", targetType: "capture" });
+                  void voice.start();
+                }}
               >
                 <Icon name="audio" />
               </button>

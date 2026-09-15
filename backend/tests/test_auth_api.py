@@ -21,7 +21,13 @@ def client(auth):
 
 
 def register(client):
-    payload = {'email': f'{uuid4()}@auth-test.invalid', 'password': 'long-secret-password', 'name': 'Real User'}
+    payload = {
+        'email': f'{uuid4()}@auth-test.invalid',
+        'password': 'long-secret-password',
+        'name': 'Real User',
+        'termsAccepted': True,
+        'privacyAccepted': True,
+    }
     response = client.post('/auth/register', json=payload)
     assert response.status_code == 201, response.text
     return payload, response
@@ -30,6 +36,16 @@ def register(client):
 def test_registration_session_items_login_logout(client):
     assert client.get('/items').status_code == 401
     payload, response = register(client)
+    with client.app.state.database.connection() as connection:
+        acceptance = connection.execute(
+            "SELECT terms_version::text,privacy_version::text "
+            "FROM auth_legal_acceptances WHERE user_id=(SELECT id FROM auth_users WHERE email=%s)",
+            (payload['email'],),
+        ).fetchone()
+    assert acceptance == {
+        'terms_version': '2026-09-15',
+        'privacy_version': '2026-09-15',
+    }
     cookie = response.headers['set-cookie'].lower()
     assert 'httponly' in cookie and 'samesite=lax' in cookie and 'domain=' not in cookie
     me = client.get('/auth/me').json()
@@ -166,9 +182,30 @@ def test_production_rejects_unsafe_origins(origins):
 @pytest.mark.parametrize('password,status', [('eight123', 201), ('seven12', 422)])
 def test_registration_password_minimum(client, password, status):
     email = f'{uuid4()}@auth-test.invalid'
-    response = client.post('/auth/register', json={'email': email, 'password': password, 'name': 'Password Test'})
+    response = client.post('/auth/register', json={
+        'email': email,
+        'password': password,
+        'name': 'Password Test',
+        'termsAccepted': True,
+        'privacyAccepted': True,
+    })
     assert response.status_code == status
     if status == 201:
         assert client.get('/auth/me').status_code == 200
         client.post('/auth/logout')
         assert client.post('/auth/login', json={'email': email, 'password': password}).status_code == 200
+
+
+@pytest.mark.parametrize('field', ['termsAccepted', 'privacyAccepted'])
+def test_registration_requires_explicit_legal_acceptance(client, field):
+    payload = {
+        'email': f'{uuid4()}@auth-test.invalid',
+        'password': 'long-secret-password',
+        'name': 'Consent Test',
+        'termsAccepted': True,
+        'privacyAccepted': True,
+    }
+    payload[field] = False
+    assert client.post('/auth/register', json=payload).status_code == 422
+    payload.pop(field)
+    assert client.post('/auth/register', json=payload).status_code == 422

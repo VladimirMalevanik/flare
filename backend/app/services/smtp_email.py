@@ -4,7 +4,8 @@ from __future__ import annotations
 import smtplib
 import ssl
 from email.message import EmailMessage
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
+
 
 class SmtpEmailSender:
     def __init__(self, smtp_url: str, default_from: str):
@@ -13,8 +14,11 @@ class SmtpEmailSender:
             raise ValueError("SMTP_URL must be smtp:// or smtps://host[:port]")
         self._host = parsed.hostname
         self._port = parsed.port or (465 if parsed.scheme == "smtps" else 587)
-        self._user = parsed.username
-        self._password = parsed.password
+        # URL credentials are percent-encoded so reserved characters in provider
+        # API keys remain valid connection URLs. Decode exactly once at the SMTP
+        # boundary and never include credentials in logs or public errors.
+        self._user = unquote(parsed.username) if parsed.username is not None else None
+        self._password = unquote(parsed.password) if parsed.password is not None else None
         self._implicit_tls = parsed.scheme == "smtps"
         self._from = default_from
 
@@ -24,12 +28,18 @@ class SmtpEmailSender:
         message["To"] = to
         message["Subject"] = subject
         message.set_content(text)
+        tls_context = ssl.create_default_context()
         if self._implicit_tls:
-            with smtplib.SMTP_SSL(self._host, self._port, timeout=10) as client:
+            with smtplib.SMTP_SSL(
+                self._host,
+                self._port,
+                timeout=10,
+                context=tls_context,
+            ) as client:
                 self._deliver(client, message)
         else:
             with smtplib.SMTP(self._host, self._port, timeout=10) as client:
-                client.starttls(context=ssl.create_default_context())
+                client.starttls(context=tls_context)
                 self._deliver(client, message)
 
     def _deliver(self, client: smtplib.SMTP, message: EmailMessage) -> None:

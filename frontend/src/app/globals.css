@@ -1943,3 +1943,113 @@ blockquote {
 .auth-alternative { margin: 24px 0 0; color: var(--secondary); }
 .auth-alternative a { color: var(--accent-text); font-weight: 500; }
 @media (max-width: 480px) { .auth-page { padding: 16px; } .auth-panel { padding: 24px; } }
+
+.legal-consent {
+  grid-template-columns: 18px 1fr !important;
+  align-items: start;
+  gap: 10px !important;
+  color: var(--secondary);
+  font-size: 12px;
+  font-weight: 400 !important;
+  line-height: 1.55;
+}
+.legal-consent input { width: 16px; min-height: 16px; margin: 2px 0 0; }
+.legal-consent a,
+.auth-legal-links a,
+.legal-inline-links a { color: var(--accent-text); text-decoration: underline; text-underline-offset: 2px; }
+.auth-legal-links { display: flex; gap: 16px; margin-top: 16px; color: var(--secondary); font-size: 12px; }
+.legal-inline-links { display: flex; gap: 8px; }
+
+.marketing-page,
+.legal-page {
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at 50% -10%, rgba(0, 113, 227, 0.12), transparent 34rem),
+    var(--canvas);
+}
+.marketing-nav,
+.legal-header,
+.marketing-footer,
+.legal-footer {
+  width: min(1120px, calc(100% - 40px));
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.marketing-nav,
+.legal-header { min-height: 72px; }
+.marketing-brand { display: inline-flex; align-items: center; gap: 9px; font-size: 20px; font-weight: 700; letter-spacing: -0.025em; }
+.marketing-spark { color: var(--accent); font-size: 25px; line-height: 1; }
+.marketing-nav nav,
+.marketing-footer nav,
+.legal-footer { display: flex; align-items: center; gap: 24px; }
+.marketing-nav nav > a:not(.button),
+.marketing-footer a,
+.legal-footer a { color: var(--secondary); font-size: 13px; }
+.marketing-nav nav > a:hover,
+.marketing-footer a:hover,
+.legal-footer a:hover { color: var(--accent-text); }
+.marketing-hero {
+  width: min(900px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 120px 0 132px;
+  text-align: center;
+}
+.marketing-kicker { color: var(--accent-text); font-size: 12px; font-weight: 650; letter-spacing: 0.09em; text-transform: uppercase; }
+.marketing-hero h1 { margin: 20px auto 24px; max-width: 850px; font-size: clamp(48px, 8vw, 88px); line-height: 0.98; font-weight: 750; letter-spacing: -0.065em; }
+.marketing-hero h1 span { color: var(--accent); }
+.marketing-lead { max-width: 680px; margin: 0 auto; color: var(--secondary); font-size: clamp(17px, 2.2vw, 21px); line-height: 1.55; }
+.marketing-actions { display: flex; justify-content: center; gap: 12px; margin-top: 34px; }
+.marketing-actions .button { height: 46px; padding: 0 20px; }
+.marketing-note { margin-top: 18px; color: var(--muted); font-size: 12px; }
+.marketing-section { width: min(1120px, calc(100% - 40px)); margin: 0 auto; padding: 96px 0; border-top: 1px solid var(--line); }
+.marketing-section > h2,
+.marketing-preview h2,
+.marketing-trust h2 { max-width: 720px; margin-top: 14px; font-size: clamp(32px, 5vw, 54px); line-height: 1.08; letter-spacing: -0.045em; }
+.marketing-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 46px; }
+.marketing-steps article,
+.marketing-insight-card { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); }
+.marketing-steps article { padding: 28px; }
+.marketing-steps article > span { color: var(--accent-text); font-size: 12px; font-weight: 650; }
+.marketing-steps h3 { margin: 38px 0 10px; font-size: 20px; font-weight: 650; }
+.marketing-steps p,
+.marketing-preview > div > p:last-child { color: var(--secondary); font-size: 15px; line-height: 1.65; }
+.marketing-preview { display: grid; grid-template-columns: 1fr 0.9fr; align-items: center; gap: 72px; }
+.marketing-preview > div > p:last-child { max-width: 540px; margin-top: 22px; }
+.marketing-insight-card { padding: 30px; transform: rotate(1deg); }
+.marketing-insight-card > span { display: inline-flex; padding: 5px 10px; border-radius: 999px; background: var(--accent-wash); color: var(--accent-text); font-size: 11px; font-weight: 650; }
+.marketing-insight-card h3 { margin: 22px 0 12px; font-size: 25px; line-height: 1.2; font-weight: 650; }
+.marketing-insight-card p { color: var(--secondary); font-size: 15px; line-height: 1.6; }
+.marketing-insight-card footer { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--accent-text); font-size: 12px; }
+.marketing-trust { text-align: center; }
+.marketing-trust h2 { margin-left: auto; margin-right: auto; }
+.marketing-trust > div { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 36px; }
+.marketing-trust > div p { padding: 9px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--secondary); font-size: 12px; }
+.marketing-footer,
+.legal-footer { min-height: 96px; border-top: 1px solid var(--line); color: var(--secondary); }
+
+.legal-page { padding-bottom: 1px; }
+.legal-document { width: min(760px, calc(100% - 40px)); margin: 60px auto 100px; }
+.legal-document > h1 { margin: 14px 0 10px; font-size: clamp(42px, 7vw, 64px); letter-spacing: -0.05em; }
+.legal-updated { color: var(--muted); }
+.legal-document > p:not(.marketing-kicker):not(.legal-updated) { margin-top: 34px; font-size: 17px; line-height: 1.75; }
+.legal-document section { margin-top: 42px; }
+.legal-document section h2 { margin-bottom: 12px; font-size: 21px; }
+.legal-document section p,
+.legal-document section li { color: var(--secondary); font-size: 15px; line-height: 1.75; }
+.legal-document section ul { margin: 0; padding-left: 22px; }
+.legal-document section li + li { margin-top: 8px; }
+
+@media (max-width: 760px) {
+  .marketing-nav nav > a:not(.button) { display: none; }
+  .marketing-nav nav { gap: 10px; }
+  .marketing-hero { padding: 86px 0 96px; }
+  .marketing-steps,
+  .marketing-preview { grid-template-columns: 1fr; }
+  .marketing-preview { gap: 42px; }
+  .marketing-section { padding: 72px 0; }
+  .marketing-footer { align-items: flex-start; padding: 28px 0; gap: 20px; }
+  .marketing-footer nav,
+  .legal-footer { flex-wrap: wrap; gap: 14px 20px; }
+}

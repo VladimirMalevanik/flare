@@ -1,5 +1,11 @@
 export interface Session {
-  user: { id: string; email: string; name: string; emailVerified: boolean };
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    emailVerified: boolean;
+    legalAccepted: boolean;
+  };
   workspace: { id: string; name: string; role: "owner" | "editor" | "viewer" };
 }
 
