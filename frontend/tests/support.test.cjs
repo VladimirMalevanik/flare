@@ -90,24 +90,24 @@ function renderSettings(supportEmail) {
   return nodes(SettingsPage({ supportEmail }));
 }
 
-test("support email configuration accepts a conservative address only", () => {
-  const { normalizeSupportEmail } = load("../src/lib/support.ts");
+test("support email configuration always keeps a safe canonical fallback", () => {
+  const { normalizeSupportEmail, DEFAULT_SUPPORT_EMAIL, supportMailto } = load("../src/lib/support.ts");
+  assert.equal(DEFAULT_SUPPORT_EMAIL, "support@flare4u.tech");
   assert.equal(normalizeSupportEmail(" help@flare.example "), "help@flare.example");
   for (const value of [undefined, "", "missing-domain@", "a@b", "line@example.com\nBcc:x@y.com"]) {
-    assert.equal(normalizeSupportEmail(value), null);
+    assert.equal(normalizeSupportEmail(value), "support@flare4u.tech");
   }
+  assert.equal(
+    supportMailto("Flare support request"),
+    "mailto:support@flare4u.tech?subject=Flare%20support%20request",
+  );
 });
 
-test("Settings exposes a mail link only when support is configured", () => {
+test("Settings exposes distinct support and feedback mail links", () => {
   const configured = renderSettings("help@flare.example");
   const contact = configured.find((node) => node.props?.href === "mailto:help@flare.example?subject=Flare%20support%20request");
   const feedback = configured.find((node) => node.props?.href === "mailto:help@flare.example?subject=Flare%20product%20feedback");
   assert.equal(contact?.type, "a");
   assert.equal(contact?.props.children, "Contact support");
   assert.equal(feedback?.props.children, "Send feedback");
-
-  const unconfigured = renderSettings(null);
-  assert.equal(unconfigured.some((node) => String(node.props?.href).startsWith("mailto:")), false);
-  assert.equal(unconfigured.filter((node) => node.props?.children === "Not configured").length, 2);
-  assert.ok(unconfigured.some((node) => node.props?.description === "The support address will be available after launch."));
 });
