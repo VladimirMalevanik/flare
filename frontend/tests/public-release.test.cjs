@@ -37,6 +37,7 @@ test("registration sends explicit consent and the API records versioned acceptan
 
 test("frontend applies release security headers", () => {
   const config = read("../next.config.ts");
+  assert.match(config, /poweredByHeader: false/);
   for (const header of [
     "Content-Security-Policy",
     "Strict-Transport-Security",

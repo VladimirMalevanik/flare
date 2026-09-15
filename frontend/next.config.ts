@@ -32,6 +32,7 @@ const nextConfig: NextConfig = {
   typedRoutes: true,
   turbopack: { root: __dirname },
   agentRules: false,
+  poweredByHeader: false,
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
