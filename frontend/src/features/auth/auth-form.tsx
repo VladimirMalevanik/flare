@@ -8,6 +8,7 @@ import {
   AuthRequestError,
   authRequest,
 } from "@/lib/auth/session";
+import { DEFAULT_SUPPORT_EMAIL, supportMailto } from "@/lib/support";
 
 const neutralResendMessage =
   "If verification is available for that address, a new email will arrive shortly.";
@@ -192,10 +193,12 @@ export function AuthForm({ register = false }: { register?: boolean }) {
             {register ? "Sign in" : "Create account"}
           </Link>
         </p>
-        <nav className="auth-legal-links" aria-label="Legal">
+        <nav className="auth-legal-links" aria-label="Legal and support">
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>
+          <a href={supportMailto("Flare support request")}>Contact support</a>
         </nav>
+        <p className="muted auth-support-email">{DEFAULT_SUPPORT_EMAIL}</p>
       </section>
     </main>
   );
