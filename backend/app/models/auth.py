@@ -2,6 +2,13 @@
 
 from psycopg import Connection
 
+from app.legal import (
+    CURRENT_PRIVACY_CONTENT_ID,
+    CURRENT_PRIVACY_VERSION,
+    CURRENT_TERMS_CONTENT_ID,
+    CURRENT_TERMS_VERSION,
+)
+
 
 class AuthRepository:
     def __init__(self, connection: Connection):
@@ -33,11 +40,22 @@ class AuthRepository:
                VALUES (%s,%s,%s,%s,%s)""",
             (user_id, email, password_hash, name, workspace_id),
         )
+        self.accept_current_legal(user_id)
+
+    def accept_current_legal(self, user_id: str) -> None:
         self.connection.execute(
             """INSERT INTO public.auth_legal_acceptances(
-                   user_id,terms_version,privacy_version
-               ) VALUES (%s,%s,%s)""",
-            (user_id, "2026-09-15", "2026-09-15"),
+                   user_id,terms_version,privacy_version,
+                   terms_content_id,privacy_content_id
+               ) VALUES (%s,%s,%s,%s,%s)
+               ON CONFLICT DO NOTHING""",
+            (
+                user_id,
+                CURRENT_TERMS_VERSION,
+                CURRENT_PRIVACY_VERSION,
+                CURRENT_TERMS_CONTENT_ID,
+                CURRENT_PRIVACY_CONTENT_ID,
+            ),
         )
 
     def insert_session(
@@ -52,13 +70,29 @@ class AuthRepository:
     def resolve_session(self, token_hash: str, idle_seconds: int):
         return self.connection.execute(
             """SELECT s.user_id, s.workspace_id, u.email, u.name,
-                      u.email_verified_at IS NOT NULL AS email_verified
+                      u.email_verified_at IS NOT NULL AS email_verified,
+                      EXISTS (
+                          SELECT 1
+                          FROM public.auth_legal_acceptances legal
+                          WHERE legal.user_id=u.id
+                            AND legal.terms_version=%s
+                            AND legal.privacy_version=%s
+                            AND legal.terms_content_id=%s
+                            AND legal.privacy_content_id=%s
+                      ) AS legal_accepted
                FROM public.auth_sessions s
                JOIN public.auth_users u ON u.id=s.user_id
                WHERE s.token_hash=%s AND s.revoked_at IS NULL
                  AND s.expires_at > now() AND NOT u.disabled
                  AND s.last_seen_at > now() - %s * interval '1 second'""",
-            (token_hash, idle_seconds),
+            (
+                CURRENT_TERMS_VERSION,
+                CURRENT_PRIVACY_VERSION,
+                CURRENT_TERMS_CONTENT_ID,
+                CURRENT_PRIVACY_CONTENT_ID,
+                token_hash,
+                idle_seconds,
+            ),
         ).fetchone()
 
     def touch(self, token_hash: str) -> None:
