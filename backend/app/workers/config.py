@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from hashlib import sha256
 import json
 
-from app.ai_engine.prompts import PROMPT_VERSION, SCHEMA_VERSION
+from app.ai_engine.text_analysis_prompts import PROMPT_VERSION, SCHEMA_VERSION
 from app.config import AISettings
 
 
