@@ -1,7 +1,7 @@
 """Deterministic bounded selection; no embeddings, inferred state or provider call."""
 import re
 from app.ai_engine.analysis import Evidence
-from app.ai_engine.prompts import build_bounded_request
+from app.ai_engine.text_analysis_prompts import build_bounded_request
 
 SELECTION_REVISION = 'recent-project-v1'
 SIGNALS = re.compile(r'\b(goal|deadline|decision|decided|blocked|constraint|launch|release|mvp|цель|решение|дедлайн|релиз)\b', re.IGNORECASE)

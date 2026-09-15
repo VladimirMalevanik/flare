@@ -17,7 +17,7 @@ from groq import AsyncGroq
 from app.config import AISettings, load_ai_settings
 from app.ai_engine.errors import AnalysisError
 from app.ai_engine.analysis import AnalysisMetadata, AnalysisResult, Evidence, TextAnalysis, validate_evidence
-from app.ai_engine.prompts import PROMPT_VERSION, SCHEMA_VERSION, build_bounded_request
+from app.ai_engine.text_analysis_prompts import PROMPT_VERSION, SCHEMA_VERSION, build_bounded_request
 
 
 class GroqTextAnalyzer:
