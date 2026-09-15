@@ -1,4 +1,4 @@
-"""Record the legal document versions accepted during account creation."""
+"""Record the exact legal document versions accepted by each user."""
 
 from alembic import op
 
@@ -16,8 +16,18 @@ def upgrade() -> None:
             user_id text NOT NULL REFERENCES public.auth_users(id) ON DELETE CASCADE,
             terms_version date NOT NULL,
             privacy_version date NOT NULL,
+            terms_content_id char(40) NOT NULL,
+            privacy_content_id char(40) NOT NULL,
             accepted_at timestamptz NOT NULL DEFAULT now(),
-            PRIMARY KEY (user_id, terms_version, privacy_version)
+            PRIMARY KEY (
+                user_id,
+                terms_version,
+                privacy_version,
+                terms_content_id,
+                privacy_content_id
+            ),
+            CHECK (terms_content_id ~ '^[0-9a-f]{40}$'),
+            CHECK (privacy_content_id ~ '^[0-9a-f]{40}$')
         );
         REVOKE ALL ON public.auth_legal_acceptances FROM PUBLIC;
         GRANT SELECT, INSERT ON public.auth_legal_acceptances TO flare_app;
