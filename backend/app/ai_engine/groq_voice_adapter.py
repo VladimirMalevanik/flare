@@ -48,7 +48,9 @@ class GroqVoiceTranscriber:
         try:
             async with asyncio.timeout(self.settings.provider_deadline_seconds):
                 response = await self._client.audio.transcriptions.with_raw_response.create(
-                    model=self.settings.model, file=(filename, audio.content, mime),
+                    model=self.settings.model,
+                    file=(filename, audio.content, mime),
+                    language='en',
                     response_format='json',
                 )
             # Inspect the original JSON too: SDK permissive construction must not coerce text.
