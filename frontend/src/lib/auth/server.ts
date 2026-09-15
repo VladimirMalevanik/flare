@@ -17,5 +17,6 @@ export async function requireSession(): Promise<Session | null> {
   if (!response.ok) throw new Error("Authentication service is unavailable. Please retry.");
   const session = (await response.json()) as Session;
   if (!session.user.emailVerified) redirect("/verify-email?pending=1");
+  if (!session.user.legalAccepted) redirect("/legal-acceptance");
   return session;
 }
