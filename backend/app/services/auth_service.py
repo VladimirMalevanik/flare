@@ -47,6 +47,7 @@ class AuthenticatedUser:
     role: str
     workspace_name: str
     email_verified: bool = True
+    legal_accepted: bool = True
 
     @property
     def identity(self) -> WorkspaceIdentity:
