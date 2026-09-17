@@ -159,7 +159,7 @@ Use these 14 light-theme values to match Flare's default product palette. If the
 - Settings and the sidebar switch update `html[data-theme]`; the selection persists as `flare-theme`. First-time default is light, and System follows OS changes.
 - Dark mode changes the core colors, selected-filter treatment, and some Sources layout/content visibility.
 - Auth pages reuse the tokens but sit outside `WorkspaceProvider`; a fresh auth-page load defaults to light and does not independently restore the saved theme.
-- The logo tile uses accent plus white. Icons inherit surrounding colors. No separate local SVG brand palette exists.
+- The logo uses a fixed `#0071E3` hexagon with a white star on a transparent canvas. It intentionally does not follow the dark-theme accent override.
 - The Settings system-theme preview alone uses `linear-gradient(90deg, #F6F6F8, #DEDEE3)` with `#5E5E63` icon text. It is not a marketing gradient.
 
 Floating and mixed colors retain their original alpha:
@@ -191,7 +191,7 @@ Floating and mixed colors retain their original alpha:
 - The old `.capture-bar` rule includes a `#00000009` shadow but is no longer rendered. `.kind-3`, `.source-drive`, `.recording`, and `.needs-attention` also appear dormant.
 - Reminder Flares use red; Recommendation Flares use green. These colors encode content categories as well as status.
 - `.button.secondary` has no separate styling and receives the base button appearance.
-- No additional hardcoded inline product colors or separate local SVG brand assets were found.
+- The canonical web brand assets live in `public/brand/flare-mark.svg` and `public/brand/flare-mark.png`; `src/app/icon.svg` and `src/app/apple-icon.png` provide browser and device icons.
 
 ## Files inspected
 

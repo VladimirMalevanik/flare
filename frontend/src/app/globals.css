@@ -51,6 +51,11 @@
 * {
   box-sizing: border-box;
 }
+.flare-brand-mark {
+  display: block;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
 body {
   margin: 0;
   background: var(--canvas);
@@ -262,17 +267,9 @@ kbd {
 .brand-mark {
   width: 32px;
   height: 32px;
-  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent);
-  color: white;
-  box-shadow: 0 1px 3px #0002;
-}
-.brand-mark svg {
-  width: 23px;
-  height: 23px;
 }
 .sidebar-capture {
   margin: 24px 0;
@@ -1981,7 +1978,6 @@ blockquote {
 .marketing-nav,
 .legal-header { min-height: 72px; }
 .marketing-brand { display: inline-flex; align-items: center; gap: 9px; font-size: 20px; font-weight: 700; letter-spacing: -0.025em; }
-.marketing-spark { color: var(--accent); font-size: 25px; line-height: 1; }
 .marketing-nav nav,
 .marketing-footer nav,
 .legal-footer { display: flex; align-items: center; gap: 24px; }

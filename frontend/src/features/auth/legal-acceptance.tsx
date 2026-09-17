@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
-import { Icon } from "@/components/icons";
+import { BrandMark } from "@/components/brand-mark";
 import { authRequest } from "@/lib/auth/session";
 import { DEFAULT_SUPPORT_EMAIL, supportMailto } from "@/lib/support";
 
@@ -37,7 +37,7 @@ export function LegalAcceptance() {
     <main className="auth-page">
       <section className="auth-panel" aria-labelledby="legal-title">
         <div className="brand">
-          <span className="brand-mark"><Icon name="sources" /></span>
+          <span className="brand-mark"><BrandMark size={32} /></span>
           <strong>Flare</strong>
         </div>
         <header className="page-heading">

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
-import { Icon } from "@/components/icons";
+import { BrandMark } from "@/components/brand-mark";
 import {
   AuthRequestError,
   authRequest,
@@ -93,7 +93,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
       <section className="auth-panel" aria-labelledby="auth-title">
         <div className="brand">
           <span className="brand-mark">
-            <Icon name="sources" />
+            <BrandMark size={32} />
           </span>
           <strong>Flare</strong>
         </div>

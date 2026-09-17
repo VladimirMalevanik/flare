@@ -1,12 +1,14 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { BrandMark } from "./brand-mark";
+
 export function LegalPage({ title, updated, children }: { title: string; updated: string; children: ReactNode }) {
   return (
     <main className="legal-page">
       <header className="legal-header">
         <Link href="/" className="marketing-brand">
-          <span className="marketing-spark" aria-hidden="true">✦</span>
+          <BrandMark size={28} />
           Flare
         </Link>
         <Link className="button" href="/register">Get started</Link>
