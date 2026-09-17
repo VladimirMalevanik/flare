@@ -27,6 +27,9 @@ function load(relative, mocks = {}, globals = {}) {
           },
         };
       }
+      if (name === "@/components/brand-mark") {
+        return { BrandMark: "brand-mark" };
+      }
       throw Error(`Unexpected import ${name}`);
     },
     ...globals,

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { BrandMark } from "@/components/brand-mark";
+
 type DemoTab = "capture" | "insights" | "vault";
 
 function Spark({ size = 24 }: { size?: number }) {
@@ -32,7 +34,7 @@ export default function Home() {
       <header className="landing-nav-shell">
         <div className="landing-container landing-nav">
           <Link className="landing-brand" href="/" aria-label="Flare home">
-            <Spark />
+            <BrandMark size={28} />
             <span>Flare</span>
           </Link>
 
@@ -164,7 +166,7 @@ export default function Home() {
 
           <div className="landing-demo">
             <aside className="landing-demo-sidebar">
-              <div className="landing-demo-brand"><Spark size={20} /> Flare</div>
+              <div className="landing-demo-brand"><BrandMark size={22} /> Flare</div>
               <div className="landing-demo-tabs" role="tablist" aria-label="Product preview">
                 <button
                   aria-selected={demoTab === "capture"}
@@ -323,7 +325,7 @@ export default function Home() {
           </div>
           <div className="landing-difference-grid">
             <article><span>Typical notes</span><p>Store information</p><p>Rely on folders</p><p>Wait for you to remember</p></article>
-            <article className="landing-difference-flare"><span><Spark size={16} /> Flare</span><p>Connects information</p><p>Links every signal to evidence</p><p>Brings forgotten context back</p></article>
+            <article className="landing-difference-flare"><span><BrandMark size={18} /> Flare</span><p>Connects information</p><p>Links every signal to evidence</p><p>Brings forgotten context back</p></article>
           </div>
         </div>
       </section>
@@ -356,7 +358,7 @@ export default function Home() {
 
       <footer className="landing-footer">
         <div className="landing-container">
-          <Link className="landing-brand" href="#top" aria-label="Back to top"><Spark /> Flare</Link>
+          <Link className="landing-brand" href="#top" aria-label="Back to top"><BrandMark size={28} /> Flare</Link>
           <span>© 2026 Flare</span>
           <nav aria-label="Legal and account links">
             <Link href="/privacy">Privacy</Link>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Icon } from "@/components/icons";
+import { BrandMark } from "@/components/brand-mark";
 import {
   apiBaseUrl,
   authRequest,
@@ -100,7 +100,7 @@ export function VerifyEmail({
       <section className="auth-panel" aria-labelledby="verification-title">
         <div className="brand">
           <span className="brand-mark">
-            <Icon name="sources" />
+            <BrandMark size={32} />
           </span>
           <strong>Flare</strong>
         </div>

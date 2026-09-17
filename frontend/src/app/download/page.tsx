@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { BrandMark } from "@/components/brand-mark";
+
 const RELEASES_URL = "https://github.com/VladimirMalevanik/flare/releases/latest";
 const APPLE_SILICON_URL = `${RELEASES_URL}/download/Flare-macOS-arm64.dmg`;
 const INTEL_URL = `${RELEASES_URL}/download/Flare-macOS-x64.dmg`;
@@ -10,27 +12,13 @@ export const metadata: Metadata = {
   description: "Download the Flare desktop app for Apple silicon or Intel Macs.",
 };
 
-function DownloadSpark({ size = 24 }: { size?: number }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className="landing-spark"
-      height={size}
-      viewBox="0 0 24 24"
-      width={size}
-    >
-      <path d="M12 1.8c.62 5.83 4.37 9.58 10.2 10.2-5.83.62-9.58 4.37-10.2 10.2C11.38 16.37 7.63 12.62 1.8 12 7.63 11.38 11.38 7.63 12 1.8Z" />
-    </svg>
-  );
-}
-
 export default function DownloadPage() {
   return (
     <main className="download-page">
       <header className="download-nav-shell">
         <div className="download-container download-nav">
           <Link className="landing-brand" href="/" aria-label="Flare home">
-            <DownloadSpark />
+            <BrandMark size={28} />
             <span>Flare</span>
           </Link>
           <nav aria-label="Download navigation">
@@ -118,7 +106,7 @@ export default function DownloadPage() {
 
       <section className="download-disclosure">
         <div className="download-container">
-          <DownloadSpark size={30} />
+          <BrandMark className="download-disclosure-mark" size={34} />
           <h2>An honest early-access build.</h2>
           <p>
             This release uses an ad-hoc signature and is not yet notarized with an Apple

@@ -7,6 +7,7 @@ import { WorkspaceProvider, useWorkspace } from "./workspace-context";
 import { Capture } from "@/features/capture/capture";
 import { dataProvider } from "@/lib/data";
 import { Dialog } from "./dialog";
+import { BrandMark } from "./brand-mark";
 const navigation = [
   { href: "/insights", label: "Flares", icon: "insights" },
   { href: "/vault", label: "Vault", icon: "vault" },
@@ -53,7 +54,7 @@ function Shell({ children }: { children: ReactNode }) {
       <div>
         <Link href="/insights" className="brand">
           <span className="brand-mark">
-            <Icon name="sources" />
+            <BrandMark size={32} />
           </span>
           <span>
             <strong>Flare</strong>
