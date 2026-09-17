@@ -149,7 +149,7 @@ export default function Home() {
               <span>03</span>
               <div className="landing-step-icon">↗</div>
               <h3>Review the evidence</h3>
-              <p>Every published Flare links back to the records that support it.</p>
+              <p>Every published Flare links back to the saved context that supports it.</p>
             </article>
           </div>
         </div>
