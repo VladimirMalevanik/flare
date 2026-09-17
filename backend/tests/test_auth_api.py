@@ -44,7 +44,7 @@ def test_registration_session_items_login_logout(client):
         ).fetchone()
     assert acceptance == {
         'terms_version': '2026-09-15',
-        'privacy_version': '2026-09-15',
+        'privacy_version': '2026-09-17',
     }
     cookie = response.headers['set-cookie'].lower()
     assert 'httponly' in cookie and 'samesite=lax' in cookie and 'domain=' not in cookie

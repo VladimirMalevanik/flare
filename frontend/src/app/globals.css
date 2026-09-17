@@ -2037,8 +2037,10 @@ blockquote {
 .legal-document > p:not(.marketing-kicker):not(.legal-updated) { margin-top: 34px; font-size: 17px; line-height: 1.75; }
 .legal-document section { margin-top: 42px; }
 .legal-document section h2 { margin-bottom: 12px; font-size: 21px; }
+.legal-document section h3 { margin: 24px 0 10px; font-size: 16px; }
 .legal-document section p,
 .legal-document section li { color: var(--secondary); font-size: 15px; line-height: 1.75; }
+.legal-document section a { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
 .legal-document section ul { margin: 0; padding-left: 22px; }
 .legal-document section li + li { margin-top: 8px; }
 

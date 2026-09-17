@@ -11,7 +11,7 @@ import psycopg
 from app.ai_engine.analysis import Evidence, TextAnalysis, validate_evidence
 from app.ai_engine.errors import AnalysisError
 from app.ai_engine.llm import TextAnalyzer
-from app.ai_engine.prompts import PROMPT_VERSION, SCHEMA_VERSION
+from app.ai_engine.text_analysis_prompts import PROMPT_VERSION, SCHEMA_VERSION
 from app.config import AISettings
 from app.models.analysis_jobs import AnalysisJobs, WorkerJobs
 from app.models.database import WorkspaceIdentity
