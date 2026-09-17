@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./landing.css";
 @font-face {
   font-family: Inter;
   src: url("/fonts/inter-latin.woff2") format("woff2");
