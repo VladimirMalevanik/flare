@@ -675,6 +675,7 @@
 
 .landing-depth-visual {
   position: relative;
+  width: 100%;
   aspect-ratio: 1;
   max-width: 520px;
   justify-self: end;
@@ -692,6 +693,7 @@
 
 .landing-depth-core {
   position: absolute;
+  z-index: 2;
   display: flex;
   align-items: center;
   flex-direction: column;
@@ -716,6 +718,7 @@
 
 .landing-node {
   position: absolute;
+  z-index: 3;
   padding: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -725,9 +728,23 @@
   font-size: 11px;
 }
 
-.landing-node-one { top: 8%; left: 43%; }
-.landing-node-two { right: 0; bottom: 33%; }
-.landing-node-three { bottom: 8%; left: 14%; }
+.landing-node-one {
+  top: 5%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.landing-node-two {
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+}
+
+.landing-node-three {
+  bottom: 5%;
+  left: 50%;
+  transform: translateX(-50%);
+}
 
 .landing-outcome {
   color: white;

@@ -3,7 +3,7 @@
 import json
 
 from app.ai_engine.flares import FlareCandidates
-from app.ai_engine.prompts import load_metadata, load_prompt
+from app.ai_engine.prompts.loader import load_metadata, load_prompt
 
 _meta = load_metadata("flare_generation")
 PROMPT_VERSION: str = _meta.get("version", "flare-v3")

@@ -43,7 +43,7 @@ def _register(client: TestClient) -> dict[str, str | bool]:
 def test_legal_content_ids_match_exact_frontend_documents():
     root = Path(__file__).resolve().parents[2]
     assert CURRENT_TERMS_VERSION == "2026-09-15"
-    assert CURRENT_PRIVACY_VERSION == "2026-09-15"
+    assert CURRENT_PRIVACY_VERSION == "2026-09-17"
     assert _git_blob_id(root / "frontend/src/app/terms/page.tsx") == CURRENT_TERMS_CONTENT_ID
     assert _git_blob_id(root / "frontend/src/app/privacy/page.tsx") == CURRENT_PRIVACY_CONTENT_ID
 

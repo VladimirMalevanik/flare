@@ -4,7 +4,7 @@ import json
 from collections.abc import Sequence
 
 from app.ai_engine.analysis import Evidence, TextAnalysis
-from app.ai_engine.prompts import load_metadata, load_prompt
+from app.ai_engine.prompts.loader import load_metadata, load_prompt
 
 _meta = load_metadata("text_analysis")
 PROMPT_VERSION: str = _meta.get("version", "text-analysis-v1")

@@ -3,7 +3,7 @@
 import json
 from collections.abc import Sequence
 
-from app.ai_engine.prompts import load_metadata, load_prompt
+from app.ai_engine.prompts.loader import load_metadata, load_prompt
 
 _meta = load_metadata("enrichment")
 PROMPT_VERSION: str = _meta.get("version", "enrichment-v1")
