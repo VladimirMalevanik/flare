@@ -6,6 +6,7 @@ import pytest
 from app.ai_engine.media_inspection import (
     FfprobeMediaInspector,
     MediaInspectionError,
+    _MAX_PROBE_OUTPUT_BYTES,
     _probe_arguments,
 )
 from app.ai_engine.voice import AudioInput
@@ -35,6 +36,19 @@ def test_duration_accepts_audio_only_and_uses_longest_probe_duration():
             "format": {"duration": "12.5"},
         }
     ) == 12.5
+
+
+def test_duration_is_derived_from_packets_for_streamed_browser_audio():
+    assert inspect(
+        {
+            "packets": [
+                {"pts_time": "0.000", "duration_time": "0.020"},
+                {"pts_time": "2.980", "duration_time": "0.020"},
+            ],
+            "streams": [{"codec_type": "audio"}],
+            "format": {},
+        }
+    ) == 3.0
 
 
 @pytest.mark.parametrize(
@@ -92,7 +106,7 @@ def test_missing_probe_has_stable_configuration_error():
 
 def test_probe_is_stdin_only_and_restricts_untrusted_demuxers():
     arguments = _probe_arguments()
-    assert arguments[0] == "-nostdin"
+    assert arguments[0:2] == ("-v", "error")
     assert arguments[arguments.index("-protocol_whitelist") + 1] == "pipe"
     formats = arguments[arguments.index("-format_whitelist") + 1].split(",")
     assert set(formats) == {"matroska", "webm", "wav", "mp3", "mov", "ogg"}
@@ -100,6 +114,9 @@ def test_probe_is_stdin_only_and_restricts_untrusted_demuxers():
     assert {"opus", "vorbis", "aac", "mp3", "pcm_s16le"}.issubset(codecs)
     assert arguments[arguments.index("-max_streams") + 1] == "2"
     assert arguments[arguments.index("-max_probe_packets") + 1] == "500"
+    assert arguments[arguments.index("-probesize") + 1] == "10485760"
+    entries = arguments[arguments.index("-show_entries") + 1]
+    assert "packet=pts_time,dts_time,duration_time" in entries
     assert "http" not in arguments
     assert "https" not in arguments
     assert "file" not in arguments
@@ -165,7 +182,8 @@ def test_probe_output_is_bounded_and_process_is_reaped():
 
         async def read(self, _size):
             self.calls += 1
-            return b"x" * 8192 if self.calls <= 9 else b""
+            chunks_before_limit = _MAX_PROBE_OUTPUT_BYTES // 8192
+            return b"x" * 8192 if self.calls <= chunks_before_limit + 1 else b""
 
     class Process:
         stdin = Stdin()

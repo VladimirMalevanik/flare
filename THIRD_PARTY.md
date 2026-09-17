@@ -19,3 +19,20 @@ The backend module layout was adapted from
 `45057fbd9b5ef427a79659c63a0b06aa57a5c41a`. At that revision the source was an
 empty scaffold: all files in `startup_insight/` were zero bytes. No source code,
 configuration or secrets were copied from it.
+
+## macOS desktop runtime
+
+The `desktop/` shell is original project code and uses
+[`Electron`](https://github.com/electron/electron) under the MIT License for the
+packaged runtime. Release artifacts retain Electron's bundled license notices.
+[`electron-builder`](https://github.com/electron-userland/electron-builder),
+also MIT-licensed, is pinned as a build-time dependency and is not shipped as
+application code.
+
+## Voice media inspection
+
+Azure App Service downloads the pinned FFmpeg 7.0.2 `ffprobe` static binary
+from [John Van Sickle's build archive](https://johnvansickle.com/ffmpeg/) and
+verifies both the archive and executable with cryptographic checksums before
+use. The build is licensed under the GNU General Public License version 3;
+corresponding build information and source are linked from the archive page.

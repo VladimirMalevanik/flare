@@ -1,0 +1,70 @@
+{
+  "name": "flare-desktop",
+  "version": "0.1.0",
+  "description": "Flare desktop app for macOS",
+  "private": true,
+  "main": "main.cjs",
+  "homepage": "https://flare4u.tech",
+  "author": "Flare",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "pack:mac": "node scripts/prepare-electron-licenses.cjs arm64 && electron-builder --dir --mac --arm64 --publish never",
+    "dist:mac:arm64": "node scripts/prepare-electron-licenses.cjs arm64 && electron-builder --mac --arm64 --publish never",
+    "dist:mac:x64": "node scripts/prepare-electron-licenses.cjs x64 && electron-builder --mac --x64 --publish never"
+  },
+  "devDependencies": {
+    "@electron/get": "5.1.0",
+    "electron": "44.4.1",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "tech.flare4u.desktop",
+    "productName": "Flare",
+    "asar": true,
+    "compression": "maximum",
+    "npmRebuild": false,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.cjs",
+      "security.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "generated-licenses",
+        "to": "licenses",
+        "filter": [
+          "LICENSE.electron.txt",
+          "LICENSES.chromium.html"
+        ]
+      }
+    ],
+    "artifactName": "Flare-macOS-${arch}.${ext}",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.icns",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Flare uses the microphone only when you choose to record a voice note."
+      }
+    },
+    "dmg": {
+      "sign": false,
+      "title": "Flare"
+    }
+  }
+}

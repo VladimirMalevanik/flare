@@ -40,6 +40,7 @@ export default function Home() {
             <a href="#problem">Why Flare</a>
             <a href="#how-it-works">How it works</a>
             <a href="#demo">Demo</a>
+            <Link href="/download">Download for Mac</Link>
             <Link href="/login">Sign in</Link>
             <Link className="landing-button landing-button-primary landing-button-small" href="/register">
               Get started
@@ -63,6 +64,7 @@ export default function Home() {
             <a href="#problem" onClick={closeMenu}>Why Flare</a>
             <a href="#how-it-works" onClick={closeMenu}>How it works</a>
             <a href="#demo" onClick={closeMenu}>Demo</a>
+            <Link href="/download" onClick={closeMenu}>Download for Mac</Link>
             <Link href="/login" onClick={closeMenu}>Sign in</Link>
             <Link className="landing-button landing-button-primary" href="/register" onClick={closeMenu}>
               Get started
@@ -87,9 +89,10 @@ export default function Home() {
               Create a workspace
               <span aria-hidden="true">→</span>
             </Link>
-            <a className="landing-button landing-button-secondary" href="#demo">
-              See the product
-            </a>
+            <Link className="landing-button landing-button-secondary" href="/download">
+              Download for Mac
+              <span aria-hidden="true">↓</span>
+            </Link>
           </div>
           <p className="landing-caption">Early access · Bring your own startup context</p>
 
@@ -349,9 +352,14 @@ export default function Home() {
           <Spark size={31} />
           <h2>Give your startup a memory.</h2>
           <p>Start capturing the context you&apos;ll wish you had later.</p>
-          <Link className="landing-button landing-button-light" href="/register">
-            Create a workspace <span>→</span>
-          </Link>
+          <div className="landing-final-actions">
+            <Link className="landing-button landing-button-light" href="/register">
+              Create a workspace <span>→</span>
+            </Link>
+            <Link className="landing-button landing-button-outline-light" href="/download">
+              Download for Mac <span>↓</span>
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -362,6 +370,7 @@ export default function Home() {
           <nav aria-label="Legal and account links">
             <Link href="/privacy">Privacy</Link>
             <Link href="/terms">Terms</Link>
+            <Link href="/download">Download</Link>
             <Link href="/login">Sign in</Link>
           </nav>
         </div>
