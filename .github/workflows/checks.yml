@@ -60,6 +60,10 @@ jobs:
         run: psql -h 127.0.0.1 -U postgres -d flare -v ON_ERROR_STOP=1 -f backend/db/configure-worker.sql
       - run: python -m pip check
       - run: pytest -q backend/tests
+      - if: matrix.database_provider == 'self-managed'
+        run: python backend/deploy/ensure_ffprobe.py --destination /tmp/flare-ffprobe
+      - if: matrix.database_provider == 'self-managed'
+        run: PYTHONPATH=backend python backend/scripts/check_voice_runtime.py --ffprobe-path /tmp/flare-ffprobe
 
   frontend:
     runs-on: ubuntu-latest

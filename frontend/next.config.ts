@@ -36,6 +36,14 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
+  async redirects() {
+    return [{
+      source: "/:path*",
+      has: [{ type: "host", value: "www.flare4u.tech" }],
+      destination: "https://flare4u.tech/:path*",
+      permanent: true,
+    }];
+  },
   async rewrites() {
     return [{
       source: "/api/:path*",

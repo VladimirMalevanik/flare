@@ -14,3 +14,6 @@ cookies.txt
 .ruff_cache/
 dist/
 build/
+desktop/node_modules/
+desktop/dist/
+desktop/generated-licenses/
