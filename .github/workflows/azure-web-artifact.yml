@@ -1,0 +1,68 @@
+name: Azure web release artifact
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - ".github/workflows/azure-web-artifact.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Linux x64 standalone web
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      NEXT_PRIVATE_STANDALONE: "true"
+      API_INTERNAL_URL: https://flare-api-vm-260914.azurewebsites.net
+      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_DATA_PROVIDER: api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Package the standalone server
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_dir="$RUNNER_TEMP/flare-web"
+          archive="$RUNNER_TEMP/flare-web.zip"
+          rm -rf "$release_dir" "$archive"
+          mkdir -p "$release_dir/.next"
+          cp -a .next/standalone/. "$release_dir/"
+          cp -a .next/static "$release_dir/.next/static"
+          cp -a public "$release_dir/public"
+          printf '%s\n' "$GITHUB_SHA" > "$release_dir/RELEASE_SHA"
+          printf '[config]\nSCM_DO_BUILD_DURING_DEPLOYMENT=false\n' > "$release_dir/.deployment"
+          test -f "$release_dir/server.js"
+          test -f "$release_dir/.next/BUILD_ID"
+          test -d "$release_dir/node_modules"
+          while IFS= read -r -d '' module; do
+            description=$(file -b "$module")
+            case "$description" in
+              *ELF*x86-64*) ;;
+              *) echo "Unexpected native module: $module ($description)" >&2; exit 1 ;;
+            esac
+          done < <(find "$release_dir" -type f -name '*.node' -print0)
+          (cd "$release_dir" && zip -Xqr "$archive" .)
+          (cd "$RUNNER_TEMP" && sha256sum flare-web.zip > flare-web.zip.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flare-web-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/flare-web.zip
+            ${{ runner.temp }}/flare-web.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
