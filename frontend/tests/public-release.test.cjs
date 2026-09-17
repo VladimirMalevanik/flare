@@ -7,7 +7,7 @@ const read = (relative) => fs.readFileSync(path.join(__dirname, relative), "utf8
 
 test("public landing page exposes product, account, and legal routes", () => {
   const source = read("../src/app/page.tsx");
-  for (const route of ["/register", "/login", "/privacy", "/terms", "/download"]) {
+  for (const route of ["/register", "/login", "/privacy", "/terms"]) {
     assert.match(source, new RegExp(`href=[{]?\"${route.replace("/", "\\/")}\"`));
   }
   assert.match(source, /Every published Flare links back to the saved context/);
@@ -32,11 +32,10 @@ test("macOS download page points both architectures at stable release assets", (
   assert.match(source, /not yet notarized/);
 });
 
-test("landing exposes Mac download from navigation, hero, closing CTA, and footer", () => {
+test("landing keeps Mac downloads out of public navigation and calls to action", () => {
   const source = read("../src/app/page.tsx");
-  assert.equal(source.match(/href="\/download"/g)?.length, 5);
-  assert.match(source, /landing-actions[\s\S]*?Download for Mac/);
-  assert.match(source, /landing-final-actions[\s\S]*?Download for Mac/);
+  assert.doesNotMatch(source, /href="\/download"/);
+  assert.doesNotMatch(source, /Download for Mac/);
 });
 
 test("mobile Vault illustration keeps a centered bounded core", () => {
