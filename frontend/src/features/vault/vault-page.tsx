@@ -288,15 +288,11 @@ export function VaultPage() {
                   aria-label={`Read transcript: ${item.title}`}
                 >
                   <Icon name="audio" />
-                  <span className="waveform">
-                    {Array.from({ length: 16 }, (_, i) => (
-                      <i
-                        key={i}
-                        style={{ height: `${6 + ((i * 7) % 20)}px` }}
-                      />
-                    ))}
+                  <span>
+                    <strong>Voice transcript</strong>
+                    <small>Captured from audio</small>
                   </span>
-                  <span>Transcript</span>
+                  <Icon name="arrow" />
                 </button>
               )}
               <div className="facts">
@@ -500,7 +496,7 @@ export function VaultPage() {
               <p className="muted">No related items yet.</p>
             )}
           </section>
-          <footer className="form-actions">
+          <footer className="form-actions item-sheet-actions">
             <button
               type="button"
               className="button primary"
@@ -511,7 +507,7 @@ export function VaultPage() {
             </button>
             <button
               type="button"
-              className="button"
+              className="button danger-button"
               disabled={deleting || session?.workspace.role === "viewer"}
               onClick={() => void deleteSelected()}
             >

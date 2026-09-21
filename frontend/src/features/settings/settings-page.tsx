@@ -497,6 +497,7 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
         title="Support"
         subtitle="Get help with your Flare workspace."
         icon="insights"
+        className="support-section"
       >
         <SettingRow
           title="Get help"
@@ -543,15 +544,17 @@ function SettingsSection({
   title,
   subtitle,
   icon,
+  className = "",
   children,
 }: {
   title: string;
   subtitle: string;
   icon: Parameters<typeof Icon>[0]["name"];
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <section className="card settings-section">
+    <section className={`card settings-section ${className}`}>
       <header>
         <h2>
           <Icon name={icon} />

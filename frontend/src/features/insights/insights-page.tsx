@@ -128,15 +128,17 @@ export function InsightsPage() {
   return (
     <div className={`insights-layout ${active ? "with-evidence" : ""}`}>
       <section className="page insight-feed">
-        <header className="page-heading">
-          <p className="eyebrow">
-            <span className="dot" />
-            RECENT FLARES · {insights.length} SURFACED
-          </p>
-          <h1>Flares</h1>
-          <p>Things you might have missed, forgotten, or contradicted.</p>
-        </header>
-        <AnalyzeAction />
+        <div className="insights-header">
+          <header className="page-heading">
+            <p className="eyebrow">
+              <span className="dot" />
+              RECENT FLARES · {insights.length} SURFACED
+            </p>
+            <h1>Flares</h1>
+            <p>Things you might have missed, forgotten, or contradicted.</p>
+          </header>
+          <AnalyzeAction />
+        </div>
         <div className="filters">
           <button
             className={`filter ${filter === "All" ? "selected" : ""}`}
@@ -177,7 +179,10 @@ export function InsightsPage() {
             {error}
           </p>
         ) : !insights.length ? (
-          <div className="state">
+          <div className="state insights-empty-state">
+            <span className="empty-state-icon" aria-hidden="true">
+              <Icon name="note" />
+            </span>
             <h2>{itemCount ? `${itemCount} item${itemCount === 1 ? "" : "s"} remembered` : "No Flares yet"}</h2>
             <p>
               {itemCount
@@ -209,9 +214,6 @@ export function InsightsPage() {
                     Import from Obsidian
                   </Link>
                 </div>
-                <p className="muted meta">
-                  Saved notes remain available in your Vault.
-                </p>
               </>
             )}
           </div>

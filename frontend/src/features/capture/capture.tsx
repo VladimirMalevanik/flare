@@ -434,6 +434,10 @@ export function Capture() {
             role="dialog"
             aria-label="Capture"
           >
+            <header className="capture-panel-header">
+              <span className="flare-orb" aria-hidden="true" />
+              <strong>Add context</strong>
+            </header>
             <div
               className="capture-dropzone"
               onDragOver={(event) => {
@@ -579,8 +583,8 @@ export function Capture() {
         }}
       />
       {saved && (
-        <div className="toast" role="status">
-          Captured in Vault{" "}
+        <div className="toast capture-toast" role="status">
+          <span>Captured in Vault</span>
           <Link href={`/vault?item=${saved}`} onClick={() => setSaved("")}>
             View item →
           </Link>

@@ -91,9 +91,6 @@ export function SourcesPage() {
           <h1>Sources</h1>
           <p>Ways to add project context to Flare.</p>
         </div>
-        <div className="heading-actions">
-          <span className="badge"><span className="dot green" />MVP</span>
-        </div>
       </header>
       {error && <p role="alert" className="error-text">{error}</p>}
       {loading ? <p role="status" className="state">Loading sources…</p> : groups.map(({ title, sources }) => (
