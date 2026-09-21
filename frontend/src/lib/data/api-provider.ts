@@ -425,8 +425,8 @@ export class ApiDataProvider implements FlareDataProvider {
       if (source.id !== "github") return source;
       if (connection.status === "connected" && connection.repository) {
         return { ...source, status: "connected", scope: connection.repository.fullName,
-          description: "Authorized read-only. Repository activity ingestion comes in the next phase.",
-          channels: [], updated: `Connected as ${connection.accountLogin ?? "GitHub account"}`,
+          description: "Repository connection is active.",
+          channels: [], updated: "Repository activity ingestion is not available yet.",
           accountLogin: connection.accountLogin ?? undefined, repository: connection.repository };
       }
       if (connection.status === "pending") {

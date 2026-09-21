@@ -90,7 +90,7 @@ export interface Source {
   scope: string;
   description: string;
   channels: string[];
-  status: "connected" | "syncing" | "disconnected" | "error" | "ready" | "coming-soon";
+  status: "connected" | "syncing" | "disconnected" | "error" | "ready" | "manual-import" | "coming-soon";
   updated: string;
   accountLogin?: string;
   repository?: GitHubRepository;

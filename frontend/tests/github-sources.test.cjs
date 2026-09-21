@@ -34,6 +34,7 @@ function harness(initialSource, available = []) {
   const exports = {};
   const sandbox = { exports, window: { location: { assign(url) { calls.push(['redirect', url]); } } }, require(name) {
     if (name === 'react/jsx-runtime') return jsx;
+    if (name === 'next/link') return { default: 'a' };
     if (name === 'react') return {
       useState(initial) { const index = cursor++; if (!(index in state)) state[index] = initial;
         return [state[index], value => { state[index] = typeof value === 'function' ? value(state[index]) : value; }]; },

@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { dataErrorMessage, dataProvider, type GitHubRepository, type Source } from "@/lib/data";
 import { Icon } from "@/components/icons";
@@ -107,15 +108,19 @@ export function SourcesPage() {
                   </span>
                 </header>
                 <div className="source-scope">
-                  <p className="eyebrow muted">{source.status === "ready" ? "AVAILABLE CONTEXT" : "MVP STATUS"}</p>
+                  <p className="eyebrow muted">{source.status === "ready" ? "AVAILABLE CONTEXT" : "PRIMARY"}</p>
                   {source.channels.length ? (
                     <div className="tags">{source.channels.map((channel) => <span key={channel}>{channel}</span>)}</div>
-                  ) : <p className="muted">Not available yet.</p>}
+                  ) : source.status === "connected" ? null : <p className="muted">Not available yet.</p>}
                 </div>
                 <p className="source-description">{source.description}</p>
                 <p className="muted meta">{source.updated}</p>
                 <footer>
-                  {source.id === "github" && source.status !== "coming-soon" ? (
+                  {source.status === "manual-import" ? (
+                    <Link className="button" href={`/settings/import-guides/${source.id}`}>
+                      View import guide
+                    </Link>
+                  ) : source.id === "github" && source.status !== "coming-soon" ? (
                     <GitHubControls
                       source={source}
                       repositories={repositories}
@@ -145,6 +150,7 @@ export function SourcesPage() {
 
 function sourceStatus(source: Source) {
   if (source.status === "ready") return "Ready";
+  if (source.status === "manual-import") return "Manual import";
   if (source.status === "connected") return "Connected";
   if (source.status === "syncing") return "Select repository";
   if (source.status === "disconnected") return "Not connected";
@@ -165,7 +171,7 @@ type GitHubControlsProps = {
   onDisconnect(): void;
 };
 
-function GitHubControls({ source, repositories, selectedRepository, loading, action, error,
+export function GitHubControls({ source, repositories, selectedRepository, loading, action, error,
   onSelect, onConnect, onSave, onDisconnect }: GitHubControlsProps) {
   if (source.status === "connected" && source.repository) {
     return <div className="github-source-controls">

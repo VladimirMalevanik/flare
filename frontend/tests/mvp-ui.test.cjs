@@ -23,6 +23,12 @@ function nodes(node) {
   if (Array.isArray(node)) return node.flatMap(nodes);
   return [node, ...nodes(node.props?.children)];
 }
+function textContent(node) {
+  if (node == null || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(textContent).join(' ');
+  return textContent(node.props?.children);
+}
 function capture(draft) {
   const requests = [], messages = [];
   const mocks = {
@@ -34,6 +40,11 @@ function capture(draft) {
     '@/lib/data': { dataProvider: { async createItem(input) { requests.push(input); return { id: 'saved' }; }, async importTextFile() { return { item: { id: 'imported' } }; }, async trackEvent() {} }, dataErrorMessage: () => 'error' },
     '@/lib/storage/preferences': {},
     '@/lib/voice': { async transcribeVoice() { return { id: 'voice-saved' }; } },
+    './capture-position': {
+      clampOrbPosition: position => position,
+      hoverRectFor: () => ({ x: 0, y: 0, width: 146, height: 58, direction: 'right' }),
+      placeCapturePanel: () => ({ x: 0, y: 0, width: 500, height: 204, horizontal: 'right', vertical: 'below' }),
+    },
     './use-voice-capture': { useVoiceCapture: () => ({ state: 'idle', recording: null, error: '', cancel() {}, start() {}, stop() {} }) },
   };
   return { tree: nodes(load('../src/features/capture/capture.tsx', mocks).Capture()), requests, messages };
@@ -88,9 +99,18 @@ test('Sources loads through provider with headings outside grids and margin-safe
   });
   const state = [];
   let cursor = 0, effect, calls = 0;
-  const providerSources = sourceCatalog.map(s => ({ ...s, name: `Provider: ${s.name}` }));
-  const { SourcesPage } = load('../src/features/sources/sources-page.tsx', {
+  const providerSources = sourceCatalog.map(s => s.id === 'github' ? {
+    ...s,
+    name: `Provider: ${s.name}`,
+    status: 'connected',
+    scope: 'flare/example',
+    description: 'Repository connection is active.',
+    updated: 'Repository activity ingestion is not available yet.',
+    repository: { id: 1, fullName: 'flare/example' },
+  } : { ...s, name: `Provider: ${s.name}` });
+  const { SourcesPage, GitHubControls } = load('../src/features/sources/sources-page.tsx', {
     'react/jsx-runtime': jsx, '@/components/icons': { Icon: 'icon' },
+    'next/link': { default: 'a' },
     react: {
       useState(initial) { const index = cursor++; if (!(index in state)) state[index] = initial; return [state[index], value => { state[index] = value; }]; },
       useEffect(fn) { effect = fn; },
@@ -112,11 +132,115 @@ test('Sources loads through provider with headings outside grids and margin-safe
   assert.equal(groups.length, 2);
   const grids = tree.filter(n => n.props?.className === 'source-grid');
   assert.equal(grids.length, 2);
-  assert.equal(grids[0].props.children.length, 2);
+  assert.equal(grids[0].props.children.length, 5);
   for (const grid of grids) assert.ok(grid.props.children.every(n => n.type === 'article'));
   assert.equal(sourceCatalog[0].scope, 'Notes, links, and text imports');
   assert.equal(sourceCatalog[0].channels.join(','), 'Notes,Links,CSV,TXT,Markdown');
   assert.equal(sourceCatalog.find(s => s.id === 'voice').status, 'ready');
-  assert.ok(sourceCatalog.filter(s => !['manual-capture', 'voice'].includes(s.id)).every(s => s.status === 'coming-soon'));
+  const obsidian = sourceCatalog.find(s => s.id === 'obsidian');
+  const notion = sourceCatalog.find(s => s.id === 'notion');
+  assert.deepEqual(
+    { status: obsidian.status, primary: obsidian.channels[0], description: obsidian.description, muted: obsidian.updated },
+    {
+      status: 'manual-import',
+      primary: 'Manual import available',
+      description: 'Export Markdown from Obsidian and import it into Flare.',
+      muted: 'Automatic vault sync is not available yet.',
+    },
+  );
+  assert.deepEqual(
+    { status: notion.status, primary: notion.channels[0], description: notion.description, muted: notion.updated },
+    {
+      status: 'manual-import',
+      primary: 'Manual import available',
+      description: 'Export your Notion content and import it into Flare.',
+      muted: 'Automatic workspace sync is not available yet.',
+    },
+  );
+  const articles = tree.filter(n => n.type === 'article');
+  const obsidianCard = articles.find(n => textContent(n).includes('Provider: Obsidian import'));
+  const notionCard = articles.find(n => textContent(n).includes('Provider: Notion'));
+  const githubCard = articles.find(n => textContent(n).includes('Provider: GitHub'));
+  assert.equal(nodes(obsidianCard).find(n => n.type === 'a')?.props.href, '/settings/import-guides/obsidian');
+  assert.equal(nodes(notionCard).find(n => n.type === 'a')?.props.href, '/settings/import-guides/notion');
+  assert.match(textContent(githubCard), /Connected/);
+  assert.match(textContent(githubCard), /Repository connection is active\./);
+  assert.match(textContent(githubCard), /flare\/example/);
+  assert.match(textContent(githubCard), /Repository activity ingestion is not available yet\./);
+  assert.doesNotMatch(textContent(githubCard), /Not available yet\./);
+  const githubControls = nodes(GitHubControls({
+    source: providerSources.find(s => s.id === 'github'),
+    repositories: [], selectedRepository: '', loading: false, action: '', error: '',
+    onSelect() {}, onConnect() {}, onSave() {}, onDisconnect() {},
+  }));
+  assert.match(textContent(githubControls), /flare\/example/);
+  assert.match(textContent(githubControls), /Read-only connection/);
+  assert.ok(sourceCatalog.filter(s => !['manual-capture', 'voice', 'obsidian', 'notion'].includes(s.id)).every(s => s.status === 'coming-soon'));
   assert.ok(nodes(grids[1]).filter(n => n.type === 'button').every(n => n.props.disabled));
+});
+
+test('Capture placement keeps the orb fixed and panels inside every viewport corner', () => {
+  const positioning = load('../src/features/capture/capture-position.ts', {});
+  const viewports = [
+    { width: 1440, height: 900 },
+    { width: 1280, height: 800 },
+    { width: 900, height: 700 },
+    { width: 390, height: 844 },
+  ];
+  for (const viewport of viewports) {
+    const orbSize = 44;
+    const edge = orbSize / 2 + 12;
+    const corners = [
+      { x: edge, y: edge, horizontal: 'right', vertical: 'below' },
+      { x: viewport.width - edge, y: edge, horizontal: 'left', vertical: 'below' },
+      { x: edge, y: viewport.height - edge, horizontal: 'right', vertical: 'above' },
+      { x: viewport.width - edge, y: viewport.height - edge, horizontal: 'left', vertical: 'above' },
+    ];
+    for (const corner of corners) {
+      const anchor = positioning.clampOrbPosition(corner, orbSize, viewport);
+      const before = { ...anchor };
+      const panel = positioning.placeCapturePanel(anchor, orbSize, { width: 500, height: 360 }, viewport);
+      assert.equal(anchor.x, before.x);
+      assert.equal(anchor.y, before.y);
+      assert.ok(panel.x >= 16 && panel.y >= 16);
+      assert.ok(panel.x + panel.width <= viewport.width - 16);
+      assert.ok(panel.y + panel.height <= viewport.height - 16);
+      if (viewport.width >= 900) assert.equal(panel.horizontal, corner.horizontal);
+      assert.equal(panel.vertical, corner.vertical);
+      const hover = positioning.hoverRectFor(anchor, orbSize, 146, viewport.width);
+      assert.ok(hover.x >= 12);
+      assert.ok(hover.y >= 12);
+      assert.ok(hover.x + hover.width <= viewport.width - 12);
+      assert.ok(hover.y + hover.height <= viewport.height - 12);
+      assert.equal(anchor.x, before.x);
+      assert.equal(anchor.y, before.y);
+    }
+    const edgeAnchors = [
+      { x: viewport.width / 2, y: viewport.height / 2 },
+      { x: 0, y: viewport.height / 2 },
+      { x: viewport.width, y: viewport.height / 2 },
+      { x: viewport.width / 2, y: 0 },
+      { x: viewport.width / 2, y: viewport.height },
+    ];
+    for (const candidate of edgeAnchors) {
+      const anchor = positioning.clampOrbPosition(candidate, orbSize, viewport);
+      const panel = positioning.placeCapturePanel(anchor, orbSize, { width: 500, height: 360 }, viewport);
+      assert.ok(panel.x >= 16 && panel.y >= 16);
+      assert.ok(panel.x + panel.width <= viewport.width - 16);
+      assert.ok(panel.y + panel.height <= viewport.height - 16);
+      const hover = positioning.hoverRectFor(anchor, orbSize, 146, viewport.width);
+      assert.ok(hover.x >= 12 && hover.x + hover.width <= viewport.width - 12);
+      assert.ok(hover.y >= 12 && hover.y + hover.height <= viewport.height - 12);
+    }
+    const leftHover = positioning.hoverRectFor(
+      positioning.clampOrbPosition({ x: 0, y: viewport.height / 2 }, orbSize, viewport),
+      orbSize, 146, viewport.width,
+    );
+    const rightHover = positioning.hoverRectFor(
+      positioning.clampOrbPosition({ x: viewport.width, y: viewport.height / 2 }, orbSize, viewport),
+      orbSize, 146, viewport.width,
+    );
+    assert.equal(leftHover.direction, 'right');
+    assert.equal(rightHover.direction, 'left');
+  }
 });

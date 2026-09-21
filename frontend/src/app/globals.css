@@ -555,7 +555,8 @@ kbd {
   border-color: color-mix(in srgb, var(--green) 25%, transparent);
 }
 .kind-3,
-.status-syncing {
+.status-syncing,
+.status-manual-import {
   color: var(--accent-text);
   background: var(--accent-wash);
 }
@@ -1811,11 +1812,8 @@ blockquote {
 .flare-capture {
   position: fixed;
   z-index: 45;
-  top: 12px;
-  left: 50%;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
+  top: 19px;
+  left: calc(50% - 22px);
   --flare-orb-size: 44px;
   --flare-hover-inline-padding: 7px;
   --flare-hover-gap: 12px;
@@ -1828,31 +1826,9 @@ blockquote {
   );
   width: var(--flare-orb-size);
   height: var(--flare-orb-size);
-  max-height: var(--flare-orb-size);
-  transform: translateX(-50%);
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: transparent;
-  box-shadow: none;
   transition:
-    width 210ms cubic-bezier(0.2, 0, 0, 1),
-    height 240ms cubic-bezier(0.2, 0, 0, 1),
-    max-height 240ms cubic-bezier(0.2, 0, 0, 1),
     left 240ms cubic-bezier(0.2, 0, 0, 1),
-    top 240ms cubic-bezier(0.2, 0, 0, 1),
-    padding 210ms cubic-bezier(0.2, 0, 0, 1),
-    border-color 180ms ease-out,
-    background-color 180ms ease-out,
-    box-shadow 180ms ease-out;
-}
-.flare-capture--hover {
-  width: var(--flare-hover-width);
-  height: var(--flare-hover-height);
-  max-height: var(--flare-hover-height);
-  border-color: var(--line);
-  background: color-mix(in srgb, var(--float) 92%, var(--surface));
-  box-shadow: 0 10px 28px #00000012;
-  backdrop-filter: blur(16px);
+    top 240ms cubic-bezier(0.2, 0, 0, 1);
 }
 .flare-capture.orb-size-small {
   --flare-orb-size: 36px;
@@ -1860,46 +1836,40 @@ blockquote {
 .flare-capture.orb-size-large {
   --flare-orb-size: 52px;
 }
-.flare-capture--capture {
-  width: min(500px, calc(100vw - 32px));
-  min-height: 204px;
-  height: auto;
-  max-height: min(360px, calc(100dvh - 32px));
-  padding: 12px;
-  border-radius: 22px;
-  border-color: var(--line);
-  background: var(--float);
-  box-shadow: 0 18px 48px #0000001c;
-  backdrop-filter: blur(20px);
-  overflow: auto;
-}
-.flare-capture--voice {
-  width: min(360px, calc(100vw - 32px));
-  height: 52px;
-  max-height: 52px;
-  padding: 7px 10px;
-  border-color: var(--line);
-  background: var(--float);
-  box-shadow: 0 14px 36px #00000018;
-  backdrop-filter: blur(20px);
-}
-.flare-capture.is-dragging {
+.flare-capture.is-dragging .flare-capture-panel {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 .flare-capture-trigger {
+  position: absolute;
+  top: calc(-1 * var(--flare-hover-inline-padding));
+  left: calc(-1 * var(--flare-hover-inline-padding));
   display: flex;
   align-items: center;
-  width: 100%;
-  height: 100%;
-  justify-content: center;
+  width: calc(var(--flare-orb-size) + 14px);
+  height: var(--flare-hover-height);
+  justify-content: flex-start;
   gap: 0;
-  padding: 0;
+  padding: 0 var(--flare-hover-inline-padding);
   overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
   white-space: nowrap;
   touch-action: none;
   cursor: grab;
   user-select: none;
+  transition:
+    width 210ms cubic-bezier(0.2, 0, 0, 1),
+    gap 210ms cubic-bezier(0.2, 0, 0, 1),
+    border-color 180ms ease-out,
+    background-color 180ms ease-out,
+    box-shadow 180ms ease-out;
+}
+.flare-capture--expand-left .flare-capture-trigger {
+  right: calc(-1 * var(--flare-hover-inline-padding));
+  left: auto;
+  flex-direction: row-reverse;
 }
 .flare-capture-label {
   max-width: 0;
@@ -1916,9 +1886,12 @@ blockquote {
     transform 210ms cubic-bezier(0.2, 0, 0, 1);
 }
 .flare-capture--hover .flare-capture-trigger {
-  justify-content: flex-start;
+  width: var(--flare-hover-width);
   gap: var(--flare-hover-gap);
-  padding: 0 var(--flare-hover-inline-padding);
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--float) 92%, var(--surface));
+  box-shadow: 0 10px 28px #00000012;
+  backdrop-filter: blur(16px);
 }
 .flare-capture.is-orb-dragging,
 .flare-capture.is-orb-dragging .flare-capture-trigger {
@@ -1930,8 +1903,23 @@ blockquote {
   opacity: 1;
   transform: none;
 }
+.flare-capture-anchor {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
 .flare-capture-panel {
-  width: 100%;
+  position: fixed;
+  width: min(500px, calc(100vw - 32px));
+  min-height: 204px;
+  max-height: calc(100dvh - 32px);
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--float);
+  box-shadow: 0 18px 48px #0000001c;
+  backdrop-filter: blur(20px);
 }
 .capture-panel-header {
   display: flex;
@@ -1940,10 +1928,6 @@ blockquote {
   padding: 1px 7px 8px;
   color: var(--ink);
   font-size: 12px;
-}
-.capture-panel-header .flare-orb {
-  --flare-orb-size: 24px;
-  animation: none;
 }
 .flare-capture-panel textarea {
   display: block;
@@ -2005,16 +1989,19 @@ blockquote {
   margin-left: 2px;
 }
 .flare-recording-island {
+  position: fixed;
   display: flex;
   align-items: center;
-  width: 100%;
-  height: 100%;
+  width: min(360px, calc(100vw - 32px));
+  height: 52px;
   gap: 12px;
-  padding: 0 1px;
-}
-.flare-recording-island .flare-orb {
-  width: 28px;
-  height: 28px;
+  padding: 7px 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--float);
+  box-shadow: 0 14px 36px #00000018;
+  backdrop-filter: blur(20px);
 }
 .voice-timer {
   font-variant-numeric: tabular-nums;

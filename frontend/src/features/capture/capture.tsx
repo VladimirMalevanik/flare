@@ -12,13 +12,17 @@ import {
 } from "@/lib/data";
 import { readLocal, writeLocal } from "@/lib/storage/preferences";
 import { transcribeVoice } from "@/lib/voice";
+import {
+  clampOrbPosition,
+  hoverRectFor,
+  placeCapturePanel,
+  type CapturePoint,
+  type CaptureSize,
+} from "./capture-position";
 import { useVoiceCapture } from "./use-voice-capture";
 
 const ORB_POSITION_KEY = "flare-orb-position-v1";
-const ORB_EDGE_PADDING = 12;
-const PANEL_EDGE_MARGIN = 16;
 const MAX_IMPORT_BYTES = 200_000;
-type OrbPosition = { x: number; y: number };
 type PointerStart = {
   pointerId: number;
   pointerX: number;
@@ -42,43 +46,6 @@ function elapsed(seconds: number) {
     .padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
 }
 
-function clampOrbPosition(position: OrbPosition, orbSize: number): OrbPosition {
-  const edgeMargin = orbSize / 2 + ORB_EDGE_PADDING;
-  return {
-    x: Math.min(
-      Math.max(edgeMargin, position.x),
-      window.innerWidth - edgeMargin,
-    ),
-    y: Math.min(
-      Math.max(edgeMargin, position.y),
-      window.innerHeight - edgeMargin,
-    ),
-  };
-}
-
-function clampPanelAxis(value: number, size: number, viewport: number) {
-  if (size + PANEL_EDGE_MARGIN * 2 >= viewport) return viewport / 2;
-  return Math.min(
-    Math.max(value, size / 2 + PANEL_EDGE_MARGIN),
-    viewport - size / 2 - PANEL_EDGE_MARGIN,
-  );
-}
-
-function panelPositionFor(
-  position: OrbPosition,
-  stage: "capture" | "voice",
-): OrbPosition {
-  const width = Math.min(
-    stage === "voice" ? 360 : 500,
-    window.innerWidth - PANEL_EDGE_MARGIN * 2,
-  );
-  const height = stage === "voice" ? 52 : 360;
-  return {
-    x: clampPanelAxis(position.x, width, window.innerWidth),
-    y: clampPanelAxis(position.y, height, window.innerHeight),
-  };
-}
-
 export function Capture() {
   const {
     captureOpen,
@@ -98,8 +65,11 @@ export function Capture() {
   const [saved, setSaved] = useState("");
   const [dragging, setDragging] = useState(false);
   const [orbDragging, setOrbDragging] = useState(false);
-  const [orbPosition, setOrbPosition] = useState<OrbPosition | null>(null);
+  const [orbPosition, setOrbPosition] = useState<CapturePoint | null>(null);
+  const [viewport, setViewport] = useState<CaptureSize | null>(null);
+  const [panelSize, setPanelSize] = useState<CaptureSize>({ width: 500, height: 204 });
   const island = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const pointerStart = useRef<PointerStart | null>(null);
   const suppressClick = useRef(false);
@@ -107,7 +77,7 @@ export function Capture() {
   const voiceIsland = !["idle", "error", "ready"].includes(voice.state);
 
   useEffect(() => {
-    const savedPosition = readLocal<Partial<OrbPosition> | null>(
+    const savedPosition = readLocal<Partial<CapturePoint> | null>(
       ORB_POSITION_KEY,
       null,
     );
@@ -118,12 +88,19 @@ export function Capture() {
         ? { x: savedPosition.x, y: savedPosition.y }
         : null;
     const restoreFrame = requestAnimationFrame(() => {
-      if (restoredPosition)
-        setOrbPosition(clampOrbPosition(restoredPosition, orbSize));
+      const nextViewport = { width: window.innerWidth, height: window.innerHeight };
+      setViewport(nextViewport);
+      setOrbPosition(clampOrbPosition(
+        restoredPosition ?? { x: nextViewport.width / 2, y: orbSize / 2 + 19 },
+        orbSize,
+        nextViewport,
+      ));
     });
     const keepInsideViewport = () => {
+      const nextViewport = { width: window.innerWidth, height: window.innerHeight };
+      setViewport(nextViewport);
       setOrbPosition((current) =>
-        current ? clampOrbPosition(current, orbSize) : current,
+        current ? clampOrbPosition(current, orbSize, nextViewport) : current,
       );
     };
     window.addEventListener("resize", keepInsideViewport);
@@ -132,6 +109,19 @@ export function Capture() {
       window.removeEventListener("resize", keepInsideViewport);
     };
   }, [orbSize]);
+
+  useEffect(() => {
+    if ((!captureOpen && !voiceIsland) || !panel.current) return;
+    const element = panel.current;
+    const measure = () => {
+      const rect = element.getBoundingClientRect();
+      setPanelSize({ width: rect.width, height: rect.height });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [captureOpen, voiceIsland]);
 
   const close = useCallback(() => {
     if (busy) return;
@@ -220,10 +210,10 @@ export function Capture() {
     setOrbDragging(true);
     setHovered(false);
     setOrbPosition(
-      clampOrbPosition({
+      viewport ? clampOrbPosition({
         x: start.orbX + event.clientX - start.pointerX,
         y: start.orbY + event.clientY - start.pointerY,
-      }, orbSize),
+      }, orbSize, viewport) : orbPosition,
     );
   };
   const finishOrbDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -233,10 +223,11 @@ export function Capture() {
     event.currentTarget.releasePointerCapture(event.pointerId);
     suppressClick.current = true;
     if (start.moved) {
+      if (!viewport) return;
       const next = clampOrbPosition({
         x: start.orbX + event.clientX - start.pointerX,
         y: start.orbY + event.clientY - start.pointerY,
-      }, orbSize);
+      }, orbSize, viewport);
       setOrbPosition(next);
       setOrbDragging(false);
       try {
@@ -339,23 +330,28 @@ export function Capture() {
       : hovered
         ? "hover"
         : "idle";
-  const displayPosition =
-    orbPosition && (stage === "capture" || stage === "voice")
-      ? panelPositionFor(orbPosition, stage)
-      : orbPosition;
+  const expandedWidth = orbSize + 76 + 12 + 14;
+  const hoverPlacement = orbPosition && viewport
+    ? hoverRectFor(orbPosition, orbSize, expandedWidth, viewport.width)
+    : null;
+  const requestedPanelSize = stage === "voice"
+    ? { width: 360, height: 52 }
+    : { width: 500, height: Math.max(204, panelSize.height) };
+  const panelPlacement = orbPosition && viewport && (stage === "capture" || stage === "voice")
+    ? placeCapturePanel(orbPosition, orbSize, requestedPanelSize, viewport)
+    : null;
 
   return (
     <>
       <div
         ref={island}
-        className={`flare-capture orb-size-${captureOrbSize} flare-capture--${stage} ${dragging ? "is-dragging" : ""} ${orbDragging ? "is-orb-dragging" : ""}`}
+        className={`flare-capture orb-size-${captureOrbSize} flare-capture--${stage} flare-capture--expand-${hoverPlacement?.direction ?? "right"} ${dragging ? "is-dragging" : ""} ${orbDragging ? "is-orb-dragging" : ""}`}
         data-capture-state={stage}
         style={
-          displayPosition
+          orbPosition
             ? {
-                left: displayPosition.x,
-                top: displayPosition.y,
-                transform: "translate(-50%, -50%)",
+                left: orbPosition.x - orbSize / 2,
+                top: orbPosition.y - orbSize / 2,
               }
             : undefined
         }
@@ -385,13 +381,19 @@ export function Capture() {
             <span className="flare-orb" aria-hidden="true" />
             <span className="flare-capture-label">Add context</span>
           </button>
-        ) : voiceIsland ? (
+        ) : (
+          <span className="flare-capture-anchor" aria-hidden="true">
+            <span className="flare-orb" />
+          </span>
+        )}
+        {voiceIsland ? (
           <div
+            ref={panel as React.RefObject<HTMLDivElement>}
             className="flare-recording-island"
             role="status"
             aria-live="polite"
+            style={panelPlacement ? { left: panelPlacement.x, top: panelPlacement.y } : undefined}
           >
-            <span className="flare-orb" aria-hidden="true" />
             {voice.state === "recording" ? (
               <>
                 <div className="voice-waveform" aria-label="Recording waveform">
@@ -428,14 +430,15 @@ export function Capture() {
               <Icon name="close" />
             </button>
           </div>
-        ) : (
+        ) : captureOpen ? (
           <section
+            ref={panel}
             className="flare-capture-panel"
             role="dialog"
             aria-label="Capture"
+            style={panelPlacement ? { left: panelPlacement.x, top: panelPlacement.y } : undefined}
           >
             <header className="capture-panel-header">
-              <span className="flare-orb" aria-hidden="true" />
               <strong>Add context</strong>
             </header>
             <div
@@ -568,7 +571,7 @@ export function Capture() {
               </button>
             </footer>
           </section>
-        )}
+        ) : null}
       </div>
       <input
         ref={fileInput}
