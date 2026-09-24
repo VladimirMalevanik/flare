@@ -43,6 +43,13 @@ jobs:
               release_sha = fetch("/api/vfs/site/wwwroot/RELEASE_SHA").decode("utf-8", "replace").strip()
           except Exception:
               release_sha = "missing"
+          try:
+              wwwroot = json.loads(fetch("/api/vfs/site/wwwroot/"))
+              wwwroot_names = sorted(
+                  item.get("name", "") for item in wwwroot if isinstance(item, dict)
+              )
+          except Exception:
+              wwwroot_names = []
           archive = zipfile.ZipFile(io.BytesIO(fetch("/api/zip/LogFiles/")))
           text_files = []
           for item in archive.infolist():
@@ -66,6 +73,7 @@ jobs:
               "uvicorn_started": r"Application startup complete|Uvicorn running",
           }
           print(f"release-sha={release_sha}")
+          print("wwwroot-files=" + ",".join(wwwroot_names))
           print(f"log-files={len(text_files)}")
           for label, pattern in patterns.items():
               print(f"{label}-recent={len(re.findall(pattern, recent_logs, flags=re.IGNORECASE))}")
@@ -83,6 +91,11 @@ jobs:
           }
           for label, pattern in root_causes.items():
               print(f"{label}-recent={len(re.findall(pattern, recent_logs, flags=re.IGNORECASE))}")
+          exception_types = sorted(set(re.findall(
+              r"(?m)^([A-Za-z_][A-Za-z0-9_.]*(?:Error|Exception|Timeout))(?::|$)",
+              recent_logs,
+          )))
+          print("exception-types-recent=" + ",".join(exception_types))
 
           try:
               processes = json.loads(fetch("/api/processes"))
