@@ -23,7 +23,6 @@ permissions:
 
 jobs:
   verify:
-    if: ${{ inputs.service == 'all' || inputs.service == matrix.service }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -37,6 +36,7 @@ jobs:
             app: flare-web-vm-260914
     steps:
       - name: Verify ${{ matrix.service }} release marker
+        if: ${{ inputs.service == 'all' || inputs.service == matrix.service }}
         env:
           AZURE_API_PUBLISH_USER: ${{ secrets.AZURE_API_PUBLISH_USER }}
           AZURE_API_PUBLISH_PASSWORD: ${{ secrets.AZURE_API_PUBLISH_PASSWORD }}
