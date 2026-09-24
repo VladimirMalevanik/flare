@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Classify App Service startup logs
         env:
-          AZURE_API_PUBLISH_PROFILE: ${{ secrets.AZURE_API_PUBLISH_PROFILE }}
+          AZURE_API_PUBLISH_CREDENTIALS: ${{ secrets.AZURE_API_PUBLISH_CREDENTIALS }}
         run: |
           python - <<'PY'
           import base64
@@ -21,19 +21,17 @@ jobs:
           import os
           import re
           import urllib.request
-          import xml.etree.ElementTree as ET
           import zipfile
 
-          profile_xml = os.environ.get("AZURE_API_PUBLISH_PROFILE", "")
-          if not profile_xml:
-              raise SystemExit("publish-profile=missing")
-          profiles = ET.fromstring(profile_xml).findall("publishProfile")
-          profile = next((item for item in profiles if item.get("publishMethod") == "MSDeploy"), profiles[0])
-          host = (profile.get("publishUrl") or "").split(":", 1)[0]
-          username = profile.get("userName") or ""
-          password = profile.get("userPWD") or ""
-          if not host or not username or not password:
-              raise SystemExit("publish-profile=invalid")
+          credentials_json = os.environ.get("AZURE_API_PUBLISH_CREDENTIALS", "")
+          if not credentials_json:
+              raise SystemExit("publish-credentials=missing")
+          credentials = json.loads(credentials_json)
+          host = "flare-api-vm-260914.scm.azurewebsites.net"
+          username = credentials.get("user") or ""
+          password = credentials.get("password") or ""
+          if not username or not password:
+              raise SystemExit("publish-credentials=invalid")
           authorization = base64.b64encode(f"{username}:{password}".encode()).decode()
 
           def fetch(path: str) -> bytes:
