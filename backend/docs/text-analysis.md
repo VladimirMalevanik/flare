@@ -45,7 +45,7 @@ All configuration is backend-only; see root `.env.example`:
 | `GROQ_BASE_URL` | `https://api.groq.com` |
 | `LLM_DEFAULT_MODEL` | `openai/gpt-oss-20b` |
 | `LLM_DEFAULT_REASONING_EFFORT` | `low` |
-| `LLM_MAX_INPUT_BYTES` | 4000 |
+| `LLM_MAX_INPUT_BYTES` | 32000 |
 | `LLM_MAX_SOURCES` | 5 |
 | `LLM_MAX_COMPLETION_TOKENS` | 2000 |
 | `LLM_CONNECT_TIMEOUT_SECONDS` | 5 |
@@ -53,9 +53,11 @@ All configuration is backend-only; see root `.env.example`:
 | `LLM_DEADLINE_SECONDS` | 40 across request/response parsing |
 
 The byte cap covers canonical compact UTF-8 JSON for the whole request,
-including prompt, schema and options. It is a **size safety bound, not token
-accounting or a guarantee of available free quota**. Oversized input is rejected,
-never truncated or split. Prompt/schema overhead reduces usable evidence size.
+including prompt, schema and options. It is deliberately separate from the
+4 KB import chunk target: the request envelope and at least one complete legacy
+chunk must fit together. It is a **size safety bound, not token accounting or a
+guarantee of available free quota**. Oversized input is rejected, never truncated
+or split. Prompt/schema overhead reduces usable evidence size.
 Generated reasoning still uses completion budget even when not returned.
 Prompt and schema version are code-owned `text-analysis-v1` constants; change
 these with the corresponding implementation, not independently via environment.

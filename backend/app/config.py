@@ -215,7 +215,10 @@ class AISettings:
     base_url: str = "https://api.groq.com"
     model: str = "openai/gpt-oss-20b"
     reasoning_effort: str = "low"
-    max_input_bytes: int = 4000
+    # Whole serialized provider request (prompt + schema + evidence), not the
+    # size of one imported chunk. 32 KiB leaves room for existing 4 KiB chunks
+    # and the code-owned request envelope.
+    max_input_bytes: int = 32_000
     max_sources: int = 5
     max_completion_tokens: int = 2000
     connect_timeout_seconds: float = 5.0
@@ -246,7 +249,7 @@ def load_ai_settings() -> AISettings:
             base_url=os.getenv("GROQ_BASE_URL", "https://api.groq.com"),
             model=os.getenv("LLM_DEFAULT_MODEL", "openai/gpt-oss-20b"),
             reasoning_effort=os.getenv("LLM_DEFAULT_REASONING_EFFORT", "low"),
-            max_input_bytes=int(os.getenv("LLM_MAX_INPUT_BYTES", "4000")),
+            max_input_bytes=int(os.getenv("LLM_MAX_INPUT_BYTES", "32000")),
             max_sources=int(os.getenv("LLM_MAX_SOURCES", "5")),
             max_completion_tokens=int(os.getenv("LLM_MAX_COMPLETION_TOKENS", "2000")),
             connect_timeout_seconds=float(os.getenv("LLM_CONNECT_TIMEOUT_SECONDS", "5")),

@@ -61,6 +61,27 @@ def test_prompt_and_strict_schema():
     assert request_size_bytes({'x': 'я'}) > request_size_bytes({'x': 'a'})
 
 
+def test_import_chunks_fit_inside_default_request_budget():
+    """The request budget includes prompt/schema and must exceed a chunk budget."""
+    from app.ai_engine.prompts import build_bounded_request, request_size_bytes
+    from app.config import AISettings
+    from app.services.import_service import IMPORT_CHUNK_TARGET_BYTES
+
+    settings = AISettings()
+    typical = [
+        Evidence(source_id=f'source-{index}', content='x' * IMPORT_CHUNK_TARGET_BYTES)
+        for index in range(settings.max_sources)
+    ]
+    request = build_bounded_request(typical, settings)
+    assert request_size_bytes(request) <= settings.max_input_bytes
+
+    # JSON can expand control characters to six bytes. Even such a legacy
+    # 4 KB chunk must remain selectable rather than being silently discarded.
+    pathological = Evidence(source_id='control-heavy', content='\x01' * IMPORT_CHUNK_TARGET_BYTES)
+    request = build_bounded_request([pathological], settings)
+    assert request_size_bytes(request) <= settings.max_input_bytes
+
+
 @pytest.mark.parametrize('source_id,quote', [
     ('forged', 'Use PostgreSQL.'), ('s1', 'Use MySQL.'),
     ('s1', 'use PostgreSQL.'), ('s1', 'Use PostgreSQL!'),

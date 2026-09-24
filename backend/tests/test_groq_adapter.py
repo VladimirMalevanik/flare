@@ -53,7 +53,10 @@ def test_actual_sdk_request_contract_and_metadata():
     assert result.metadata.validation_outcome == 'valid'
 
 
-@pytest.mark.parametrize('evidence', [[], SOURCES * 2, [Evidence(source_id='s1', content='x' * 4001)]])
+@pytest.mark.parametrize('evidence', [
+    [], SOURCES * 2,
+    [Evidence(source_id='s1', content='x' * (AISettings().max_input_bytes + 1))],
+])
 def test_bad_input_makes_no_request(evidence):
     def handler(_):
         pytest.fail('Invalid input reached provider')
