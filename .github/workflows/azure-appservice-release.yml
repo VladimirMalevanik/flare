@@ -104,7 +104,9 @@ jobs:
           set -euo pipefail
           runtime_dir="$RUNNER_TEMP/flare-backend-runtime"
           "$runtime_dir/antenv/bin/python" -m compileall -q "$runtime_dir/app"
-          "$runtime_dir/antenv/bin/python" -c 'import fastapi, psycopg, sqlalchemy, uvicorn; import app.main; import app.workers.analysis_worker'
+          cd "$runtime_dir"
+          FLARE_ENV=test EMAIL_VERIFICATION_REQUIRED=false \
+            "$runtime_dir/antenv/bin/python" -c 'import fastapi, psycopg, sqlalchemy, uvicorn; import app.main; import app.workers.analysis_worker'
       - name: Archive portable Linux runtime
         shell: bash
         run: |
