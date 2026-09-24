@@ -100,7 +100,22 @@ def test_unrelated_problem_observation_cannot_authorize_recommendation():
         'text': 'The office coffee machine is broken.',
         'evidence': [{'source_id': S1, 'quote': SOURCES[0].content}],
     }]})
-    assert validated([c], SOURCES, analysis).flares == []
+    result = validated([c], SOURCES, analysis)
+    assert all(item.type != 'Recommendation' for item in result.flares)
+
+
+def test_evidenced_problem_falls_back_to_warning_when_provider_returns_empty():
+    text = 'The database connection pool fails during startup.'
+    source = Evidence(source_id=S1, content=text)
+    analysis = TextAnalysis.model_validate({'observations': [{
+        'category': 'problem',
+        'text': 'The database connection pool fails during startup.',
+        'evidence': [{'source_id': S1, 'quote': text}],
+    }]})
+    result = validated([], [source], analysis)
+    assert len(result.flares) == 1
+    assert result.flares[0].type == 'Warning'
+    assert result.flares[0].evidence[0].quote == text
 
 
 def test_evidenced_problem_can_be_a_warning_without_invented_action():
@@ -214,7 +229,7 @@ def test_observation_categories_still_rejected_as_supports(category):
 
 def test_prompt_revision_changes_generation_identity(monkeypatch):
     import app.ai_engine.flare_config as config
-    assert PROMPT_VERSION == 'flare-v6'
+    assert PROMPT_VERSION == 'flare-v7'
     assert SCHEMA_VERSION == 'flare-v1'
     settings, ai = FlareSettings(), AISettings()
     current = settings.revision(ai)

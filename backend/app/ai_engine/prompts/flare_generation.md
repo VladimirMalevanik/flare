@@ -1,5 +1,5 @@
 ---
-version: flare-v6
+version: flare-v7
 schema: flare-v1
 ---
 

@@ -194,6 +194,43 @@ def validate_candidates(candidates: FlareCandidates, analysis: TextAnalysis,
                    for o in analysis.observations):
                 continue
         accepted.append(c)
+
+    # A provider may legally return an empty list even after stage 1 found a
+    # grounded problem. Do not silently erase that useful signal. If no
+    # accepted candidate cites the problem, surface a conservative Warning
+    # built only from the already validated observation and exact evidence.
+    covered = {
+        (item.source_id, normalized(item.quote))
+        for candidate in accepted
+        for item in candidate.evidence
+    }
+    for observation in analysis.observations:
+        if observation.category != 'problem' or len(accepted) >= 3:
+            continue
+        reference = next(
+            (item for item in observation.evidence
+             if (item.source_id, normalized(item.quote)) not in covered),
+            None,
+        )
+        if reference is None:
+            continue
+        quote = normalized(reference.quote)[:240].rstrip()
+        statement = normalized(observation.text)
+        try:
+            prose(statement, 180, 30, sentence=True)
+        except ValueError:
+            statement = 'A recorded problem needs review.'
+        fallback = FlareCandidate(
+            type='Warning',
+            title='Recorded problem needs attention',
+            statement=statement,
+            action=None,
+            reason='This problem is supported by the cited source and may require review.',
+            evidence=[FlareEvidence(source_id=reference.source_id, quote=quote,
+                                    supports=['state'])],
+        )
+        accepted.append(fallback)
+        covered.add((reference.source_id, normalized(reference.quote)))
     return FlareCandidates(flares=accepted)
 
 
