@@ -2,6 +2,11 @@ name: Azure services ZIP redeploy
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Immutable Azure release tag to deploy
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -28,7 +33,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release download azure-40956bcffe33 \
+          gh release download '${{ inputs.release_tag }}' \
             --pattern '${{ matrix.asset }}' \
             --pattern '${{ matrix.asset }}.sha256' \
             --dir "$RUNNER_TEMP/release"
