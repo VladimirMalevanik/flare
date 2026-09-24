@@ -12,14 +12,30 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Check public web and API routes
-        run: python backend/scripts/release_smoke.py --base-url https://flare4u.tech --timeout 30
+      - name: Check public landing page
+        run: curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 https://flare4u.tech/login >/dev/null
+      - name: Check public API proxy
+        if: always()
+        run: |
+          set -euo pipefail
+          health=$(curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 https://flare4u.tech/api/health)
+          ready=$(curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 https://flare4u.tech/api/ready)
+          printf 'health=%s\nready=%s\n' "$health" "$ready"
+          test "$health" = '{"status":"ok"}'
+          test "$ready" = '{"status":"ready"}'
       - name: Check API origin directly
+        if: always()
         run: |
           set -euo pipefail
-          test "$(curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 https://flare-api-vm-260914.azurewebsites.net/health)" = '{"status":"ok"}'
-          test "$(curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 https://flare-api-vm-260914.azurewebsites.net/ready)" = '{"status":"ready"}'
+          health=$(curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 https://flare-api-vm-260914.azurewebsites.net/health)
+          ready=$(curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 https://flare-api-vm-260914.azurewebsites.net/ready)
+          printf 'health=%s\nready=%s\n' "$health" "$ready"
+          test "$health" = '{"status":"ok"}'
+          test "$ready" = '{"status":"ready"}'
       - name: Check worker readiness
+        if: always()
         run: |
           set -euo pipefail
-          test "$(curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 https://flare-worker-vm-260914.azurewebsites.net/ready)" = '{"status":"ready","role":"worker"}'
+          ready=$(curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 https://flare-worker-vm-260914.azurewebsites.net/ready)
+          printf 'ready=%s\n' "$ready"
+          test "$ready" = '{"status":"ready","role":"worker"}'
