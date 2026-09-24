@@ -80,16 +80,14 @@ jobs:
           python -m pip install -e 'backend[dev]'
           python -m pip check
           pytest -q backend/tests
-      - name: Package portable Linux runtime
+      - name: Install portable Linux runtime
         shell: bash
         run: |
           set -euo pipefail
           runtime_dir="$RUNNER_TEMP/flare-backend-runtime"
-          package_dir="$RUNNER_TEMP/flare-backend-package"
-          archive="$RUNNER_TEMP/flare-backend.zip"
           site_packages="$runtime_dir/antenv/lib/python3.12/site-packages"
-          rm -rf "$runtime_dir" "$package_dir" "$archive"
-          mkdir -p "$site_packages" "$runtime_dir/antenv/bin" "$package_dir"
+          rm -rf "$runtime_dir"
+          mkdir -p "$site_packages" "$runtime_dir/antenv/bin"
           python -m pip install --no-cache-dir --target "$site_packages" ./backend
           cp -a backend/app "$runtime_dir/app"
           cat > "$runtime_dir/antenv/bin/python" <<'PYTHON_WRAPPER'
@@ -100,18 +98,38 @@ jobs:
           exec python3 "$@"
           PYTHON_WRAPPER
           chmod +x "$runtime_dir/antenv/bin/python"
+      - name: Validate portable Linux runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_dir="$RUNNER_TEMP/flare-backend-runtime"
           "$runtime_dir/antenv/bin/python" -m compileall -q "$runtime_dir/app"
           "$runtime_dir/antenv/bin/python" -c 'import fastapi, psycopg, sqlalchemy, uvicorn; import app.main; import app.workers.analysis_worker'
+      - name: Archive portable Linux runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_dir="$RUNNER_TEMP/flare-backend-runtime"
+          package_dir="$RUNNER_TEMP/flare-backend-package"
+          rm -rf "$package_dir"
+          mkdir -p "$package_dir"
           tar --zstd -cf "$package_dir/output.tar.zst" -C "$runtime_dir" .
+          test -s "$package_dir/output.tar.zst"
+          tar --use-compress-program=unzstd -tf "$package_dir/output.tar.zst" > "$RUNNER_TEMP/flare-backend-files.txt"
+          test -s "$RUNNER_TEMP/flare-backend-files.txt"
+      - name: Assemble backend deployment ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_dir="$RUNNER_TEMP/flare-backend-package"
+          archive="$RUNNER_TEMP/flare-backend.zip"
+          rm -f "$archive"
           cp backend/deploy/bootstrap_flare_api.sh "$package_dir/bootstrap_flare_api.sh"
           cp backend/deploy/bootstrap_flare_worker.sh "$package_dir/bootstrap_flare_worker.sh"
           cp backend/deploy/ensure_ffprobe.py "$package_dir/ensure_ffprobe.py"
           chmod +x "$package_dir/bootstrap_flare_api.sh" "$package_dir/bootstrap_flare_worker.sh"
           printf '%s\n' "$GITHUB_SHA" > "$package_dir/RELEASE_SHA"
           printf '[config]\nSCM_DO_BUILD_DURING_DEPLOYMENT=false\n' > "$package_dir/.deployment"
-          test -s "$package_dir/output.tar.zst"
-          tar --use-compress-program=unzstd -tf "$package_dir/output.tar.zst" > "$RUNNER_TEMP/flare-backend-files.txt"
-          grep -q 'app/main.py$' "$RUNNER_TEMP/flare-backend-files.txt"
           (cd "$package_dir" && zip -Xqr "$archive" .)
           (cd "$RUNNER_TEMP" && sha256sum flare-backend.zip > flare-backend.zip.sha256)
       - uses: actions/upload-artifact@v4
