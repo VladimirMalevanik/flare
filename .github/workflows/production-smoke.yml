@@ -1,0 +1,25 @@
+name: Production smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Verify public production endpoints
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check public web and API routes
+        run: python backend/scripts/release_smoke.py --base-url https://flare4u.tech --timeout 30
+      - name: Check API origin directly
+        run: |
+          set -euo pipefail
+          test "$(curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 https://flare-api-vm-260914.azurewebsites.net/health)" = '{"status":"ok"}'
+          test "$(curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 https://flare-api-vm-260914.azurewebsites.net/ready)" = '{"status":"ready"}'
+      - name: Check worker readiness
+        run: |
+          set -euo pipefail
+          test "$(curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 30 https://flare-worker-vm-260914.azurewebsites.net/ready)" = '{"status":"ready","role":"worker"}'
