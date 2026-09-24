@@ -1,0 +1,80 @@
+name: Azure API startup diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Classify App Service startup logs
+        env:
+          AZURE_API_PUBLISH_PROFILE: ${{ secrets.AZURE_API_PUBLISH_PROFILE }}
+        run: |
+          python - <<'PY'
+          import base64
+          import io
+          import json
+          import os
+          import re
+          import urllib.request
+          import xml.etree.ElementTree as ET
+          import zipfile
+
+          profile_xml = os.environ.get("AZURE_API_PUBLISH_PROFILE", "")
+          if not profile_xml:
+              raise SystemExit("publish-profile=missing")
+          profiles = ET.fromstring(profile_xml).findall("publishProfile")
+          profile = next((item for item in profiles if item.get("publishMethod") == "MSDeploy"), profiles[0])
+          host = (profile.get("publishUrl") or "").split(":", 1)[0]
+          username = profile.get("userName") or ""
+          password = profile.get("userPWD") or ""
+          if not host or not username or not password:
+              raise SystemExit("publish-profile=invalid")
+          authorization = base64.b64encode(f"{username}:{password}".encode()).decode()
+
+          def fetch(path: str) -> bytes:
+              request = urllib.request.Request(
+                  f"https://{host}{path}",
+                  headers={"Authorization": f"Basic {authorization}", "User-Agent": "flare-release-diagnostic/1"},
+              )
+              with urllib.request.urlopen(request, timeout=90) as response:
+                  return response.read()
+
+          release_sha = fetch("/api/vfs/site/wwwroot/RELEASE_SHA").decode("utf-8", "replace").strip()
+          archive = zipfile.ZipFile(io.BytesIO(fetch("/api/zip/LogFiles/")))
+          text_files = []
+          for item in archive.infolist():
+              if item.is_dir() or item.file_size > 8 * 1024 * 1024:
+                  continue
+              payload = archive.read(item)
+              if b"\x00" in payload[:1024]:
+                  continue
+              text_files.append(payload.decode("utf-8", "replace"))
+          logs = "\n".join(text_files)
+          patterns = {
+              "database_connectivity": r"psycopg|postgres|database.{0,40}(unavailable|failed|error)|could not connect|connection refused|timeout expired",
+              "invalid_configuration": r"Production requires|CORS_ORIGINS|SMTP_URL|EMAIL_FROM|FLARE_ENV|APP_PUBLIC_URL",
+              "archive_or_bootstrap": r"unzstd|output\.tar\.zst|tar:.{0,80}(error|failed|not found)|bootstrap_flare_api",
+              "missing_module": r"ModuleNotFoundError|ImportError|No module named",
+              "permission_error": r"Permission denied|Errno 13",
+              "port_binding": r"address already in use|didn't respond to HTTP pings|failed to bind",
+              "startup_failure": r"Application startup failed|failed to start|exited with code|Container .{0,120}(failed|terminated)",
+              "uvicorn_started": r"Application startup complete|Uvicorn running",
+          }
+          print(f"release-sha={release_sha}")
+          print(f"log-files={len(text_files)}")
+          for label, pattern in patterns.items():
+              print(f"{label}={len(re.findall(pattern, logs, flags=re.IGNORECASE))}")
+
+          try:
+              processes = json.loads(fetch("/api/processes"))
+          except Exception:
+              processes = []
+          commands = "\n".join(str(item.get("command_line", "")) for item in processes if isinstance(item, dict))
+          print(f"processes={len(processes)}")
+          print(f"uvicorn-processes={len(re.findall(r'uvicorn', commands, flags=re.IGNORECASE))}")
+          PY
