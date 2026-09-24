@@ -73,6 +73,36 @@ def test_explicit_decision_can_be_a_durable_reminder_without_today_filler():
     assert len(validated([c], [Evidence(source_id=S1, content=text)]).flares) == 1
 
 
+def test_evidenced_problem_can_produce_a_linked_recommendation_without_fake_goal():
+    text = 'The database connection pool fails during startup.'
+    source = Evidence(source_id=S1, content=text)
+    analysis = TextAnalysis.model_validate({'observations': [{
+        'category': 'problem',
+        'text': 'The database connection pool fails during startup.',
+        'evidence': [{'source_id': S1, 'quote': text}],
+    }]})
+    c = {
+        'type': 'Recommendation',
+        'title': 'Restore startup database connection',
+        'statement': 'The database connection pool fails during application startup.',
+        'action': 'Repair the database connection pool startup configuration.',
+        'reason': 'The failure prevents the service from starting reliably.',
+        'evidence': [{'source_id': S1, 'quote': text, 'supports': ['state']}],
+    }
+    assert len(validated([c], [source], analysis).flares) == 1
+
+
+def test_unrelated_problem_observation_cannot_authorize_recommendation():
+    c = candidate()
+    c['evidence'] = [dict(c['evidence'][1], supports=['state'])]
+    analysis = TextAnalysis.model_validate({'observations': [{
+        'category': 'problem',
+        'text': 'The office coffee machine is broken.',
+        'evidence': [{'source_id': S1, 'quote': SOURCES[0].content}],
+    }]})
+    assert validated([c], SOURCES, analysis).flares == []
+
+
 @pytest.mark.parametrize('field,value', [
     ('title','x'*81),('title','a '*12+'b'),('statement','x'*181),
     ('action','x'*161),('reason','x'*241),('statement','a '*30+'b'),
@@ -165,7 +195,7 @@ def test_observation_categories_still_rejected_as_supports(category):
 
 def test_prompt_revision_changes_generation_identity(monkeypatch):
     import app.ai_engine.flare_config as config
-    assert PROMPT_VERSION == 'flare-v4'
+    assert PROMPT_VERSION == 'flare-v5'
     assert SCHEMA_VERSION == 'flare-v1'
     settings, ai = FlareSettings(), AISettings()
     current = settings.revision(ai)

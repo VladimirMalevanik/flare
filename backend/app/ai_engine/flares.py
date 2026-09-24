@@ -117,6 +117,12 @@ def validate_candidates(candidates: FlareCandidates, analysis: TextAnalysis,
     Supports are untrusted labels: an explicit goal cue is required in its quote.
     """
     validate_evidence(analysis, tuple(evidence))
+    problem_evidence = {
+        (reference.source_id, normalized(reference.quote))
+        for observation in analysis.observations
+        if observation.category == 'problem'
+        for reference in observation.evidence
+    }
     accepted = []
     for c in candidates.flares:
         references = [EvidenceReference(source_id=e.source_id, quote=e.quote) for e in c.evidence]
@@ -147,23 +153,36 @@ def validate_candidates(candidates: FlareCandidates, analysis: TextAnalysis,
             if not re.search(r'(?i)\b(but|however|yet|instead|again|repeated|still|contradict|но|снова|вопреки|повторно|по-прежнему)\b', conflict):
                 continue
         if c.type == 'Recommendation':
-            if not ('goal' in roles and roles & {'state','constraint'}):
-                continue
-            goals = ' '.join(e.quote for e in c.evidence if 'goal' in e.supports)
-            if NEGATIVE_GOAL.search(goals):
-                continue
-            if re.search(r'(?i)\b(maybe|might|possibly|perhaps|unclear|either|возможно|неясно)\b', goals):
-                continue
-            if not re.search(r'(?i)\b(goal|aim|target|objective|ship|launch|release|цель|выпустить|запустить)\b', goals):
+            if not roles & {'state','constraint'}:
                 continue
             if GENERIC.match(c.action or '') or len((c.action or '').split()) < 3:
                 continue
             states = ' '.join(e.quote for e in c.evidence if set(e.supports) & {'state', 'constraint'})
-            goal_anchors = lexical_anchors(goals)
             state_anchors = lexical_anchors(states)
             action_anchors = lexical_anchors(c.action or '')
-            if not (action_anchors & state_anchors and goal_anchors & (state_anchors | action_anchors)):
+            if not action_anchors & state_anchors:
                 continue
+            goals = ' '.join(e.quote for e in c.evidence if 'goal' in e.supports)
+            if goals:
+                if NEGATIVE_GOAL.search(goals):
+                    continue
+                if re.search(r'(?i)\b(maybe|might|possibly|perhaps|unclear|either|возможно|неясно)\b', goals):
+                    continue
+                if not re.search(r'(?i)\b(goal|aim|target|objective|ship|launch|release|цель|выпустить|запустить)\b', goals):
+                    continue
+                goal_anchors = lexical_anchors(goals)
+                if not goal_anchors & (state_anchors | action_anchors):
+                    continue
+            else:
+                # A stage-1 problem is already an evidence-backed signal. Allow a
+                # concrete action that addresses the same cited subject instead of
+                # forcing users to restate the problem as an artificial goal.
+                if not any(
+                    (e.source_id, normalized(e.quote)) in problem_evidence
+                    and set(e.supports) & {'state', 'constraint'}
+                    for e in c.evidence
+                ):
+                    continue
             action = re.sub(r'\W+', ' ', (c.action or '').casefold()).strip()
             if any(o.category == 'intention' and re.sub(r'\W+', ' ', o.text.casefold()).strip() == action
                    for o in analysis.observations):
