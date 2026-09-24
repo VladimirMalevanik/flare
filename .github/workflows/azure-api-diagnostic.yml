@@ -51,8 +51,10 @@ jobs:
               payload = archive.read(item)
               if b"\x00" in payload[:1024]:
                   continue
-              text_files.append(payload.decode("utf-8", "replace"))
-          logs = "\n".join(text_files)
+              text_files.append((item.date_time, item.filename, payload.decode("utf-8", "replace")))
+          text_files.sort(key=lambda item: item[0])
+          logs = "\n".join(item[2] for item in text_files)
+          recent_logs = "\n".join(item[2] for item in text_files[-40:])
           patterns = {
               "database_connectivity": r"psycopg|postgres|database.{0,40}(unavailable|failed|error)|could not connect|connection refused|timeout expired",
               "invalid_configuration": r"Production requires|CORS_ORIGINS|SMTP_URL|EMAIL_FROM|FLARE_ENV|APP_PUBLIC_URL",
@@ -66,7 +68,21 @@ jobs:
           print(f"release-sha={release_sha}")
           print(f"log-files={len(text_files)}")
           for label, pattern in patterns.items():
-              print(f"{label}={len(re.findall(pattern, logs, flags=re.IGNORECASE))}")
+              print(f"{label}-recent={len(re.findall(pattern, recent_logs, flags=re.IGNORECASE))}")
+          root_causes = {
+              "deployment_archive_missing": r"output\.tar\.zst.{0,100}(No such file|not found)|No such file.{0,100}output\.tar\.zst",
+              "deployment_archive_invalid": r"tar:.{0,120}(invalid|corrupt|unexpected|error is not recoverable)",
+              "runtime_python_missing": r"antenv/bin/python.{0,100}(No such file|not found)|No such file.{0,100}antenv/bin/python",
+              "database_timeout": r"connection timeout|timeout expired|connection is bad|could not connect",
+              "database_authentication": r"password authentication failed|no pg_hba\.conf entry|authentication failed",
+              "database_role_guard": r"Application database connections must use",
+              "database_name_resolution": r"could not translate host name|Name or service not known",
+              "temporary_permission": r"Permission denied.{0,160}(/tmp|flare_api_runtime)|(/tmp|flare_api_runtime).{0,160}Permission denied",
+              "ffprobe_bootstrap": r"ffprobe bootstrap failed|ensure_ffprobe|ffmpeg-7\.0\.2",
+              "python_traceback": r"Traceback \(most recent call last\)",
+          }
+          for label, pattern in root_causes.items():
+              print(f"{label}-recent={len(re.findall(pattern, recent_logs, flags=re.IGNORECASE))}")
 
           try:
               processes = json.loads(fetch("/api/processes"))
