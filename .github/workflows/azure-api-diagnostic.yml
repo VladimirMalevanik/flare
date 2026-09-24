@@ -39,7 +39,10 @@ jobs:
               with urllib.request.urlopen(request, timeout=90) as response:
                   return response.read()
 
-          release_sha = fetch("/api/vfs/site/wwwroot/RELEASE_SHA").decode("utf-8", "replace").strip()
+          try:
+              release_sha = fetch("/api/vfs/site/wwwroot/RELEASE_SHA").decode("utf-8", "replace").strip()
+          except Exception:
+              release_sha = "missing"
           archive = zipfile.ZipFile(io.BytesIO(fetch("/api/zip/LogFiles/")))
           text_files = []
           for item in archive.infolist():
