@@ -12,7 +12,8 @@ jobs:
     steps:
       - name: Classify App Service startup logs
         env:
-          AZURE_API_PUBLISH_CREDENTIALS: ${{ secrets.AZURE_API_PUBLISH_CREDENTIALS }}
+          AZURE_API_PUBLISH_USER: ${{ secrets.AZURE_API_PUBLISH_USER }}
+          AZURE_API_PUBLISH_PASSWORD: ${{ secrets.AZURE_API_PUBLISH_PASSWORD }}
         run: |
           python - <<'PY'
           import base64
@@ -23,15 +24,11 @@ jobs:
           import urllib.request
           import zipfile
 
-          credentials_json = os.environ.get("AZURE_API_PUBLISH_CREDENTIALS", "")
-          if not credentials_json:
-              raise SystemExit("publish-credentials=missing")
-          credentials = json.loads(credentials_json)
-          host = "flare-api-vm-260914.scm.azurewebsites.net"
-          username = credentials.get("user") or ""
-          password = credentials.get("password") or ""
+          username = os.environ.get("AZURE_API_PUBLISH_USER", "")
+          password = os.environ.get("AZURE_API_PUBLISH_PASSWORD", "")
           if not username or not password:
-              raise SystemExit("publish-credentials=invalid")
+              raise SystemExit("publish-credentials=missing")
+          host = "flare-api-vm-260914.scm.azurewebsites.net"
           authorization = base64.b64encode(f"{username}:{password}".encode()).decode()
 
           def fetch(path: str) -> bytes:
