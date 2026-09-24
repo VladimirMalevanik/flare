@@ -128,13 +128,18 @@ def validate_candidates(candidates: FlareCandidates, analysis: TextAnalysis,
             anchors = ' '.join(e.quote for e in c.evidence if set(e.supports) & {'commitment','constraint'})
             if not re.search(r'(?i)\b(committed|promised|agreed|decided|must|required|обязались|решили|договорились|должны)\b|\brevisit\b.{1,100}\b(after|when)\b', anchors):
                 continue
-            if not (roles & {'commitment','constraint'} and 'relevance' in roles):
+            if not roles & {'commitment','constraint'}:
                 continue
-            # A deadline/precondition alone says nothing about relevance now.
-            # Inspect the cited relevance support, not unrelated candidate prose.
-            relevance = ' '.join(e.quote for e in c.evidence if 'relevance' in e.supports)
-            if not re.search(r'(?i)\b(now|today|tomorrow|this week|сегодня|завтра|теперь)\b', relevance):
-                continue
+            # A concrete decision remains useful durable context and can be surfaced
+            # once without an artificial "today" sentence. Other commitments still
+            # need evidence that their trigger or deadline is currently relevant.
+            decision = re.search(r'(?i)\b(decided|chose|selected|решили|выбрали)\b', anchors)
+            if not decision:
+                if 'relevance' not in roles:
+                    continue
+                relevance = ' '.join(e.quote for e in c.evidence if 'relevance' in e.supports)
+                if not re.search(r'(?i)\b(now|today|tomorrow|this week|сегодня|завтра|теперь)\b', relevance):
+                    continue
         if c.type == 'Warning':
             if not ('conflict' in roles and roles & {'state','constraint','goal'}):
                 continue

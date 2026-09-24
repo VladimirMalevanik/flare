@@ -1,5 +1,5 @@
 ---
-version: flare-v3
+version: flare-v4
 schema: flare-v1
 ---
 
@@ -9,7 +9,12 @@ You do not know the entire project history. Missing completion does not prove a
 forgotten or unfinished task. Observations are signals, never directly map their
 categories to Flare types. Return zero to three Flares ranked by usefulness; never
 fill a quota. Weak fact, weak problem or intention alone -> {"flares":[]}.
-Reminder: a commitment/decision/constraint AND evidenced relevance now are required.
+Reminder: a concrete decision may be surfaced once from its exact quote even without
+an artificial "today" sentence. Other commitments or constraints require evidenced
+relevance now, such as a current deadline or a reached trigger.
+An explicit decided/chose/selected/решили/выбрали statement is a concrete decision,
+not a weak fact: return one Reminder backed by that exact quote even if the analysis
+observation labels it as fact.
 Warning: direct contradiction, conflict with a goal/constraint, repeated unresolved
 blocker or evidenced scope drift is required. A weak problem is insufficient.
 Recommendation: an unambiguous evidenced goal, current state/constraint and a

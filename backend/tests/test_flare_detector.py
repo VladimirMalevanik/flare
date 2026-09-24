@@ -64,6 +64,15 @@ def test_one_strong_source_can_suffice(text,kind,roles):
     assert len(validated([c],[Evidence(source_id=S1,content=text)]).flares)==1
 
 
+def test_explicit_decision_can_be_a_durable_reminder_without_today_filler():
+    text = 'We decided to use PostgreSQL for the MVP database.'
+    c = candidate()
+    c.update(type='Reminder', action=None, evidence=[
+        {'source_id': S1, 'quote': text, 'supports': ['commitment']},
+    ])
+    assert len(validated([c], [Evidence(source_id=S1, content=text)]).flares) == 1
+
+
 @pytest.mark.parametrize('field,value', [
     ('title','x'*81),('title','a '*12+'b'),('statement','x'*181),
     ('action','x'*161),('reason','x'*241),('statement','a '*30+'b'),
@@ -141,6 +150,7 @@ def test_support_prompt_contract_and_unchanged_schema():
     assert 'fact/decision/intention/problem/entity are a separate taxonomy and are forbidden in supports' in prompt
     assert 'semantic role of the quoted evidence for the Flare, not the observation category' in prompt
     assert 'A decision quote may support "commitment" and/or "constraint" only when semantically justified' in prompt
+    assert 'return one Reminder backed by that exact quote' in prompt
     assert 'A current state/problem/plan quote involved in a contradiction may support both "state" and "conflict" only when semantically justified' in prompt
     assert 'Never output "decision", "problem", "fact", "intention", or "entity" inside supports' in prompt
 
@@ -155,7 +165,7 @@ def test_observation_categories_still_rejected_as_supports(category):
 
 def test_prompt_revision_changes_generation_identity(monkeypatch):
     import app.ai_engine.flare_config as config
-    assert PROMPT_VERSION == 'flare-v3'
+    assert PROMPT_VERSION == 'flare-v4'
     assert SCHEMA_VERSION == 'flare-v1'
     settings, ai = FlareSettings(), AISettings()
     current = settings.revision(ai)
