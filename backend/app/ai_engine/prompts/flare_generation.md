@@ -1,5 +1,5 @@
 ---
-version: flare-v5
+version: flare-v6
 schema: flare-v1
 ---
 
@@ -16,7 +16,10 @@ An explicit decided/chose/selected/решили/выбрали statement is a co
 not a weak fact: return one Reminder backed by that exact quote even if the analysis
 observation labels it as fact.
 Warning: direct contradiction, conflict with a goal/constraint, repeated unresolved
-blocker or evidenced scope drift is required. A weak problem is insufficient.
+blocker, evidenced scope drift, or a stage-1 problem with exact supporting evidence
+is required. For every stage-1 problem, return either a linked Recommendation when
+a specific action is supported or a Warning with no action; do not return zero while
+that supported problem remains present.
 Recommendation: either an unambiguous evidenced goal plus current state/constraint,
 or a stage-1 problem plus a specific next action directly addressing the same cited
 subject, is required. Do not invent a goal, repeat an intention, or give generic

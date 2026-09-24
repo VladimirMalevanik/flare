@@ -103,6 +103,25 @@ def test_unrelated_problem_observation_cannot_authorize_recommendation():
     assert validated([c], SOURCES, analysis).flares == []
 
 
+def test_evidenced_problem_can_be_a_warning_without_invented_action():
+    text = 'The database connection pool fails during startup.'
+    source = Evidence(source_id=S1, content=text)
+    analysis = TextAnalysis.model_validate({'observations': [{
+        'category': 'problem',
+        'text': 'The database connection pool fails during startup.',
+        'evidence': [{'source_id': S1, 'quote': text}],
+    }]})
+    c = {
+        'type': 'Warning',
+        'title': 'Database startup failure',
+        'statement': 'The database connection pool fails during startup.',
+        'action': None,
+        'reason': 'The recorded startup failure can prevent the service from becoming available.',
+        'evidence': [{'source_id': S1, 'quote': text, 'supports': ['state']}],
+    }
+    assert len(validated([c], [source], analysis).flares) == 1
+
+
 @pytest.mark.parametrize('field,value', [
     ('title','x'*81),('title','a '*12+'b'),('statement','x'*181),
     ('action','x'*161),('reason','x'*241),('statement','a '*30+'b'),
@@ -195,7 +214,7 @@ def test_observation_categories_still_rejected_as_supports(category):
 
 def test_prompt_revision_changes_generation_identity(monkeypatch):
     import app.ai_engine.flare_config as config
-    assert PROMPT_VERSION == 'flare-v5'
+    assert PROMPT_VERSION == 'flare-v6'
     assert SCHEMA_VERSION == 'flare-v1'
     settings, ai = FlareSettings(), AISettings()
     current = settings.revision(ai)

@@ -147,11 +147,17 @@ def validate_candidates(candidates: FlareCandidates, analysis: TextAnalysis,
                 if not re.search(r'(?i)\b(now|today|tomorrow|this week|сегодня|завтра|теперь)\b', relevance):
                     continue
         if c.type == 'Warning':
-            if not ('conflict' in roles and roles & {'state','constraint','goal'}):
-                continue
-            conflict = ' '.join(e.quote for e in c.evidence if 'conflict' in e.supports)
-            if not re.search(r'(?i)\b(but|however|yet|instead|again|repeated|still|contradict|но|снова|вопреки|повторно|по-прежнему)\b', conflict):
-                continue
+            supported_problem = any(
+                (e.source_id, normalized(e.quote)) in problem_evidence
+                and set(e.supports) & {'state', 'constraint'}
+                for e in c.evidence
+            )
+            if not supported_problem:
+                if not ('conflict' in roles and roles & {'state','constraint','goal'}):
+                    continue
+                conflict = ' '.join(e.quote for e in c.evidence if 'conflict' in e.supports)
+                if not re.search(r'(?i)\b(but|however|yet|instead|again|repeated|still|contradict|но|снова|вопреки|повторно|по-прежнему)\b', conflict):
+                    continue
         if c.type == 'Recommendation':
             if not roles & {'state','constraint'}:
                 continue
