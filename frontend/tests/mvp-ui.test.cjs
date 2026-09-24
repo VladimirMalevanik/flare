@@ -42,6 +42,7 @@ function capture(draft) {
     '@/lib/voice': { async transcribeVoice() { return { id: 'voice-saved' }; } },
     './capture-position': {
       clampOrbPosition: position => position,
+      captureTransformOrigin: (anchor, panel) => ({ x: anchor.x - panel.x, y: anchor.y - panel.y }),
       hoverRectFor: () => ({ x: 0, y: 0, width: 146, height: 58, direction: 'right' }),
       placeCapturePanel: () => ({ x: 0, y: 0, width: 500, height: 204, horizontal: 'right', vertical: 'below' }),
     },
@@ -92,6 +93,19 @@ test('Capture preserves a UTF-8 BOM so file size and uploaded bytes agree', () =
   );
   assert.equal(bomText, '\ufeffa');
   assert.equal(Buffer.byteLength(bomText, 'utf8'), 4);
+});
+test('Capture toast auto-dismisses and both explicit actions cancel its timer', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/features/capture/capture.tsx'), 'utf8');
+  assert.match(source, /CAPTURE_TOAST_DISMISS_MS = 4000/);
+  assert.match(source, /return \(\) => \{\s*if \(toastTimer\.current !== null\) window\.clearTimeout\(toastTimer\.current\)/s);
+  assert.match(source, /<Link href=\{`\/vault\?item=\$\{saved\}`\} onClick=\{dismissToast\}>/);
+  assert.match(source, /aria-label="Dismiss capture confirmation"[\s\S]*?onClick=\{dismissToast\}/);
+});
+test('Vault cards render voice as transcript provenance without prominent audio chrome', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/features/vault/vault-page.tsx'), 'utf8');
+  assert.match(source, /item\.type === "audio" && <p className="voice-provenance">Voice transcript<\/p>/);
+  assert.doesNotMatch(source, /className="audio-preview"/);
+  assert.match(source, /item\.type !== "audio" && <Icon name=\{itemIcon\[item\.type\]\}/);
 });
 test('Sources loads through provider with headings outside grids and margin-safe labels', async () => {
   const { sourceCatalog } = load('../src/lib/data/source-catalog.ts', {
@@ -200,6 +214,9 @@ test('Capture placement keeps the orb fixed and panels inside every viewport cor
       const anchor = positioning.clampOrbPosition(corner, orbSize, viewport);
       const before = { ...anchor };
       const panel = positioning.placeCapturePanel(anchor, orbSize, { width: 500, height: 360 }, viewport);
+      const origin = positioning.captureTransformOrigin(anchor, panel);
+      assert.equal(panel.x + origin.x, anchor.x);
+      assert.equal(panel.y + origin.y, anchor.y);
       assert.equal(anchor.x, before.x);
       assert.equal(anchor.y, before.y);
       assert.ok(panel.x >= 16 && panel.y >= 16);
@@ -212,6 +229,7 @@ test('Capture placement keeps the orb fixed and panels inside every viewport cor
       assert.ok(hover.y >= 12);
       assert.ok(hover.x + hover.width <= viewport.width - 12);
       assert.ok(hover.y + hover.height <= viewport.height - 12);
+      assert.equal(hover.y + hover.height / 2, anchor.y);
       assert.equal(anchor.x, before.x);
       assert.equal(anchor.y, before.y);
     }
@@ -243,4 +261,8 @@ test('Capture placement keeps the orb fixed and panels inside every viewport cor
     assert.equal(leftHover.direction, 'right');
     assert.equal(rightHover.direction, 'left');
   }
+  const captureSource = fs.readFileSync(path.join(__dirname, '../src/features/capture/capture.tsx'), 'utf8');
+  assert.equal((captureSource.match(/writeLocal\(ORB_POSITION_KEY/g) ?? []).length, 1);
+  assert.match(captureSource, /<span className="flare-capture-anchor" aria-hidden="true" \/>/);
+  assert.match(captureSource, /"--capture-origin-x": `\$\{panelOrigin\.x\}px`/);
 });

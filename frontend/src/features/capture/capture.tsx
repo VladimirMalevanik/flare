@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Icon } from "@/components/icons";
 import { useWorkspace } from "@/components/workspace-context";
 import {
@@ -14,6 +14,7 @@ import { readLocal, writeLocal } from "@/lib/storage/preferences";
 import { transcribeVoice } from "@/lib/voice";
 import {
   clampOrbPosition,
+  captureTransformOrigin,
   hoverRectFor,
   placeCapturePanel,
   type CapturePoint,
@@ -23,6 +24,7 @@ import { useVoiceCapture } from "./use-voice-capture";
 
 const ORB_POSITION_KEY = "flare-orb-position-v1";
 const MAX_IMPORT_BYTES = 200_000;
+export const CAPTURE_TOAST_DISMISS_MS = 4000;
 type PointerStart = {
   pointerId: number;
   pointerX: number;
@@ -63,6 +65,7 @@ export function Capture() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
+  const [panelClosing, setPanelClosing] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [orbDragging, setOrbDragging] = useState(false);
   const [orbPosition, setOrbPosition] = useState<CapturePoint | null>(null);
@@ -73,8 +76,29 @@ export function Capture() {
   const fileInput = useRef<HTMLInputElement>(null);
   const pointerStart = useRef<PointerStart | null>(null);
   const suppressClick = useRef(false);
+  const toastTimer = useRef<number | null>(null);
+  const closeTimer = useRef<number | null>(null);
   const voice = useVoiceCapture();
   const voiceIsland = !["idle", "error", "ready"].includes(voice.state);
+
+  useEffect(() => () => {
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+  }, []);
+
+  useEffect(() => {
+    if (!saved) return;
+    toastTimer.current = window.setTimeout(() => setSaved(""), CAPTURE_TOAST_DISMISS_MS);
+    return () => {
+      if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
+      toastTimer.current = null;
+    };
+  }, [saved]);
+
+  const dismissToast = useCallback(() => {
+    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
+    toastTimer.current = null;
+    setSaved("");
+  }, []);
 
   useEffect(() => {
     const savedPosition = readLocal<Partial<CapturePoint> | null>(
@@ -124,12 +148,17 @@ export function Capture() {
   }, [captureOpen, voiceIsland]);
 
   const close = useCallback(() => {
-    if (busy) return;
-    voice.cancel();
+    if (busy || panelClosing) return;
     setDragging(false);
     setHovered(false);
-    closeCapture();
-  }, [busy, closeCapture, voice]);
+    setPanelClosing(true);
+    closeTimer.current = window.setTimeout(() => {
+      voice.cancel();
+      closeCapture();
+      setPanelClosing(false);
+      closeTimer.current = null;
+    }, 180);
+  }, [busy, closeCapture, panelClosing, voice]);
 
   useEffect(() => {
     if (!captureOpen) return;
@@ -340,6 +369,17 @@ export function Capture() {
   const panelPlacement = orbPosition && viewport && (stage === "capture" || stage === "voice")
     ? placeCapturePanel(orbPosition, orbSize, requestedPanelSize, viewport)
     : null;
+  const panelOrigin = panelPlacement && orbPosition
+    ? captureTransformOrigin(orbPosition, panelPlacement)
+    : null;
+  const panelStyle = panelPlacement && panelOrigin
+    ? {
+        left: panelPlacement.x,
+        top: panelPlacement.y,
+        "--capture-origin-x": `${panelOrigin.x}px`,
+        "--capture-origin-y": `${panelOrigin.y}px`,
+      } as CSSProperties
+    : undefined;
 
   return (
     <>
@@ -381,18 +421,14 @@ export function Capture() {
             <span className="flare-orb" aria-hidden="true" />
             <span className="flare-capture-label">Add context</span>
           </button>
-        ) : (
-          <span className="flare-capture-anchor" aria-hidden="true">
-            <span className="flare-orb" />
-          </span>
-        )}
+        ) : <span className="flare-capture-anchor" aria-hidden="true" />}
         {voiceIsland ? (
           <div
             ref={panel as React.RefObject<HTMLDivElement>}
             className="flare-recording-island"
             role="status"
             aria-live="polite"
-            style={panelPlacement ? { left: panelPlacement.x, top: panelPlacement.y } : undefined}
+            style={panelStyle}
           >
             {voice.state === "recording" ? (
               <>
@@ -433,10 +469,10 @@ export function Capture() {
         ) : captureOpen ? (
           <section
             ref={panel}
-            className="flare-capture-panel"
+            className={`flare-capture-panel ${panelClosing ? "is-closing" : ""}`}
             role="dialog"
             aria-label="Capture"
-            style={panelPlacement ? { left: panelPlacement.x, top: panelPlacement.y } : undefined}
+            style={panelStyle}
           >
             <header className="capture-panel-header">
               <strong>Add context</strong>
@@ -588,13 +624,13 @@ export function Capture() {
       {saved && (
         <div className="toast capture-toast" role="status">
           <span>Captured in Vault</span>
-          <Link href={`/vault?item=${saved}`} onClick={() => setSaved("")}>
+          <Link href={`/vault?item=${saved}`} onClick={dismissToast}>
             View item →
           </Link>
           <button
             className="icon-button"
             aria-label="Dismiss capture confirmation"
-            onClick={() => setSaved("")}
+            onClick={dismissToast}
           >
             <Icon name="close" />
           </button>

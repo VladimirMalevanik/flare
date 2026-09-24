@@ -4,11 +4,36 @@ from app.services.context_selection import SELECTION_REVISION, select_context
 
 
 class NoEligibleContext(ValueError):
-    pass
+    CODES = {
+        'no_context',
+        'no_ready_context',
+        'context_too_large',
+        'request_budget_exceeded',
+        'unsupported_context',
+    }
+
+    def __init__(self, code: str):
+        if code not in self.CODES:
+            raise ValueError('Invalid no-context reason')
+        self.code = code
+        super().__init__(code)
 
 
 class DailyLimitReached(ValueError):
     pass
+
+
+def no_eligible_reason(stats: dict) -> str:
+    """Classify only states proven by the workspace-scoped selection query."""
+    if stats['total_context'] == 0:
+        return 'no_context'
+    if stats['supported_context'] == 0:
+        return 'unsupported_context'
+    if stats['ready_context'] == 0:
+        return 'no_ready_context'
+    if stats['fitting_chunks'] == 0:
+        return 'context_too_large'
+    return 'request_budget_exceeded'
 
 
 class AnalysisRuns:
@@ -59,7 +84,28 @@ class AnalysisRuns:
         """, (ai.max_input_bytes, max_sources, candidate_limit)).fetchall()
         selected = select_context(candidates, ai)
         if not selected:
-            raise NoEligibleContext('no_eligible_context')
+            stats = connection.execute("""
+                SELECT
+                    count(DISTINCT d.id) AS total_context,
+                    count(DISTINCT d.id) FILTER (
+                        WHERE d.source_type IN ('note','file','url','audio')
+                    ) AS supported_context,
+                    count(DISTINCT d.id) FILTER (
+                        WHERE d.source_type IN ('note','file','url','audio')
+                          AND v.state='ready' AND c.id IS NOT NULL
+                    ) AS ready_context,
+                    count(DISTINCT c.id) FILTER (
+                        WHERE d.source_type IN ('note','file','url','audio')
+                          AND v.state='ready' AND octet_length(c.content)<=%s
+                    ) AS fitting_chunks
+                FROM public.documents d
+                LEFT JOIN public.document_versions v
+                  ON (v.workspace_id,v.id)=(d.workspace_id,d.current_version_id)
+                LEFT JOIN public.chunks c
+                  ON (c.workspace_id,c.document_version_id)=(d.workspace_id,v.id)
+                WHERE d.deleted_at IS NULL
+            """, (ai.max_input_bytes,)).fetchone()
+            raise NoEligibleContext(no_eligible_reason(stats))
         run_id = connection.execute('SELECT public.start_daily_analysis_run(%s,%s,%s,%s,%s,%s,%s,%s) AS id',
             (key, [UUID(e.source_id) for e in selected], SELECTION_REVISION, pipeline, generation,
              attempts, max_sources, ai.max_input_bytes)).fetchone()['id']

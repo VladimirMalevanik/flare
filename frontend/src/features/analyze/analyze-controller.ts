@@ -4,6 +4,13 @@ import type { FlareDataProvider } from "@/lib/data/provider";
 export type AnalyzeState = { busy: boolean; run: AnalysisRun | null; message: string; error: boolean };
 const initial: AnalyzeState = { busy: false, run: null, message: "", error: false };
 const retryable = new Set(["rate_limited", "timeout", "network", "provider_transient", "provider_server", "lease_expired"]);
+const requestFailureMessages: Record<string, string> = {
+  no_context: "No project context yet. Add a note or import a source before analyzing.",
+  no_ready_context: "Your saved context is still being prepared. Try again shortly.",
+  context_too_large: "Your saved context is too large for the current analysis limit.",
+  request_budget_exceeded: "Flare found project context, but it could not fit into this analysis run.",
+  unsupported_context: "Your saved sources are not supported by Analyze yet.",
+};
 export function failureMessage(code: string | null) {
   if (retryable.has(code ?? "")) return "Analysis could not finish. Try again.";
   if (["source_invalid", "authorization_revoked"].includes(code ?? "")) return "Context or access changed. Check your Notes and permissions before retrying.";
@@ -73,7 +80,7 @@ export class AnalyzeController {
       const code = (error as { code?: string }).code;
       if (status && status >= 400 && status < 500) this.pendingKey = null;
       this.update({ busy: false, run, error: true, message: status === 422
-        ? "No fitting sources to analyze. Add project context and try again."
+        ? requestFailureMessages[code ?? ""] ?? "Analysis could not accept this request. Try again shortly."
         : status === 403 ? "Only workspace owners and editors can analyze context."
         : status === 409 && code === "daily_limit"
           ? "Today’s insight slot is already used or scheduled. The next run is available tomorrow."

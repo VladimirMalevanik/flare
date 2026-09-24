@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import type { Route } from "next";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   dataErrorMessage,
   dataProvider,
@@ -15,6 +16,12 @@ import { Icon, itemIcon } from "@/components/icons";
 import { Dialog } from "@/components/dialog";
 const PAGE_SIZE = 50;
 const PAGE_FETCH_SIZE = PAGE_SIZE + 1;
+export function withoutLinkedItem(pathname: string, query: string): string {
+  const next = new URLSearchParams(query);
+  next.delete("item");
+  const queryString = next.toString();
+  return queryString ? `${pathname}?${queryString}` : pathname;
+}
 type VaultFilter = "all" | "note" | "url" | "voice" | "file";
 const filters: { id: VaultFilter; label: string }[] = [
   { id: "all", label: "All" },
@@ -25,6 +32,8 @@ const filters: { id: VaultFilter; label: string }[] = [
 ];
 export function VaultPage() {
   const params = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
   const session = useSession();
   const { revision, refresh } = useWorkspace();
   const [items, setItems] = useState<Item[]>([]);
@@ -44,6 +53,7 @@ export function VaultPage() {
   const [editSourceUrl, setEditSourceUrl] = useState("");
   const [editError, setEditError] = useState("");
   const listRequest = useRef(0);
+  const closedLinkedItem = useRef<string | null>(null);
   const linkedItemId = params.get("item");
   const itemType: ItemType | "all" = filter === "voice"
     ? "audio"
@@ -84,7 +94,11 @@ export function VaultPage() {
     };
   }, [revision, query, itemType]);
   useEffect(() => {
-    if (!linkedItemId) return;
+    if (!linkedItemId) {
+      closedLinkedItem.current = null;
+      return;
+    }
+    if (closedLinkedItem.current === linkedItemId) return;
     let live = true;
     void dataProvider.getItem(linkedItemId)
       .then((item) => {
@@ -95,6 +109,14 @@ export function VaultPage() {
       });
     return () => { live = false; };
   }, [linkedItemId, revision]);
+  const closeSelected = useCallback(() => {
+    if (linkedItemId) {
+      closedLinkedItem.current = linkedItemId;
+      router.replace(withoutLinkedItem(pathname, params.toString()) as Route, { scroll: false });
+    }
+    setEditing(false);
+    setSelected(null);
+  }, [linkedItemId, params, pathname, router]);
   const loadMore = async () => {
     const cursor = items.at(-1);
     if (!cursor || loadingMore || !hasMore) return;
@@ -186,7 +208,7 @@ export function VaultPage() {
     try {
       await dataProvider.deleteItem(selected.id);
       setItems((current) => current.filter((item) => item.id !== selected.id));
-      setSelected(null);
+      closeSelected();
       refresh();
     } catch (caught) {
       setError(dataErrorMessage(caught, "The item could not be deleted."));
@@ -264,7 +286,7 @@ export function VaultPage() {
             <article className="card memory-card" key={item.id}>
               <div className="card-meta">
                 <span className="badge">{item.sourceLabel ?? item.type}</span>
-                <Icon name={itemIcon[item.type]} />
+                {item.type !== "audio" && <Icon name={itemIcon[item.type]} />}
               </div>
               <h2>
                 <button
@@ -281,20 +303,7 @@ export function VaultPage() {
                   day: "numeric",
                 })}
               </p>
-              {item.type === "audio" && (
-                <button
-                  className="audio-preview"
-                  onClick={() => openItem(item)}
-                  aria-label={`Read transcript: ${item.title}`}
-                >
-                  <Icon name="audio" />
-                  <span>
-                    <strong>Voice transcript</strong>
-                    <small>Captured from audio</small>
-                  </span>
-                  <Icon name="arrow" />
-                </button>
-              )}
+              {item.type === "audio" && <p className="voice-provenance">Voice transcript</p>}
               <div className="facts">
                 <h3 className="eyebrow muted">{item.extractedFacts.length ? "EXTRACTED FACTS" : "ORIGINAL CONTENT"}</h3>
                 {item.extractedFacts.length ? (
@@ -341,12 +350,7 @@ export function VaultPage() {
       {selected && (
         <Dialog
           title={selected.title}
-          onClose={() => {
-            if (!saving) {
-              setEditing(false);
-              setSelected(null);
-            }
-          }}
+          onClose={() => { if (!saving) closeSelected(); }}
           className="item-sheet"
         >
           <header className="sheet-header">
@@ -361,8 +365,7 @@ export function VaultPage() {
               aria-label="Close item"
               disabled={saving}
               onClick={() => {
-                setEditing(false);
-                setSelected(null);
+                closeSelected();
               }}
             >
               <Icon name="close" />

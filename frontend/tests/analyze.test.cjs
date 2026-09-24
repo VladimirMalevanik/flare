@@ -92,6 +92,21 @@ test('controller distinguishes a consumed daily slot from a retryable selection 
     assert.match(f.states.at(-1).message,expected);
   }
 });
+test('controller maps each proven no-context reason and keeps unknown 422 generic', async () => {
+  const cases = [
+    ['no_context', 'No project context yet. Add a note or import a source before analyzing.'],
+    ['no_ready_context', 'Your saved context is still being prepared. Try again shortly.'],
+    ['context_too_large', 'Your saved context is too large for the current analysis limit.'],
+    ['request_budget_exceeded', 'Flare found project context, but it could not fit into this analysis run.'],
+    ['unsupported_context', 'Your saved sources are not supported by Analyze yet.'],
+    ['unknown_reason', 'Analysis could not accept this request. Try again shortly.'],
+  ];
+  for (const [code, expected] of cases) {
+    const f=setup({startAnalysis:async()=>{throw new FlareApiError(code,422,code);},getAnalysisRun:()=>assert.fail()});
+    await f.controller.start();
+    assert.equal(f.states.at(-1).message,expected);
+  }
+});
 test('zero-Flares completion refreshes real feed and says none found', async () => {
   const f=setup({startAnalysis:async()=>({...completed,flareIds:[]}),getAnalysisRun:()=>assert.fail()});
   await f.controller.start(); assert.equal(f.refreshed(),1); assert.match(f.states.at(-1).message,/No new Flares/);

@@ -110,4 +110,6 @@ test("Settings exposes distinct support and feedback mail links", () => {
   assert.equal(contact?.type, "a");
   assert.equal(contact?.props.children, "Contact support");
   assert.equal(feedback?.props.children, "Send feedback");
+  assert.ok(configured.some((node) => node.props?.title === "help@flare.example"));
+  assert.ok(configured.some((node) => node.type === "button" && node.props.children === "Copy"));
 });

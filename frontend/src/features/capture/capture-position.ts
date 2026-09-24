@@ -93,3 +93,7 @@ export function placeCapturePanel(
     vertical,
   };
 }
+
+export function captureTransformOrigin(anchor: CapturePoint, panel: CaptureRect): CapturePoint {
+  return { x: anchor.x - panel.x, y: anchor.y - panel.y };
+}

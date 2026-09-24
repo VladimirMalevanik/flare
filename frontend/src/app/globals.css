@@ -901,41 +901,12 @@ blockquote {
   margin-top: 8px;
   overflow-wrap: anywhere;
 }
-.audio-preview {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--inset);
-  margin-top: 12px;
-  text-align: left;
-  font-size: 12px;
-  color: var(--secondary);
-}
-.audio-preview > svg {
-  width: 16px;
-  height: 16px;
+.voice-provenance {
+  margin-top: 10px;
   color: var(--muted);
-}
-.audio-preview > span {
-  display: grid;
-  gap: 1px;
-  flex: 1;
-  min-width: 0;
-}
-.audio-preview strong {
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 500;
-}
-.audio-preview small {
-  font-size: 10px;
-}
-.audio-preview > svg:last-child {
-  width: 14px;
-  height: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 .list-view {
   grid-template-columns: 1fr;
@@ -945,9 +916,6 @@ blockquote {
 }
 .list-view .facts {
   display: none;
-}
-.list-view .audio-preview {
-  max-width: 320px;
 }
 .memory-card .card-footer {
   margin-top: 20px;
@@ -1489,6 +1457,10 @@ blockquote {
 .support-section .setting-row > .button {
   width: 148px;
 }
+.support-section .support-copy {
+  justify-self: end;
+  width: auto;
+}
 .support-section .legal-inline-links {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1872,11 +1844,14 @@ blockquote {
   flex-direction: row-reverse;
 }
 .flare-capture-label {
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch;
   max-width: 0;
   overflow: hidden;
   color: var(--ink);
   font-size: 13px;
-  line-height: 1.15;
+  line-height: 16px;
   font-weight: 600;
   opacity: 0;
   transform: translateX(-5px);
@@ -1907,6 +1882,7 @@ blockquote {
   position: absolute;
   inset: 0;
   display: block;
+  visibility: hidden;
 }
 .flare-capture-panel {
   position: fixed;
@@ -1920,6 +1896,12 @@ blockquote {
   background: var(--float);
   box-shadow: 0 18px 48px #0000001c;
   backdrop-filter: blur(20px);
+  transform-origin: var(--capture-origin-x, 50%) var(--capture-origin-y, 50%);
+  animation: capture-panel-in 180ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+.flare-capture-panel.is-closing {
+  pointer-events: none;
+  animation: capture-panel-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 .capture-panel-header {
   display: flex;
@@ -2042,6 +2024,26 @@ blockquote {
   50% {
     transform: scale(1.06) rotate(8deg);
     filter: brightness(1.08);
+  }
+}
+@keyframes capture-panel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.08);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes capture-panel-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.08);
   }
 }
 @keyframes voice-wave {

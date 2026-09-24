@@ -55,7 +55,7 @@ def failure(error):
     if isinstance(error, (MembershipRequiredError, WritePermissionRequiredError, psycopg.errors.InsufficientPrivilege)):
         raise HTTPException(403, 'permission_denied') from None
     if isinstance(error, NoEligibleContext):
-        raise HTTPException(422, 'no_eligible_context') from None
+        raise HTTPException(422, error.code) from None
     if isinstance(error, DailyLimitReached):
         raise HTTPException(409, 'daily_limit') from None
     if isinstance(error, (psycopg.IntegrityError, psycopg.errors.InvalidParameterValue)):

@@ -70,6 +70,7 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
   const [message, setMessage] = useState(
     "Preferences are saved in this browser",
   );
+  const [supportCopied, setSupportCopied] = useState(false);
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const value = readLocal<Partial<typeof defaults>>(
@@ -499,6 +500,25 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
         icon="insights"
         className="support-section"
       >
+        {supportEmail && (
+          <SettingRow
+            title={supportEmail}
+            description="Flare support email"
+          >
+            <button
+              type="button"
+              className="text-button support-copy"
+              onClick={() => {
+                void navigator.clipboard.writeText(supportEmail).then(
+                  () => setSupportCopied(true),
+                  () => setSupportCopied(false),
+                );
+              }}
+            >
+              {supportCopied ? "Copied" : "Copy"}
+            </button>
+          </SettingRow>
+        )}
         <SettingRow
           title="Get help"
           description={

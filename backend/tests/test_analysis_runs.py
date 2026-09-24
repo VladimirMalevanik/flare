@@ -6,11 +6,13 @@ from dataclasses import replace
 
 import psycopg
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.config import AISettings, Settings
 from app.models.database import WorkspaceIdentity
-from app.models.analysis_runs import AnalysisRuns, DailyLimitReached
+from app.models.analysis_runs import AnalysisRuns, DailyLimitReached, NoEligibleContext, no_eligible_reason
+from app.api.analysis import failure
 from app.services.analysis_jobs import AnalysisJobService, AnalysisProcessor
 from app.services.context_selection import select_context
 from app.ai_engine.prompts import build_bounded_request, request_size_bytes
@@ -71,9 +73,24 @@ def test_no_eligible_notes_and_no_partial_job(jobs, admin_url):
         c.execute('UPDATE documents SET deleted_at=now() WHERE workspace_id=%s', (jobs[2][0].workspace_id,))
     with client_for(jobs) as c:
         response = post(c)
-        assert response.status_code == 422 and response.json()['detail'] == 'no_eligible_context'
+        assert response.status_code == 422 and response.json()['detail'] == 'no_context'
     with psycopg.connect(admin_url) as c:
         assert c.execute('SELECT count(*) FROM analysis_jobs').fetchone() == (0,)
+
+
+@pytest.mark.parametrize(('stats', 'reason'), [
+    ({'total_context': 0, 'supported_context': 0, 'ready_context': 0, 'fitting_chunks': 0}, 'no_context'),
+    ({'total_context': 2, 'supported_context': 0, 'ready_context': 0, 'fitting_chunks': 0}, 'unsupported_context'),
+    ({'total_context': 2, 'supported_context': 2, 'ready_context': 0, 'fitting_chunks': 0}, 'no_ready_context'),
+    ({'total_context': 2, 'supported_context': 2, 'ready_context': 1, 'fitting_chunks': 0}, 'context_too_large'),
+    ({'total_context': 2, 'supported_context': 2, 'ready_context': 1, 'fitting_chunks': 1}, 'request_budget_exceeded'),
+])
+def test_no_eligible_reason_uses_only_proven_selection_facts(stats, reason):
+    assert no_eligible_reason(stats) == reason
+    with pytest.raises(HTTPException) as raised:
+        failure(NoEligibleContext(reason))
+    assert raised.value.status_code == 422
+    assert raised.value.detail == reason
 
 
 def test_idempotency_concurrency_and_snapshot(jobs, admin_url):

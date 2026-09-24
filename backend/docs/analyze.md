@@ -46,7 +46,10 @@ project words (see `SIGNALS` in `context_selection.py`), with recency as the tie
 Whole chunks are added only if the complete serialized provider request remains
 within `LLM_MAX_INPUT_BYTES` and the source count fits. No embeddings or extra AI
 call; no task completion inferred from absent text. Revision: `recent-project-v1`.
-No fitting context returns 422 without creating a job.
+No fitting context returns 422 without creating a job. The response detail is a
+fact-based reason: `no_context`, `no_ready_context`, `context_too_large`,
+`request_budget_exceeded`, or `unsupported_context`. These codes expose only
+selection state, never source text or database details.
 
 Migration 0007 adds `analysis_runs`; migration 0015 adds schedules, cycles and
 immutable cycle-source snapshots. A
