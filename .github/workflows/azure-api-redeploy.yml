@@ -1,4 +1,4 @@
-name: Azure API ZIP redeploy
+name: Azure services ZIP redeploy
 
 on:
   workflow_dispatch:
@@ -9,23 +9,43 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api
+            app: flare-api-vm-260914
+            asset: flare-backend.zip
+          - service: worker
+            app: flare-worker-vm-260914
+            asset: flare-backend.zip
+          - service: web
+            app: flare-web-vm-260914
+            asset: flare-web.zip
     steps:
-      - name: Download immutable backend package
+      - name: Download immutable release package
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           gh release download azure-40956bcffe33 \
-            --pattern flare-backend.zip \
-            --pattern flare-backend.zip.sha256 \
+            --pattern '${{ matrix.asset }}' \
+            --pattern '${{ matrix.asset }}.sha256' \
             --dir "$RUNNER_TEMP/release"
           cd "$RUNNER_TEMP/release"
-          sha256sum -c flare-backend.zip.sha256
-          unzip -tq flare-backend.zip
-      - name: Deploy API through Kudu ZIP deploy
+          sha256sum -c '${{ matrix.asset }}.sha256'
+          unzip -tq '${{ matrix.asset }}'
+      - name: Deploy ${{ matrix.service }} through Kudu ZIP deploy
         env:
           AZURE_API_PUBLISH_USER: ${{ secrets.AZURE_API_PUBLISH_USER }}
           AZURE_API_PUBLISH_PASSWORD: ${{ secrets.AZURE_API_PUBLISH_PASSWORD }}
+          AZURE_WORKER_PUBLISH_USER: ${{ secrets.AZURE_WORKER_PUBLISH_USER }}
+          AZURE_WORKER_PUBLISH_PASSWORD: ${{ secrets.AZURE_WORKER_PUBLISH_PASSWORD }}
+          AZURE_WEB_PUBLISH_USER: ${{ secrets.AZURE_WEB_PUBLISH_USER }}
+          AZURE_WEB_PUBLISH_PASSWORD: ${{ secrets.AZURE_WEB_PUBLISH_PASSWORD }}
+          FLARE_AZURE_SERVICE: ${{ matrix.service }}
+          FLARE_AZURE_APP: ${{ matrix.app }}
+          FLARE_RELEASE_ASSET: ${{ matrix.asset }}
         run: |
           python - <<'PY'
           import base64
@@ -36,19 +56,18 @@ jobs:
           import urllib.parse
           import urllib.request
 
-          username = os.environ["AZURE_API_PUBLISH_USER"]
-          password = os.environ["AZURE_API_PUBLISH_PASSWORD"]
-          archive = Path(os.environ["RUNNER_TEMP"]) / "release" / "flare-backend.zip"
+          service = os.environ["FLARE_AZURE_SERVICE"].upper()
+          app = os.environ["FLARE_AZURE_APP"]
+          username = os.environ[f"AZURE_{service}_PUBLISH_USER"]
+          password = os.environ[f"AZURE_{service}_PUBLISH_PASSWORD"]
+          archive = Path(os.environ["RUNNER_TEMP"]) / "release" / os.environ["FLARE_RELEASE_ASSET"]
           authorization = base64.b64encode(f"{username}:{password}".encode()).decode()
           headers = {
               "Authorization": f"Basic {authorization}",
               "Content-Type": "application/zip",
               "User-Agent": "flare-release-deploy/1",
           }
-          endpoint = (
-              "https://flare-api-vm-260914.scm.azurewebsites.net"
-              "/api/zipdeploy?isAsync=true&clean=true"
-          )
+          endpoint = f"https://{app}.scm.azurewebsites.net/api/zipdeploy?isAsync=true&clean=true"
           request = urllib.request.Request(
               endpoint, data=archive.read_bytes(), headers=headers, method="POST"
           )
