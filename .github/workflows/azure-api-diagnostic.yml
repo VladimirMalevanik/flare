@@ -7,12 +7,23 @@ on:
         description: Full release commit SHA expected on every service
         required: true
         type: string
+      service:
+        description: Service marker to verify
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - api
+          - worker
+          - web
 
 permissions:
   contents: read
 
 jobs:
   verify:
+    if: ${{ inputs.service == 'all' || inputs.service == matrix.service }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -40,6 +51,7 @@ jobs:
           python - <<'PY'
           import base64
           import os
+          import time
           import urllib.request
 
           service = os.environ["FLARE_AZURE_SERVICE"].upper()
@@ -55,8 +67,15 @@ jobs:
                   "User-Agent": "flare-release-check/1",
               },
           )
-          with urllib.request.urlopen(request, timeout=90) as response:
-              actual = response.read().decode("utf-8", "strict").strip()
+          for attempt in range(4):
+              try:
+                  with urllib.request.urlopen(request, timeout=90) as response:
+                      actual = response.read().decode("utf-8", "strict").strip()
+                  break
+              except Exception:
+                  if attempt == 3:
+                      raise
+                  time.sleep(10)
           print(f"service={service.lower()} release-sha={actual}")
           if actual != expected:
               raise SystemExit("release-sha=mismatch")
