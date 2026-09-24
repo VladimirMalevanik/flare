@@ -111,5 +111,18 @@ test("Settings exposes distinct support and feedback mail links", () => {
   assert.equal(contact?.props.children, "Contact support");
   assert.equal(feedback?.props.children, "Send feedback");
   assert.ok(configured.some((node) => node.props?.title === "help@flare.example"));
-  assert.ok(configured.some((node) => node.type === "button" && node.props.children === "Copy"));
+  const copy = configured.find((node) => node.type === "button" && node.props.children === "Copy");
+  assert.match(copy?.props.className ?? "", /\bbutton\b/);
+  assert.doesNotMatch(copy?.props.className ?? "", /text-button/);
+});
+
+test("Settings rows use centered text blocks and compact section spacing", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../src/features/settings/settings-page.tsx"), "utf8");
+  const css = fs.readFileSync(path.join(__dirname, "../src/app/globals.css"), "utf8");
+  assert.match(source, /className="setting-row-copy"/);
+  assert.match(css, /\.setting-row-copy \{[\s\S]*?align-self: center;[\s\S]*?gap: 3px;/);
+  assert.match(css, /\.setting-row-copy h3,[\s\S]*?\.setting-row-copy p \{\s*margin: 0;/);
+  assert.match(css, /\.setting-row > \.badge \{[\s\S]*?align-self: center;/);
+  assert.match(css, /\.settings-section \{\s*padding: 20px;\s*margin-bottom: 16px;/);
+  assert.match(css, /\.support-section \.setting-row \{\s*min-height: 58px;/);
 });

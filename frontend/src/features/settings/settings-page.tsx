@@ -507,7 +507,7 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
           >
             <button
               type="button"
-              className="text-button support-copy"
+              className="button support-copy"
               onClick={() => {
                 void navigator.clipboard.writeText(supportEmail).then(
                   () => setSupportCopied(true),
@@ -597,7 +597,7 @@ function SettingRow({
 }) {
   return (
     <div className="setting-row">
-      <div>
+      <div className="setting-row-copy">
         <h3>{title}</h3>
         <p className="muted meta">{description}</p>
       </div>

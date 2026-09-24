@@ -4,7 +4,6 @@ export type CaptureRect = CapturePoint & CaptureSize;
 
 export const ORB_EDGE_PADDING = 12;
 export const PANEL_EDGE_MARGIN = 16;
-export const PANEL_GAP = 10;
 export const HOVER_INLINE_PADDING = 7;
 
 function clamp(value: number, min: number, max: number) {
@@ -55,42 +54,25 @@ export function placeCapturePanel(
   orbSize: number,
   requested: CaptureSize,
   viewport: CaptureSize,
-): CaptureRect & {
-  horizontal: "left" | "right" | "overlap";
-  vertical: "above" | "below" | "overlap";
-} {
-  const width = Math.min(requested.width, Math.max(0, viewport.width - PANEL_EDGE_MARGIN * 2));
-  const height = Math.min(requested.height, Math.max(0, viewport.height - PANEL_EDGE_MARGIN * 2));
-  const rightX = anchor.x + orbSize / 2 + PANEL_GAP;
-  const leftX = anchor.x - orbSize / 2 - PANEL_GAP - width;
-  const belowY = anchor.y + orbSize / 2 + PANEL_GAP;
-  const aboveY = anchor.y - orbSize / 2 - PANEL_GAP - height;
-  const horizontal = rightX + width <= viewport.width - PANEL_EDGE_MARGIN
-    ? "right"
-    : leftX >= PANEL_EDGE_MARGIN
-      ? "left"
-      : "overlap";
-  const vertical = belowY + height <= viewport.height - PANEL_EDGE_MARGIN
-    ? "below"
-    : aboveY >= PANEL_EDGE_MARGIN
-      ? "above"
-      : "overlap";
+): CaptureRect {
+  const availableWidth = Math.max(0, viewport.width - PANEL_EDGE_MARGIN * 2);
+  const availableHeight = Math.max(0, viewport.height - PANEL_EDGE_MARGIN * 2);
+  const width = Math.min(Math.max(requested.width, orbSize), availableWidth);
+  const height = Math.min(Math.max(requested.height, orbSize), availableHeight);
 
   return {
-    x: horizontal === "right"
-      ? rightX
-      : horizontal === "left"
-        ? leftX
-        : clamp(anchor.x - width / 2, PANEL_EDGE_MARGIN, viewport.width - PANEL_EDGE_MARGIN - width),
-    y: vertical === "below"
-      ? belowY
-      : vertical === "above"
-        ? aboveY
-        : clamp(anchor.y - height / 2, PANEL_EDGE_MARGIN, viewport.height - PANEL_EDGE_MARGIN - height),
+    x: clamp(
+      anchor.x - width / 2,
+      PANEL_EDGE_MARGIN,
+      viewport.width - PANEL_EDGE_MARGIN - width,
+    ),
+    y: clamp(
+      anchor.y - height / 2,
+      PANEL_EDGE_MARGIN,
+      viewport.height - PANEL_EDGE_MARGIN - height,
+    ),
     width,
     height,
-    horizontal,
-    vertical,
   };
 }
 

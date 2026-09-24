@@ -378,6 +378,8 @@ export function Capture() {
         top: panelPlacement.y,
         "--capture-origin-x": `${panelOrigin.x}px`,
         "--capture-origin-y": `${panelOrigin.y}px`,
+        "--capture-start-scale-x": `${orbSize / panelPlacement.width}`,
+        "--capture-start-scale-y": `${orbSize / panelPlacement.height}`,
       } as CSSProperties
     : undefined;
 

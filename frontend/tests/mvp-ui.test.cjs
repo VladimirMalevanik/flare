@@ -44,7 +44,7 @@ function capture(draft) {
       clampOrbPosition: position => position,
       captureTransformOrigin: (anchor, panel) => ({ x: anchor.x - panel.x, y: anchor.y - panel.y }),
       hoverRectFor: () => ({ x: 0, y: 0, width: 146, height: 58, direction: 'right' }),
-      placeCapturePanel: () => ({ x: 0, y: 0, width: 500, height: 204, horizontal: 'right', vertical: 'below' }),
+      placeCapturePanel: () => ({ x: 0, y: 0, width: 500, height: 204 }),
     },
     './use-voice-capture': { useVoiceCapture: () => ({ state: 'idle', recording: null, error: '', cancel() {}, start() {}, stop() {} }) },
   };
@@ -193,7 +193,7 @@ test('Sources loads through provider with headings outside grids and margin-safe
   assert.ok(nodes(grids[1]).filter(n => n.type === 'button').every(n => n.props.disabled));
 });
 
-test('Capture placement keeps the orb fixed and panels inside every viewport corner', () => {
+test('Capture morph contains the unchanged orb at centers, edges, and corners', () => {
   const positioning = load('../src/features/capture/capture-position.ts', {});
   const viewports = [
     { width: 1440, height: 900 },
@@ -203,18 +203,36 @@ test('Capture placement keeps the orb fixed and panels inside every viewport cor
   ];
   for (const viewport of viewports) {
     const orbSize = 44;
-    const edge = orbSize / 2 + 12;
-    const corners = [
-      { x: edge, y: edge, horizontal: 'right', vertical: 'below' },
-      { x: viewport.width - edge, y: edge, horizontal: 'left', vertical: 'below' },
-      { x: edge, y: viewport.height - edge, horizontal: 'right', vertical: 'above' },
-      { x: viewport.width - edge, y: viewport.height - edge, horizontal: 'left', vertical: 'above' },
+    const positions = [
+      { x: viewport.width / 2, y: viewport.height / 2 },
+      { x: viewport.width, y: viewport.height / 3 },
+      { x: viewport.width, y: viewport.height / 2 },
+      { x: viewport.width, y: viewport.height * 2 / 3 },
+      { x: 0, y: viewport.height / 3 },
+      { x: 0, y: viewport.height / 2 },
+      { x: 0, y: viewport.height * 2 / 3 },
+      { x: viewport.width / 3, y: 0 },
+      { x: viewport.width / 2, y: 0 },
+      { x: viewport.width * 2 / 3, y: 0 },
+      { x: viewport.width / 3, y: viewport.height },
+      { x: viewport.width / 2, y: viewport.height },
+      { x: viewport.width * 2 / 3, y: viewport.height },
+      { x: 0, y: 0 },
+      { x: viewport.width, y: 0 },
+      { x: 0, y: viewport.height },
+      { x: viewport.width, y: viewport.height },
     ];
-    for (const corner of corners) {
-      const anchor = positioning.clampOrbPosition(corner, orbSize, viewport);
+    for (const candidate of positions) {
+      const anchor = positioning.clampOrbPosition(candidate, orbSize, viewport);
       const before = { ...anchor };
       const panel = positioning.placeCapturePanel(anchor, orbSize, { width: 500, height: 360 }, viewport);
       const origin = positioning.captureTransformOrigin(anchor, panel);
+      const orb = {
+        left: anchor.x - orbSize / 2,
+        right: anchor.x + orbSize / 2,
+        top: anchor.y - orbSize / 2,
+        bottom: anchor.y + orbSize / 2,
+      };
       assert.equal(panel.x + origin.x, anchor.x);
       assert.equal(panel.y + origin.y, anchor.y);
       assert.equal(anchor.x, before.x);
@@ -222,8 +240,12 @@ test('Capture placement keeps the orb fixed and panels inside every viewport cor
       assert.ok(panel.x >= 16 && panel.y >= 16);
       assert.ok(panel.x + panel.width <= viewport.width - 16);
       assert.ok(panel.y + panel.height <= viewport.height - 16);
-      if (viewport.width >= 900) assert.equal(panel.horizontal, corner.horizontal);
-      assert.equal(panel.vertical, corner.vertical);
+      assert.ok(panel.x <= orb.left);
+      assert.ok(panel.x + panel.width >= orb.right);
+      assert.ok(panel.y <= orb.top);
+      assert.ok(panel.y + panel.height >= orb.bottom);
+      assert.ok(origin.x >= orbSize / 2 && origin.x <= panel.width - orbSize / 2);
+      assert.ok(origin.y >= orbSize / 2 && origin.y <= panel.height - orbSize / 2);
       const hover = positioning.hoverRectFor(anchor, orbSize, 146, viewport.width);
       assert.ok(hover.x >= 12);
       assert.ok(hover.y >= 12);
@@ -232,23 +254,6 @@ test('Capture placement keeps the orb fixed and panels inside every viewport cor
       assert.equal(hover.y + hover.height / 2, anchor.y);
       assert.equal(anchor.x, before.x);
       assert.equal(anchor.y, before.y);
-    }
-    const edgeAnchors = [
-      { x: viewport.width / 2, y: viewport.height / 2 },
-      { x: 0, y: viewport.height / 2 },
-      { x: viewport.width, y: viewport.height / 2 },
-      { x: viewport.width / 2, y: 0 },
-      { x: viewport.width / 2, y: viewport.height },
-    ];
-    for (const candidate of edgeAnchors) {
-      const anchor = positioning.clampOrbPosition(candidate, orbSize, viewport);
-      const panel = positioning.placeCapturePanel(anchor, orbSize, { width: 500, height: 360 }, viewport);
-      assert.ok(panel.x >= 16 && panel.y >= 16);
-      assert.ok(panel.x + panel.width <= viewport.width - 16);
-      assert.ok(panel.y + panel.height <= viewport.height - 16);
-      const hover = positioning.hoverRectFor(anchor, orbSize, 146, viewport.width);
-      assert.ok(hover.x >= 12 && hover.x + hover.width <= viewport.width - 12);
-      assert.ok(hover.y >= 12 && hover.y + hover.height <= viewport.height - 12);
     }
     const leftHover = positioning.hoverRectFor(
       positioning.clampOrbPosition({ x: 0, y: viewport.height / 2 }, orbSize, viewport),
@@ -265,4 +270,17 @@ test('Capture placement keeps the orb fixed and panels inside every viewport cor
   assert.equal((captureSource.match(/writeLocal\(ORB_POSITION_KEY/g) ?? []).length, 1);
   assert.match(captureSource, /<span className="flare-capture-anchor" aria-hidden="true" \/>/);
   assert.match(captureSource, /"--capture-origin-x": `\$\{panelOrigin\.x\}px`/);
+  assert.match(captureSource, /"--capture-start-scale-x": `\$\{orbSize \/ panelPlacement\.width\}`/);
+  const positioningSource = fs.readFileSync(
+    path.join(__dirname, '../src/features/capture/capture-position.ts'),
+    'utf8',
+  );
+  const panelPlacementSource = positioningSource.match(
+    /export function placeCapturePanel[\s\S]*?export function captureTransformOrigin/,
+  )?.[0] ?? '';
+  assert.doesNotMatch(panelPlacementSource, /PANEL_GAP|rightX|leftX|belowY|aboveY/);
+  const css = fs.readFileSync(path.join(__dirname, '../src/app/globals.css'), 'utf8');
+  assert.match(css, /\.flare-capture-label \{[\s\S]*?flex: 0 0 0;[\s\S]*?justify-content: center;/);
+  assert.match(css, /\.flare-capture--hover \.flare-capture-label \{[\s\S]*?flex: 1 1 auto;/);
+  assert.doesNotMatch(css.match(/\.flare-capture-label \{[\s\S]*?\n\}/)?.[0] ?? '', /translateY/);
 });
