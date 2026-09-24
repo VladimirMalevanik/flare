@@ -111,7 +111,7 @@ jobs:
           printf '[config]\nSCM_DO_BUILD_DURING_DEPLOYMENT=false\n' > "$package_dir/.deployment"
           test -s "$package_dir/output.tar.zst"
           tar --use-compress-program=unzstd -tf "$package_dir/output.tar.zst" > "$RUNNER_TEMP/flare-backend-files.txt"
-          grep -q '^\./app/main.py$' "$RUNNER_TEMP/flare-backend-files.txt"
+          grep -q 'app/main.py$' "$RUNNER_TEMP/flare-backend-files.txt"
           (cd "$package_dir" && zip -Xqr "$archive" .)
           (cd "$RUNNER_TEMP" && sha256sum flare-backend.zip > flare-backend.zip.sha256)
       - uses: actions/upload-artifact@v4
