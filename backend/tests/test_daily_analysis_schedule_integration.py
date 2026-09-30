@@ -20,6 +20,8 @@ from app.models.analysis_schedules import WorkerAnalysisSchedules
 from app.services.analysis_jobs import AnalysisProcessor
 from app.services.flare_generation import FlareProcessor
 from app.services.item_service import ItemService
+from app.services.import_service import ImportService
+from app.workers.scheduler import DailyScheduleProcessor
 from app.workers.config import WorkerSettings, pipeline_revision
 
 
@@ -62,6 +64,179 @@ def _materialize_scheduled_cycle(jobs, admin_url):
         assert datetime.fromisoformat(preview.json()["nextRunAt"]) == cycle[1]
         assert datetime.fromisoformat(preview.json()["nextRefreshAt"]) == cycle[2]
     return worker, cycle
+
+
+@pytest.fixture
+def scheduled_importer(jobs, admin_url):
+    identity = jobs[2][0]
+    yield ImportService(jobs[0].database, identity)
+    # Import batches hold an auth-user FK; remove them before jobs teardown.
+    with psycopg.connect(admin_url) as connection:
+        connection.execute(
+            "DELETE FROM public.import_batches WHERE workspace_id=%s",
+            (identity.workspace_id,),
+        )
+
+
+def _refresh_snapshot(jobs, admin_url, cycle_id):
+    with psycopg.connect(admin_url) as connection:
+        connection.execute(
+            "UPDATE public.analysis_cycles SET refresh_due_at=now()-interval '1 second' WHERE id=%s",
+            (cycle_id,),
+        )
+    processor = DailyScheduleProcessor(
+        WorkerAnalysisSchedules(jobs[1]._database_url),
+        AISettings(), FlareSettings(), WorkerSettings(),
+    )
+    assert asyncio.run(processor.process_one()) == "refresh_ready"
+    with psycopg.connect(admin_url) as connection:
+        return [row[0] for row in connection.execute(
+            """SELECT chunk_id FROM public.analysis_cycle_sources
+                WHERE cycle_id=%s ORDER BY ordinal""", (cycle_id,),
+        ).fetchall()]
+
+
+def test_scheduled_refresh_includes_older_note_behind_long_recent_files(
+    jobs, admin_url, scheduled_importer,
+):
+    identity = jobs[2][0]
+    note = ItemService(jobs[0].database, identity).create_note(
+        title="Project target", content="Our goal is to release the MVP next week."
+    )
+    with jobs[0].database.workspace_transaction(identity) as connection:
+        goal_chunk = connection.execute(
+            "SELECT id FROM public.chunks WHERE document_version_id=%s",
+            (note.current_version_id,),
+        ).fetchone()["id"]
+    content = "Routine archive entry without a project signal.\n" * 600
+    for index in range(4):
+        unique_content = content + str(index)
+        scheduled_importer.create_import(
+            format="txt", file_name=f"archive-{index}.txt", file_type="text/plain",
+            file_size=len(unique_content.encode("utf-8")), content=unique_content,
+        )
+
+    _, cycle = _materialize_scheduled_cycle(jobs, admin_url)
+    selected = _refresh_snapshot(jobs, admin_url, cycle[0])
+    assert len(selected) == AISettings().max_sources
+    assert goal_chunk in selected
+
+
+def test_next_scheduled_refresh_rotates_to_unseen_documents(jobs, admin_url):
+    identity = jobs[2][0]
+    items = ItemService(jobs[0].database, identity)
+    for index in range(10):
+        items.create_note(title=f"Archive {index}", content=f"Saved status for archive {index}.")
+
+    _, first_cycle = _materialize_scheduled_cycle(jobs, admin_url)
+    first = set(_refresh_snapshot(jobs, admin_url, first_cycle[0]))
+    assert len(first) == AISettings().max_sources
+    with psycopg.connect(admin_url) as connection:
+        # Advance only this disposable workspace fixture to its next day.
+        connection.execute(
+            """UPDATE public.analysis_cycles
+                  SET local_date=(now() AT TIME ZONE 'UTC')::date-2,
+                      scheduled_for=now()-interval '2 days'
+                WHERE id=%s""", (first_cycle[0],),
+        )
+        connection.execute(
+            """UPDATE public.analysis_daily_quotas
+                  SET local_date=(now() AT TIME ZONE 'UTC')::date-2,
+                      scheduled_for=now()-interval '2 days'
+                WHERE workspace_id=%s""", (identity.workspace_id,),
+        )
+        second_cycle = connection.execute(
+            """INSERT INTO public.analysis_cycles(
+                   workspace_id,local_date,mode,requested_by_user_id,
+                   idempotency_key,scheduled_for,refresh_due_at,refresh_status)
+               VALUES(%s,(now() AT TIME ZONE 'UTC')::date,'scheduled',%s,%s,
+                      now()+interval '30 minutes',now()-interval '1 second','scheduled')
+               RETURNING id""",
+            (identity.workspace_id, identity.user_id, uuid4()),
+        ).fetchone()[0]
+    second = set(_refresh_snapshot(jobs, admin_url, second_cycle))
+    assert len(second) == AISettings().max_sources
+    assert first.isdisjoint(second)
+
+
+def test_selection_history_survives_run_retention_and_rotates_again(jobs, admin_url):
+    identity = jobs[2][0]
+    max_sources = AISettings().max_sources
+    items = ItemService(jobs[0].database, identity)
+    # The jobs fixture already contributes one ready note. Give this workspace
+    # exactly two full rounds of distinct, small, actionable source chunks.
+    for index in range(2 * max_sources - 1):
+        items.create_note(
+            title=f"Decision {index}",
+            content=f"Decision: release project milestone {index} next week.",
+        )
+
+    selections = []
+    for round_number in range(3):
+        with client_for(jobs) as client:
+            response = _post_analyze(client, uuid4())
+        assert response.status_code == 202, response.text
+        run_id = response.json()["id"]
+        with psycopg.connect(admin_url) as connection:
+            selected = {row[0] for row in connection.execute(
+                """SELECT s.chunk_id FROM public.analysis_cycle_sources s
+                    JOIN public.analysis_cycles c
+                      ON (c.workspace_id,c.id)=(s.workspace_id,s.cycle_id)
+                   WHERE c.analysis_run_id=%s""", (run_id,),
+            )}
+            assert len(selected) == max_sources
+            selections.append(selected)
+            assert connection.execute(
+                """SELECT count(*) FROM public.analysis_chunk_selection_history
+                    WHERE workspace_id=%s AND chunk_id=ANY(%s)""",
+                (identity.workspace_id, list(selected)),
+            ).fetchone() == (max_sources,)
+            assert connection.execute(
+                """SELECT count(*) FROM public.analysis_chunk_selection_history
+                    WHERE workspace_id=%s""", (identity.workspace_id,),
+            ).fetchone() == (min((round_number + 1) * max_sources, 2 * max_sources),)
+
+            if round_number < 2:
+                job_id = connection.execute(
+                    "SELECT analysis_job_id FROM public.analysis_runs WHERE id=%s",
+                    (run_id,),
+                ).fetchone()[0]
+                # Queue retention deletes the job, then cascades through the
+                # public run, cycle and snapshot sources.
+                connection.execute("DELETE FROM public.analysis_jobs WHERE id=%s", (job_id,))
+                assert connection.execute(
+                    """SELECT count(*) FROM public.analysis_runs WHERE id=%s""", (run_id,),
+                ).fetchone() == (0,)
+                assert connection.execute(
+                    """SELECT count(*) FROM public.analysis_cycles WHERE workspace_id=%s""",
+                    (identity.workspace_id,),
+                ).fetchone() == (0,)
+                assert connection.execute(
+                    """SELECT count(*) FROM public.analysis_cycle_sources WHERE workspace_id=%s""",
+                    (identity.workspace_id,),
+                ).fetchone() == (0,)
+                assert connection.execute(
+                    """SELECT count(*) FROM public.analysis_chunk_selection_history
+                        WHERE workspace_id=%s AND chunk_id=ANY(%s)""",
+                    (identity.workspace_id, list(selected)),
+                ).fetchone() == (max_sources,)
+                # Move the consumed slot to a past fixture day. The independent
+                # quota remains intact while the next daily request is modeled.
+                connection.execute(
+                    """UPDATE public.analysis_daily_quotas
+                          SET local_date=local_date-%s,
+                              scheduled_for=scheduled_for-interval '2 days'
+                        WHERE workspace_id=%s
+                          AND local_date=(clock_timestamp() AT TIME ZONE 'UTC')::date""",
+                    (2 - round_number, identity.workspace_id),
+                )
+
+    assert selections[0].isdisjoint(selections[1])
+    assert selections[2] == selections[0]
+    with jobs[0].database.workspace_transaction(jobs[2][1]) as connection:
+        assert connection.execute(
+            "SELECT count(*) FROM public.analysis_chunk_selection_history"
+        ).fetchone()["count"] == 0
 
 
 def _insert_newer_processing_documents(admin_url, workspace_id, count=200):
@@ -522,7 +697,7 @@ def test_worker_has_capabilities_but_no_direct_customer_table_access(jobs, admin
             ).fetchone() == (True,)
         for table in (
             "analysis_cycles", "analysis_cycle_sources", "analysis_schedules",
-            "analysis_daily_quotas",
+            "analysis_daily_quotas", "analysis_chunk_selection_history",
         ):
             assert connection.execute(
                 "SELECT has_table_privilege('flare_worker',%s,'SELECT,INSERT,UPDATE,DELETE')",

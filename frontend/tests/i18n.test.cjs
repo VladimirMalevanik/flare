@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { loadPure, i18nMock } = require('./i18n-utils.cjs');
 const { parseLocale, SUPPORTED_LOCALES } = loadPure('../src/i18n/config.ts');
-const { translate, localizeMessage, dictionaries } = loadPure('../src/i18n/translate.ts');
+const { translate, localizeLabel, localizeMessage, dictionaries } = loadPure('../src/i18n/translate.ts');
 const jsx = { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
 
 function load(relative, mocks = {}, globals = {}) {
@@ -66,6 +66,24 @@ test('locale defaults, invalid values, matching dictionaries, and interpolation'
   const title = 'Roadmap {unchanged} — José';
   assert.equal(translate('es', 'deleteItemConfirmation', { title }), `¿Eliminar «${title}»?`);
   assert.equal(localizeMessage('es', 'untrusted English server details'), 'Algo salió mal. Inténtalo de nuevo.');
+});
+
+test('Analyze localizes recent-cycle labels, statuses, and completion details', () => {
+  assert.equal(translate('es', 'Check recent insight'), 'Consultar el Flare más reciente');
+  assert.equal(translate('es', 'Next insight later'), 'Próximo Flare más adelante');
+  assert.equal(localizeMessage('es', 'Loading the most recent insight…'), 'Cargando el Flare más reciente…');
+  assert.equal(localizeMessage('es', 'The most recent insight status is unavailable.'), 'El estado del Flare más reciente no está disponible.');
+  for (const [english, spanish] of [
+    ['The most recent insight is complete. The next analysis slot is not available yet.', 'El Flare más reciente está completado. El próximo análisis aún no está disponible.'],
+    ['The previous insight slot was used. The next analysis slot is not available yet.', 'Ya se utilizó el análisis anterior. El próximo análisis aún no está disponible.'],
+    ['The most recent insight did not complete. The next analysis slot is not available yet.', 'El Flare más reciente no se completó. El próximo análisis aún no está disponible.'],
+  ]) assert.equal(localizeLabel('es', english), spanish);
+
+  assert.equal(translate('es', 'Analysis complete.'), 'Análisis completado.');
+  assert.equal(translate('es', 'Analyzed {count} selected text section.', { count: 1 }), 'Se analizó 1 sección de texto seleccionada.');
+  assert.equal(translate('es', 'Analyzed {count} selected text sections.', { count: 3 }), 'Se analizaron 3 secciones de texto seleccionadas.');
+  assert.equal(translate('es', 'Flares refreshed.'), 'Flares actualizados.');
+  assert.match(translate('es', 'No new Flares were found. Later additions cannot change this run’s result.'), /no cambiarán el resultado/);
 });
 
 test('switching locale persists one long-lived cookie, updates document language, and keeps children', async () => {

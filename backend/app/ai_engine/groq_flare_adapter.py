@@ -111,6 +111,7 @@ class GroqFlareDetector:
             # Raise outside the except block: don't retain the raw exception/body.
             raise failure
 
+        submitted_count = None
         try:
             if len(response.choices) != 1:
                 raise ValueError('Expected one completion')
@@ -126,10 +127,12 @@ class GroqFlareDetector:
             if not choice.message.content or getattr(choice.message, 'refusal', None):
                 raise ValueError('No analysis')
             candidates = FlareCandidates.model_validate_json(choice.message.content)
+            submitted_count = len(candidates.flares)
             candidates = validate_candidates(candidates, analysis, evidence)
         except (ValueError, TypeError, AttributeError, IndexError):
             failure = AnalysisError('invalid_output', metadata=replace(metadata, validation_outcome='invalid'))
         if failure is not None:
             raise failure
         return FlareResult(candidates, replace(metadata, validation_outcome='valid',
-                                               latency_ms=(perf_counter() - started) * 1000))
+                                               latency_ms=(perf_counter() - started) * 1000),
+                           submitted_count=submitted_count)

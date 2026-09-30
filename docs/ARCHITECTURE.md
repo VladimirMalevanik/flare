@@ -1,6 +1,6 @@
 # Flare Architecture
 
-This document describes the repository at migration head `0017`.
+This document describes the repository at migration head `0018`.
 
 Status labels used throughout:
 
@@ -200,7 +200,7 @@ membership, and requires owner/editor for writes. Viewer access is read-only.
 Tenant tables have enabled and forced PostgreSQL row-level security. Composite keys
 and foreign keys prevent cross-workspace relationships. The API connects as the
 restricted `flare_app` role without `SUPERUSER`, `BYPASSRLS`, role membership, or
-schema ownership. Readiness fails if the schema revision is not `0017`, required
+schema ownership. Readiness fails if the schema revision is not `0018`, required
 tenant tables lack forced RLS, or tenant rows are visible without context.
 
 Auth tables are intentionally outside tenant RLS because session lookup happens
@@ -216,12 +216,16 @@ or the worker.
 | Identity | `auth_users`, `auth_sessions`, `auth_email_verifications` | User, revocable sessions, and verification tokens |
 | Tenancy | `workspaces`, `workspace_members` | Workspace boundary and owner/editor/viewer role |
 | Knowledge | `documents`, `document_versions`, `chunks` | Soft-deleted document, immutable published version, ordered evidence chunks |
-| Analysis | `analysis_jobs`, `analysis_job_sources`, `analysis_runs`, `analysis_schedules`, `analysis_daily_quotas`, `analysis_cycles`, `analysis_cycle_sources` | Durable extraction job, retention-safe daily quota, schedule, immutable T-30 snapshot, and public idempotent run |
+| Analysis | `analysis_jobs`, `analysis_job_sources`, `analysis_runs`, `analysis_schedules`, `analysis_daily_quotas`, `analysis_cycles`, `analysis_cycle_sources`, `analysis_chunk_selection_history` | Durable extraction job, retention-safe daily quota, schedule, immutable T-30 snapshot, compact selection history, and public idempotent run |
 | Flares | `flare_generation_runs`, `insights`, `insight_sources` | Durable generation stage, typed Flare, and exact evidence quote |
 | Notifications | `scheduled_analysis_notifications` | Durable titles-only email outbox for successful scheduled Flare runs |
 | GitHub | `github_connection_states`, `github_connections` | One-time state and one selected repository per workspace |
 | Imports | `import_batches` | Idempotent bounded text-import status and canonical document link |
 | Analytics | `activity_events` | Bounded allowlisted product events without source bodies |
+
+Downgrading schema revision 0018 removes the compact selection history. A
+subsequent upgrade restores history from cycle sources that still exist, but
+selections whose cycles were already removed by retention cannot be recovered.
 
 The initial schema retains nullable pgvector capacity, but the current Analyze flow
 uses bounded recency and keyword signals rather than vector retrieval. Published
@@ -350,7 +354,7 @@ than a secret, but the server validates it before exposing it in Settings.
 **Implemented.** Alembic has one linear head:
 
 ```text
-0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0008 → 0009 → 0010 → 0011 → 0012 → 0013 → 0014 → 0015 → 0016 → 0017
+0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0008 → 0009 → 0010 → 0011 → 0012 → 0013 → 0014 → 0015 → 0016 → 0017 → 0018
 ```
 
 `0008` adds email verification and backfills existing users. `0009` adds GitHub
@@ -361,7 +365,8 @@ source versions and exact import provenance, and `0015` adds daily schedules,
 cycles, immutable source snapshots, and the database-enforced daily limit.
 `0016` adds the scheduled-analysis email preference and durable notification outbox.
 `0017` adds immutable, versioned Terms and Privacy acceptance records for new accounts.
-Application readiness requires `0017`. CI tests both self-managed and Yandex-compatible upgrades,
+`0018` rotates scheduled analysis across ready documents and less-used chunks without
+adding tables or privileges. Application readiness requires `0018`. CI tests both self-managed and Yandex-compatible upgrades,
 historical upgrade steps, repeat `upgrade head`, role
 ownership, RLS, preserved data, and worker isolation.
 

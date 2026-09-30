@@ -75,7 +75,8 @@ class DailyScheduleProcessor:
                 )
                 return "refresh_" + status
             candidates = loaded.get("candidates")
-            selected = select_context(candidates if isinstance(candidates, list) else [], self.ai)
+            selected = select_context(candidates if isinstance(candidates, list) else [],
+                                      self.ai, preserve_order=True)
             if not selected:
                 status = await asyncio.to_thread(
                     self.schedules.finish_refresh,
