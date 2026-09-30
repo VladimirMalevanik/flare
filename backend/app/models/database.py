@@ -14,7 +14,7 @@ from psycopg_pool import ConnectionPool
 from pwdlib import PasswordHash
 
 
-CURRENT_SCHEMA_REVISION = "0017"
+CURRENT_SCHEMA_REVISION = "0018"
 TENANT_TABLES = (
     "workspaces",
     "workspace_members",

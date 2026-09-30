@@ -1,6 +1,7 @@
 """Fast checks for the Yandex migration path without a cloud database."""
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
+import re
 
 import pytest
 
@@ -320,3 +321,30 @@ def test_legal_acceptance_migration_is_private_and_immutable(monkeypatch):
     assert 'GRANT SELECT, INSERT ON public.auth_legal_acceptances TO flare_app' in sql
     assert 'UPDATE ON public.auth_legal_acceptances' not in sql
     assert 'DELETE ON public.auth_legal_acceptances' not in sql
+
+
+def test_context_rotation_migration_replaces_only_existing_capability_and_restores_0015(monkeypatch):
+    migration = load_migration('0018_rotate_analysis_context.py')
+    operation = FakeOp()
+    monkeypatch.setattr(migration, 'op', operation)
+
+    migration.upgrade()
+    assert len(operation.statements) == 1
+    upgrade_sql = operation.statements.pop()
+    assert 'CREATE OR REPLACE FUNCTION public.load_analysis_cycle_candidates' in upgrade_sql
+    assert 'CROSS JOIN LATERAL' in upgrade_sql
+    assert 'LIMIT p_max_sources' in upgrade_sql
+    for forbidden in ('CREATE TABLE', 'CREATE POLICY', 'GRANT ', 'REVOKE ', 'ALTER FUNCTION'):
+        assert forbidden not in upgrade_sql
+
+    migration.downgrade()
+    assert len(operation.statements) == 1
+    downgrade_sql = operation.statements.pop()
+    legacy_source = (VERSIONS / '0015_daily_analysis_schedule.py').read_text()
+    legacy_start = legacy_source.index('CREATE FUNCTION public.load_analysis_cycle_candidates')
+    legacy_end = legacy_source.index('END $$;', legacy_start) + len('END $$;')
+    old_body = legacy_source[legacy_start:legacy_end]
+    restored_start = downgrade_sql.index('CREATE OR REPLACE FUNCTION public.load_analysis_cycle_candidates')
+    restored_end = downgrade_sql.index('END $$;', restored_start) + len('END $$;')
+    restored_body = downgrade_sql[restored_start:restored_end].replace('CREATE OR REPLACE FUNCTION', 'CREATE FUNCTION', 1)
+    assert re.sub(r'\s+', ' ', restored_body) == re.sub(r'\s+', ' ', old_body)

@@ -9,11 +9,11 @@ SIGNALS = re.compile(r'\b(goal|deadline|decision|decided|blocked|constraint|laun
 
 def select_context(candidates, ai, *, preserve_order=False):
     if preserve_order:
-        # The manual query orders unseen documents and chunks first.
+        # Manual and scheduled queries order unseen documents and chunks first.
         ordered = candidates
     else:
-        # Scheduled selection retains its original ordering until its existing
-        # database candidate function can receive the same rotation query.
+        # Keep the original ordering for direct callers supplying recency-only
+        # candidates; public runs use the database's rotation order instead.
         ranked = sorted(enumerate(candidates), key=lambda pair: (
             -len(set(SIGNALS.findall(pair[1]['content'].lower()))), pair[0]))
         newest = None

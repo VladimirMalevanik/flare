@@ -1,6 +1,6 @@
 # Flare Architecture
 
-This document describes the repository at migration head `0017`.
+This document describes the repository at migration head `0018`.
 
 Status labels used throughout:
 
@@ -200,7 +200,7 @@ membership, and requires owner/editor for writes. Viewer access is read-only.
 Tenant tables have enabled and forced PostgreSQL row-level security. Composite keys
 and foreign keys prevent cross-workspace relationships. The API connects as the
 restricted `flare_app` role without `SUPERUSER`, `BYPASSRLS`, role membership, or
-schema ownership. Readiness fails if the schema revision is not `0017`, required
+schema ownership. Readiness fails if the schema revision is not `0018`, required
 tenant tables lack forced RLS, or tenant rows are visible without context.
 
 Auth tables are intentionally outside tenant RLS because session lookup happens
@@ -350,7 +350,7 @@ than a secret, but the server validates it before exposing it in Settings.
 **Implemented.** Alembic has one linear head:
 
 ```text
-0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0008 → 0009 → 0010 → 0011 → 0012 → 0013 → 0014 → 0015 → 0016 → 0017
+0001 → 0002 → 0003 → 0004 → 0005 → 0006 → 0007 → 0008 → 0009 → 0010 → 0011 → 0012 → 0013 → 0014 → 0015 → 0016 → 0017 → 0018
 ```
 
 `0008` adds email verification and backfills existing users. `0009` adds GitHub
@@ -361,7 +361,8 @@ source versions and exact import provenance, and `0015` adds daily schedules,
 cycles, immutable source snapshots, and the database-enforced daily limit.
 `0016` adds the scheduled-analysis email preference and durable notification outbox.
 `0017` adds immutable, versioned Terms and Privacy acceptance records for new accounts.
-Application readiness requires `0017`. CI tests both self-managed and Yandex-compatible upgrades,
+`0018` rotates scheduled analysis across ready documents and less-used chunks without
+adding tables or privileges. Application readiness requires `0018`. CI tests both self-managed and Yandex-compatible upgrades,
 historical upgrade steps, repeat `upgrade head`, role
 ownership, RLS, preserved data, and worker isolation.
 
