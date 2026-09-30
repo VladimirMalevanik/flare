@@ -15,7 +15,11 @@ export const dataProvider: FlareDataProvider =
     : new MockDataProvider();
 
 export function dataErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? error.message : fallback;
+  const failure = error as { status?: number; code?: string } | null;
+  if (failure?.status === 401) return "errorSession";
+  if (failure?.status === 403) return "errorPermission";
+  if (failure?.status === 429) return "errorRateLimit";
+  return fallback;
 }
 
 export * from "./types";

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { BrandMark } from "@/components/brand-mark";
+import { LanguageSelector } from "@/components/language-selector";
+import { useI18n } from "@/i18n/provider";
 import {
   apiBaseUrl,
   authRequest,
@@ -13,9 +15,6 @@ import { DEFAULT_SUPPORT_EMAIL, supportMailto } from "@/lib/support";
 
 type VerificationState = "pending" | "awaiting" | "success" | "invalid";
 
-const neutralResendMessage =
-  "If verification is available for that address, a new email will arrive shortly.";
-
 export function VerifyEmail({
   token,
   awaitingEmail,
@@ -23,6 +22,7 @@ export function VerifyEmail({
   token: string;
   awaitingEmail: boolean;
 }) {
+  const { t, message } = useI18n();
   const [state, setState] = useState<VerificationState>(
     token ? "pending" : "awaiting",
   );
@@ -68,9 +68,9 @@ export function VerifyEmail({
     setNotice("");
     try {
       await authRequest("resend-verification", { email });
-      setNotice(neutralResendMessage);
+      setNotice("neutralResend");
     } catch {
-      setNotice("Unable to request a new email. Please retry.");
+      setNotice("resendFallback");
     } finally {
       setResending(false);
     }
@@ -78,26 +78,27 @@ export function VerifyEmail({
 
   const content = {
     pending: {
-      title: "Verifying your email…",
-      text: "Please keep this page open for a moment.",
+      title: t("verifyingEmail"),
+      text: t("verifyingEmailDetail"),
     },
     awaiting: {
-      title: "Check your inbox",
-      text: "Open the verification link we sent before continuing to Flare.",
+      title: t("checkInbox"),
+      text: t("checkInboxDetail"),
     },
     success: {
-      title: "Email verified",
-      text: "Your existing session can now use the workspace.",
+      title: t("emailVerified"),
+      text: t("emailVerifiedDetail"),
     },
     invalid: {
-      title: "Link unavailable",
-      text: "This verification link is invalid, expired, or has already been used.",
+      title: t("linkUnavailable"),
+      text: t("linkUnavailableDetail"),
     },
   }[state];
 
   return (
     <main className="auth-page">
       <section className="auth-panel" aria-labelledby="verification-title">
+        <div className="auth-language"><LanguageSelector /></div>
         <div className="brand">
           <span className="brand-mark">
             <BrandMark size={32} />
@@ -109,10 +110,10 @@ export function VerifyEmail({
           <p>{content.text}</p>
         </header>
         <div className="auth-form" aria-live="polite">
-          {notice && <p role="status">{notice}</p>}
+          {notice && <p role="status">{message(notice)}</p>}
           {state === "success" && (
             <Link className="button primary" href="/vault">
-              Continue to Flare
+              {t("continueToFlare")}
             </Link>
           )}
           {(state === "awaiting" || state === "invalid") && email && (
@@ -122,13 +123,13 @@ export function VerifyEmail({
               onClick={resend}
               disabled={resending}
             >
-              {resending ? "Requesting…" : "Resend verification email"}
+              {resending ? t("requesting") : t("resendVerification")}
             </button>
           )}
           {(state === "awaiting" || state === "invalid") && (
-            <Link href="/login">Back to sign in</Link>
+            <Link href="/login">{t("backToSignIn")}</Link>
           )}
-          <a href={supportMailto("Flare email verification help")}>Contact support</a>
+          <a href={supportMailto("Flare email verification help")}>{t("contactSupport")}</a>
           <p className="muted auth-support-email">{DEFAULT_SUPPORT_EMAIL}</p>
         </div>
       </section>

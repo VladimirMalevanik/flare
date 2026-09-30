@@ -10,6 +10,8 @@ import {
   type Theme,
 } from "@/components/workspace-context";
 import { readLocal, writeLocal } from "@/lib/storage/preferences";
+import { LanguageSelector } from "@/components/language-selector";
+import { useI18n } from "@/i18n/provider";
 import {
   dataErrorMessage,
   dataProvider,
@@ -22,6 +24,7 @@ const defaults = {
   telegram: true,
 };
 export function SettingsPage({ supportEmail }: { supportEmail: string | null }) {
+  const { locale, t, label, message: localizeMessage } = useI18n();
   const session = useSession();
   const [loggingOut, setLoggingOut] = useState(false);
   async function logout() {
@@ -134,7 +137,7 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
     }
   }
   const scheduleDate = (value: string | null) => value
-    ? new Intl.DateTimeFormat("en", {
+    ? new Intl.DateTimeFormat(locale, {
         dateStyle: "medium",
         timeStyle: "short",
         timeZone: analysisSchedule?.timezone ?? scheduleTimezone,
@@ -157,17 +160,17 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
     <section className="page settings-page">
       <header className="page-heading heading-row">
         <div>
-          <h1>Settings</h1>
-          <p>Manage your profile, workspace preferences, and privacy controls.</p>
+          <h1>{t("Settings")}</h1>
+          <p>{t("Manage your profile, workspace preferences, and privacy controls.")}</p>
         </div>
         <span role="status" className="saved-status">
           <Icon name="check" />
-          {message}
+          {localizeMessage(message)}
         </span>
       </header>
       <SettingsSection
-        title="Profile & Account"
-        subtitle="Personal identity details for your workspace."
+        title={t("Profile & Account")}
+        subtitle={t("Personal identity details for your workspace.")}
         icon="home"
       >
         <div className="profile-editor">
@@ -180,8 +183,7 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
           </span>
           <div className="field-grid">
             <label>
-              Full Name
-              <input
+              {t("Full Name")}{" "}<input
                 readOnly={Boolean(session)}
                 value={profile.name}
                 maxLength={100}
@@ -189,8 +191,7 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
               />
             </label>
             <label>
-              Work Email
-              <input
+              {t("Work Email")}{" "}<input
                 type="email"
                 readOnly={Boolean(session)}
                 value={profile.email}
@@ -198,16 +199,14 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
               />
             </label>
             <label>
-              Role / Position
-              <input
+              {t("Role / Position")}{" "}<input
                 readOnly={Boolean(session)}
                 value={profile.role}
                 onChange={(e) => updateProfile({ role: e.target.value })}
               />
             </label>
             <label>
-              Timezone
-              <select
+              {t("Timezone")}{" "}<select
                 value={profile.timezone}
                 onChange={(e) => updateProfile({ timezone: e.target.value })}
               >
@@ -219,11 +218,11 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
             </label>
           </div>
         </div>
-        {session && <button className="button" onClick={logout} disabled={loggingOut}>{loggingOut ? "Signing out…" : "Sign out"}</button>}
+        {session && <button className="button" onClick={logout} disabled={loggingOut}>{loggingOut ? t("Signing out…") : t("Sign out")}</button>}
       </SettingsSection>
       <SettingsSection
-        title="Appearance & Theme"
-        subtitle="Customize how Flare looks on your display."
+        title={t("Appearance & Theme")}
+        subtitle={t("Customize how Flare looks on your display.")}
         icon="sun"
       >
         <div className="theme-options">
@@ -259,35 +258,38 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
                 <Icon name={choice.icon} />
               </span>
               <span>
-                {choice.label}
+                {label(choice.label)}
                 {theme === choice.id && <Icon name="check" />}
               </span>
-              <small>{choice.description}</small>
+              <small>{label(choice.description)}</small>
             </button>
           ))}
         </div>
+        <SettingRow title={t("language")} description={t("languageDescription")}>
+          <LanguageSelector compact={false} />
+        </SettingRow>
         <SettingRow
-          title="Compact interface density"
-          description="Reduce card padding and spacing across your workspace."
+          title={t("Compact interface density")}
+          description={t("Reduce card padding and spacing across your workspace.")}
         >
           <input
             className="switch"
             type="checkbox"
-            aria-label="Compact interface density"
+            aria-label={t("Compact interface density")}
             checked={compact}
             onChange={(e) => setCompact(e.target.checked)}
           />
         </SettingRow>
         <SettingRow
-          title="Capture orb size"
-          description="Choose the size of the floating capture orb."
+          title={t("captureSize")}
+          description={t("captureSizeDescription")}
         >
-          <div className="orb-size-options" role="group" aria-label="Capture orb size">
+          <div className="orb-size-options" role="group" aria-label={t("captureSize")}>
             {(
               [
-                ["small", "Small"],
-                ["medium", "Medium"],
-                ["large", "Large"],
+                ["small", t("small")],
+                ["medium", t("medium")],
+                ["large", t("large")],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -303,63 +305,63 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
         </SettingRow>
       </SettingsSection>
       <SettingsSection
-        title="In-app notifications"
-        subtitle="Choose which updates appear in your workspace."
+        title={t("In-app notifications")}
+        subtitle={t("Choose which updates appear in your workspace.")}
         icon="insights"
       >
         <SettingRow
-          title="Alerts for important Flares"
-          description="A nudge when enough evidence points to something worth reviewing."
+          title={t("Alerts for important Flares")}
+          description={t("A nudge when enough evidence points to something worth reviewing.")}
         >
           <input
             type="checkbox"
             className="switch"
-            aria-label="Instant alerts"
+            aria-label={t("Instant alerts")}
             checked={settings.alerts}
             onChange={(e) => update("alerts", e.target.checked)}
           />
         </SettingRow>
       </SettingsSection>
       <SettingsSection
-        title="Daily insight"
-        subtitle="Choose one workspace insight time. Flare freezes the latest supported source versions 30 minutes beforehand."
+        title={t("Daily insight")}
+        subtitle={t("Choose one workspace insight time. Flare freezes the latest supported source versions 30 minutes beforehand.")}
         icon="insights"
       >
         {scheduleLoading ? (
-          <p className="muted" role="status">Loading daily insight schedule…</p>
+          <p className="muted" role="status">{t("Loading daily insight schedule…")}</p>
         ) : (
           <>
             <SettingRow
-              title="Automatic daily insight"
-              description="At most one insight run is allowed per workspace day, including manual Analyze."
+              title={t("Automatic daily insight")}
+              description={t("At most one insight run is allowed per workspace day, including manual Analyze.")}
             >
               <input
                 type="checkbox"
                 className="switch"
-                aria-label="Automatic daily insight"
+                aria-label={t("Automatic daily insight")}
                 checked={scheduleEnabled}
                 disabled={scheduleSaving || session?.workspace.role === "viewer"}
                 onChange={(event) => setScheduleEnabled(event.target.checked)}
               />
             </SettingRow>
             <SettingRow
-              title="Insight time"
-              description="If today’s 30-minute preparation window has passed, the first run is scheduled for tomorrow."
+              title={t("Insight time")}
+              description={t("If today’s 30-minute preparation window has passed, the first run is scheduled for tomorrow.")}
             >
               <input
                 type="time"
-                aria-label="Daily insight time"
+                aria-label={t("Daily insight time")}
                 value={scheduleTime}
                 disabled={scheduleSaving || !scheduleEnabled || session?.workspace.role === "viewer"}
                 onChange={(event) => setScheduleTime(event.target.value)}
               />
             </SettingRow>
             <SettingRow
-              title="Workspace timezone"
-              description="The daily limit and schedule follow this timezone."
+              title={t("Workspace timezone")}
+              description={t("The daily limit and schedule follow this timezone.")}
             >
               <select
-                aria-label="Daily insight timezone"
+                aria-label={t("Daily insight timezone")}
                 value={scheduleTimezone}
                 disabled={scheduleSaving || !scheduleEnabled || session?.workspace.role === "viewer"}
                 onChange={(event) => setScheduleTimezone(event.target.value)}
@@ -370,13 +372,13 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
               </select>
             </SettingRow>
             <SettingRow
-              title="Email new scheduled Flares"
-              description="Send one email to your verified account address when a scheduled run creates at least one Flare."
+              title={t("Email new scheduled Flares")}
+              description={t("Send one email to your verified account address when a scheduled run creates at least one Flare.")}
             >
               <input
                 type="checkbox"
                 className="switch"
-                aria-label="Email new scheduled Flares"
+                aria-label={t("Email new scheduled Flares")}
                 checked={scheduleEmailNotifications}
                 disabled={scheduleSaving || session?.workspace.role === "viewer"}
                 onChange={(event) => setScheduleEmailNotifications(event.target.checked)}
@@ -384,20 +386,19 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
             </SettingRow>
             {analysisSchedule?.enabled && (
               <div className="schedule-preview" aria-live="polite">
-                <span><strong>Next refresh</strong>{scheduleDate(analysisSchedule.nextRefreshAt)}</span>
-                <span><strong>Next insight</strong>{scheduleDate(analysisSchedule.nextRunAt)}</span>
+                <span><strong>{t("Next refresh")}</strong>{scheduleDate(analysisSchedule.nextRefreshAt)}</span>
+                <span><strong>{t("Next insight")}</strong>{scheduleDate(analysisSchedule.nextRunAt)}</span>
               </div>
             )}
             <p className="muted meta">
-              Notes and CSV/TXT/Markdown are included. GitHub repository content is not imported yet; its connection currently stores metadata only.
-            </p>
+              {t("Notes and CSV/TXT/Markdown are included. GitHub repository content is not imported yet; its connection currently stores metadata only.")}</p>
             <div className="form-actions schedule-actions">
               {scheduleMessage && (
                 <p
                   className={scheduleError ? "error-text meta" : "muted meta"}
                   role={scheduleError ? "alert" : "status"}
                 >
-                  {scheduleMessage}
+                  {localizeMessage(scheduleMessage)}
                 </p>
               )}
               <button
@@ -406,104 +407,101 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
                 disabled={scheduleSaving || !scheduleTime || !scheduleTimezone || session?.workspace.role === "viewer"}
                 onClick={() => void saveAnalysisSchedule()}
               >
-                {scheduleSaving ? "Saving…" : "Save insight schedule"}
+                {scheduleSaving ? t("Saving…") : t("Save insight schedule")}
               </button>
             </div>
           </>
         )}
       </SettingsSection>
       <SettingsSection
-        title="Data & Privacy"
-        subtitle="Preferences for future connected sources; no live ingestion is running."
+        title={t("Data & Privacy")}
+        subtitle={t("Preferences for future connected sources; no live ingestion is running.")}
         icon="settings"
       >
         <SettingRow
-          title="Exclude direct messages and private channels"
-          description="Keep connected context scoped to public team conversations."
+          title={t("Exclude direct messages and private channels")}
+          description={t("Keep connected context scoped to public team conversations.")}
         >
           <input
             type="checkbox"
             className="switch"
-            aria-label="Exclude private channels"
+            aria-label={t("Exclude private channels")}
             checked={settings.privateChannels}
             onChange={(e) => update("privateChannels", e.target.checked)}
           />
         </SettingRow>
         <SettingRow
-          title="Workspace data retention"
-          description="Saved preference; automatic deletion is not enabled."
+          title={t("Workspace data retention")}
+          description={t("Saved preference; automatic deletion is not enabled.")}
         >
           <select
-            aria-label="Data retention"
+            aria-label={t("Data retention")}
             value={settings.retention}
             onChange={(e) => update("retention", e.target.value)}
           >
-            <option value="30">30 days rolling memory</option>
-            <option value="90">90 days rolling memory</option>
-            <option value="365">1 year</option>
+            <option value="30">{t("30 days rolling memory")}</option>
+            <option value="90">{t("90 days rolling memory")}</option>
+            <option value="365">{t("1 year")}</option>
           </select>
         </SettingRow>
         <SettingRow
-          title="Export workspace data"
-          description="Download active workspace Notes and Flares as Markdown and JSON in a ZIP file."
+          title={t("Export workspace data")}
+          description={t("Download active workspace Notes and Flares as Markdown and JSON in a ZIP file.")}
         >
           {session?.workspace.role === "owner" ? (
             <a className="button" href={`${apiBaseUrl}/export`} download>
-              Download ZIP
-            </a>
+              {t("Download ZIP")}</a>
           ) : (
-            <span className="muted">Owner only</span>
+            <span className="muted">{t("Owner only")}</span>
           )}
         </SettingRow>
       </SettingsSection>
       <SettingsSection
-        title="Import guides"
-        subtitle="Prepare exports from other tools for Flare's current file importer."
+        title={t("Import guides")}
+        subtitle={t("Prepare exports from other tools for Flare's current file importer.")}
         icon="file"
       >
         {(["notion", "obsidian", "evernote"] as const).map((source) => (
           <SettingRow
             key={source}
             title={source[0].toUpperCase() + source.slice(1)}
-            description="Current imports accept one Markdown, text, or CSV file up to 200 KB."
+            description={t("Current imports accept one Markdown, text, or CSV file up to 200 KB.")}
           >
             <Link className="button" href={`/settings/import-guides/${source}`}>
-              View guide
-            </Link>
+              {t("View guide")}</Link>
           </SettingRow>
         ))}
       </SettingsSection>
       <SettingsSection
-        title="Workspace & Projects"
-        subtitle="Your current workspace and connected project context."
+        title={t("Workspace & Projects")}
+        subtitle={t("Your current workspace and connected project context.")}
         icon="sources"
       >
         <SettingRow
           title={session?.workspace.name ?? "Northstar"}
-          description={session ? `Workspace role: ${session.workspace.role}` : "Personal demo workspace"}
+          description={session ? t("workspaceRole", { role: label(session.workspace.role) }) : t("Personal demo workspace")}
         >
           <span className="badge status-connected">
             <span className="dot" />
-            Active
-          </span>
+            {" "}{t("Active")}</span>
         </SettingRow>
-        <p className="meta muted">Workspace tags</p>
+        <p className="meta muted">{t("Workspace tags")}</p>
         <div className="tags">
-          <span>Product</span>
-          <span>Customer Research</span>
-          <span>Launch</span>
+          <span>{t("Product")}</span>
+          <span>{t("Customer Research")}</span>
+          <span>{t("Launch")}</span>
         </div>
       </SettingsSection>
       <SettingsSection
-        title="Support"
-        subtitle="Get help with your Flare workspace."
+        title={t("Support")}
+        subtitle={t("Get help with your Flare workspace.")}
         icon="insights"
         className="support-section"
       >
         {supportEmail && (
           <SettingRow
             title={supportEmail}
-            description="Flare support email"
+            description={t("Flare support email")}
           >
             <button
               type="button"
@@ -515,45 +513,43 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
                 );
               }}
             >
-              {supportCopied ? "Copied" : "Copy"}
+              {supportCopied ? t("Copied") : t("Copy")}
             </button>
           </SettingRow>
         )}
         <SettingRow
-          title="Get help"
+          title={t("Get help")}
           description={
             supportEmail
-              ? "Open your email app to contact the Flare support team."
-              : "The support address will be available after launch."
+              ? t("Open your email app to contact the Flare support team.")
+              : t("The support address will be available after launch.")
           }
         >
           {supportEmail ? (
             <a className="button" href={`mailto:${supportEmail}?subject=${encodeURIComponent("Flare support request")}`}>
-              Contact support
-            </a>
+              {t("Contact support")}</a>
           ) : (
-            <span className="muted">Not configured</span>
+            <span className="muted">{t("Not configured")}</span>
           )}
         </SettingRow>
         <SettingRow
-          title="Send feedback"
-          description={supportEmail ? "Share product feedback with the Flare team." : "The feedback address will be available after launch."}
+          title={t("Send feedback")}
+          description={supportEmail ? t("Share product feedback with the Flare team.") : t("The feedback address will be available after launch.")}
         >
           {supportEmail ? (
             <a className="button" href={`mailto:${supportEmail}?subject=${encodeURIComponent("Flare product feedback")}`}>
-              Send feedback
-            </a>
+              {t("Send feedback")}</a>
           ) : (
-            <span className="muted">Not configured</span>
+            <span className="muted">{t("Not configured")}</span>
           )}
         </SettingRow>
         <SettingRow
-          title="Legal"
-          description="Review how Flare handles your data and the terms for using the service."
+          title={t("Legal")}
+          description={t("Review how Flare handles your data and the terms for using the service.")}
         >
           <span className="legal-inline-links">
-            <Link className="button" href="/privacy">Privacy</Link>
-            <Link className="button" href="/terms">Terms</Link>
+            <Link className="button" href="/privacy">{t("Privacy")}</Link>
+            <Link className="button" href="/terms">{t("Terms")}</Link>
           </span>
         </SettingRow>
       </SettingsSection>

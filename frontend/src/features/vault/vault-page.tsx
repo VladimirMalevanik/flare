@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "@/i18n/provider";
 import Link from "next/link";
 import type { Route } from "next";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -31,6 +32,8 @@ const filters: { id: VaultFilter; label: string }[] = [
   { id: "file", label: "Files" },
 ];
 export function VaultPage() {
+  const { t, locale, label, message } = useI18n();
+
   const params = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
@@ -202,7 +205,7 @@ export function VaultPage() {
   };
   const deleteSelected = async () => {
     if (!selected || deleting) return;
-    if (!window.confirm(`Delete “${selected.title}”?`)) return;
+    if (!window.confirm(t("deleteItemConfirmation", { title: selected.title }))) return;
     setDeleting(true);
     setError("");
     try {
@@ -222,17 +225,16 @@ export function VaultPage() {
       <header className="page-heading">
         <p className="eyebrow">
           <span className="dot green" />
-          PROJECT MEMORY · {items.length} ITEMS LOADED
-        </p>
+          {" "}{t("PROJECT MEMORY ·")}{" "}{items.length} {" "}{t("ITEMS LOADED")}</p>
         <h1>Vault</h1>
-        <p>Everything Flare remembers about your project.</p>
+        <p>{t("Everything Flare remembers about your project.")}</p>
       </header>
       <div className="vault-toolbar">
         <label className="search-field">
           <Icon name="search" />
           <input
-            aria-label="Search vault"
-            placeholder="Search notes, voice, files, or context…"
+            aria-label={t("Search vault")}
+            placeholder={t("Search notes, voice, files, or context…")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -246,7 +248,7 @@ export function VaultPage() {
             <button
               className={`icon-button ${v === view ? "active" : ""}`}
               key={v}
-              aria-label={`${v} view`}
+              aria-label={label(`${v} view`)}
               aria-pressed={v === view}
               onClick={() => setView(v)}
             >
@@ -262,22 +264,21 @@ export function VaultPage() {
             onClick={() => setFilter(f.id)}
             className={`filter ${filter === f.id ? "selected" : ""}`}
           >
-            {f.label}
+            {label(f.label)}
           </button>
         ))}
       </div>
       {loading ? (
         <p className="state" role="status">
-          Loading your context…
-        </p>
+          {t("Loading your context…")}</p>
       ) : error ? (
         <p role="alert" className="state error-text">
-          {error}
+          {message(error)}
         </p>
       ) : !visible.length ? (
         <div className="state">
-          <h2>No matching context</h2>
-          <p>Try another keyword or filter, or capture something new.</p>
+          <h2>{t("No matching context")}</h2>
+          <p>{t("Try another keyword or filter, or capture something new.")}</p>
         </div>
       ) : (
         <>
@@ -285,7 +286,7 @@ export function VaultPage() {
           {visible.map((item) => (
             <article className="card memory-card" key={item.id}>
               <div className="card-meta">
-                <span className="badge">{item.sourceLabel ?? item.type}</span>
+                <span className="badge">{item.sourceLabel ?? label(item.type)}</span>
                 {item.type !== "audio" && <Icon name={itemIcon[item.type]} />}
               </div>
               <h2>
@@ -297,15 +298,15 @@ export function VaultPage() {
                 </button>
               </h2>
               <p className="muted meta">
-                {item.author ?? "Team workspace"} ·{" "}
-                {new Date(item.createdAt).toLocaleDateString("en-US", {
+                {item.author ?? t("Team workspace")} ·{" "}
+                {new Date(item.createdAt).toLocaleDateString(locale, {
                   month: "short",
                   day: "numeric",
                 })}
               </p>
-              {item.type === "audio" && <p className="voice-provenance">Voice transcript</p>}
+              {item.type === "audio" && <p className="voice-provenance">{t("Voice transcript")}</p>}
               <div className="facts">
-                <h3 className="eyebrow muted">{item.extractedFacts.length ? "EXTRACTED FACTS" : "ORIGINAL CONTENT"}</h3>
+                <h3 className="eyebrow muted">{item.extractedFacts.length ? t("EXTRACTED FACTS") : t("ORIGINAL CONTENT")}</h3>
                 {item.extractedFacts.length ? (
                   <ul>
                     {item.extractedFacts.map((fact) => (
@@ -315,18 +316,18 @@ export function VaultPage() {
                 ) : (
                   <p>
                     {item.status === "processing"
-                      ? "Processing…"
+                      ? t("Processing…")
                       : item.content.slice(0, 220)}
                   </p>
                 )}
               </div>
               <footer className="card-footer">
-                <span>{item.relatedItemIds.length} related items</span>
+                <span>{item.relatedItemIds.length} {" "}{t("related items")}</span>
                   <button
                     className="text-button"
                     onClick={() => openItem(item)}
                   >
-                  Open {item.type === "audio" ? "transcript" : "item"}
+                  {t("Open")}{" "}{item.type === "audio" ? t("transcript") : t("item")}
                   <Icon name="arrow" />
                 </button>
               </footer>
@@ -341,7 +342,7 @@ export function VaultPage() {
               disabled={loadingMore}
               onClick={() => void loadMore()}
             >
-              {loadingMore ? "Loading…" : "Load more"}
+              {loadingMore ? t("Loading…") : t("Load more")}
             </button>
           </div>
         )}
@@ -356,13 +357,13 @@ export function VaultPage() {
           <header className="sheet-header">
             <div>
               <span className="eyebrow muted">
-                {selected.sourceLabel ?? selected.type} · {selected.status}
+                {selected.sourceLabel ?? label(selected.type)} · {label(selected.status)}
               </span>
               <h2>{selected.title}</h2>
             </div>
             <button
               className="icon-button"
-              aria-label="Close item"
+              aria-label={t("Close item")}
               disabled={saving}
               onClick={() => {
                 closeSelected();
@@ -380,8 +381,7 @@ export function VaultPage() {
               }}
             >
               <label>
-                Title
-                <input
+                {t("Title")}{" "}<input
                   value={editTitle}
                   maxLength={300}
                   required
@@ -403,7 +403,7 @@ export function VaultPage() {
                 </label>
               )}
               <label>
-                {selected.type === "audio" ? "Transcript" : "Content"}
+                {selected.type === "audio" ? t("Transcript") : t("Content")}
                 <textarea
                   value={editContent}
                   maxLength={200000}
@@ -414,10 +414,9 @@ export function VaultPage() {
                 />
               </label>
               <p className="muted meta">
-                Saving creates version {selected.versionNumber + 1}. Existing Flares keep their original evidence.
-              </p>
+                {t("Saving creates version")}{" "}{selected.versionNumber + 1}{t(". Existing Flares keep their original evidence.")}</p>
               {editError && (
-                <p className="error-text meta" role="alert">{editError}</p>
+                <p className="error-text meta" role="alert">{message(editError)}</p>
               )}
               <div className="form-actions">
                 <button
@@ -426,21 +425,20 @@ export function VaultPage() {
                   disabled={saving}
                   onClick={() => setEditing(false)}
                 >
-                  Cancel
-                </button>
+                  {t("Cancel")}</button>
                 <button
                   type="submit"
                   className="button primary"
                   disabled={saving || !editTitle.trim() || !editContent.trim()}
                 >
-                  {saving ? "Saving…" : selected.type === "note" ? "Save new version" : "Replace source"}
+                  {saving ? t("Saving…") : selected.type === "note" ? t("Save new version") : t("Replace source")}
                 </button>
               </div>
             </form>
           ) : (
           <>
           <section>
-            <h3>Extracted Facts</h3>
+            <h3>{t("Extracted Facts")}</h3>
             {selected.extractedFacts.length ? (
               <ul className="detail-facts">
                 {selected.extractedFacts.map((fact) => (
@@ -448,12 +446,12 @@ export function VaultPage() {
                 ))}
               </ul>
             ) : (
-              <p className="muted">No extracted facts yet.</p>
+              <p className="muted">{t("No extracted facts yet.")}</p>
             )}
           </section>
           <section>
             <h3>
-              {selected.type === "audio" ? "Transcript" : "Original Content"}
+              {selected.type === "audio" ? t("Transcript") : t("Original Content")}
             </h3>
             <p className="original-content">{selected.content}</p>
             {selected.sourceUrl && /^https?:\/\//.test(selected.sourceUrl) && (
@@ -463,19 +461,16 @@ export function VaultPage() {
                 target="_blank"
                 rel="noreferrer"
               >
-                Open original URL ↗
-              </a>
+                {t("Open original URL ↗")}</a>
             )}
             {selected.fileName && (
               <p className="muted">
                 {selected.fileName} ·{" "}
-                {((selected.fileSize ?? 0) / 1024).toFixed(1)} KB · metadata
-                only
-              </p>
+                {t("fileMetadata", { size: new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format((selected.fileSize ?? 0) / 1024) })}</p>
             )}
           </section>
           <section>
-            <h3>Related Items</h3>
+            <h3>{t("Related Items")}</h3>
             {selected.relatedItemIds.length ? (
               selected.relatedItemIds.map((id) => {
                 const item = items.find((i) => i.id === id);
@@ -491,12 +486,11 @@ export function VaultPage() {
                   </button>
                 ) : (
                   <Link key={id} href={`/vault?item=${id}`}>
-                    Open related source
-                  </Link>
+                    {t("Open related source")}</Link>
                 );
               })
             ) : (
-              <p className="muted">No related items yet.</p>
+              <p className="muted">{t("No related items yet.")}</p>
             )}
           </section>
           <footer className="form-actions item-sheet-actions">
@@ -506,7 +500,7 @@ export function VaultPage() {
               disabled={session?.workspace.role === "viewer"}
               onClick={beginEdit}
             >
-              {selected.type === "note" ? "Edit note" : "Edit source"}
+              {selected.type === "note" ? t("Edit note") : t("Edit source")}
             </button>
             <button
               type="button"
@@ -514,7 +508,7 @@ export function VaultPage() {
               disabled={deleting || session?.workspace.role === "viewer"}
               onClick={() => void deleteSelected()}
             >
-              {deleting ? "Deleting…" : "Delete item"}
+              {deleting ? t("Deleting…") : t("Delete item")}
             </button>
           </footer>
           </>

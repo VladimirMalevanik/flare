@@ -13,6 +13,7 @@ function load(relative, mocks) {
   const exports = {};
   vm.runInNewContext(code, { exports, require: (name) => {
     if (name in mocks) return mocks[name];
+    if (name === '@/i18n/provider') return require('./i18n-utils.cjs').i18nMock();
     throw Error(`Unexpected import ${name}`);
   } });
   return exports;
@@ -33,7 +34,7 @@ function capture(draft) {
   const requests = [], messages = [];
   const mocks = {
     'react/jsx-runtime': jsx,
-    react: { useState: (initial) => [initial, (value) => messages.push(value)], useRef: () => ({ current: null }), useEffect: () => {}, useCallback: (fn) => fn },
+    react: { useState: (initial) => [initial, (value) => messages.push(value)], useRef: () => ({ current: null }), useEffect: () => {}, useLayoutEffect: () => {}, useCallback: (fn) => fn },
     'next/link': { default: 'a' },
     '@/components/icons': { Icon: 'icon' },
     '@/components/workspace-context': { useWorkspace: () => ({ captureOpen: true, draft, captureOrbSize: 'medium', openCapture() {}, closeCapture() {}, setDraft() {}, refresh() {} }) },
@@ -41,6 +42,7 @@ function capture(draft) {
     '@/lib/storage/preferences': {},
     '@/lib/voice': { async transcribeVoice() { return { id: 'voice-saved' }; } },
     './capture-position': {
+      CAPTURE_PANEL_SIZES: { small: { width: 410, height: 174, textareaHeight: 66 }, medium: { width: 500, height: 204, textareaHeight: 88 }, large: { width: 610, height: 254, textareaHeight: 138 } },
       clampOrbPosition: position => position,
       captureTransformOrigin: (anchor, panel) => ({ x: anchor.x - panel.x, y: anchor.y - panel.y }),
       hoverRectFor: () => ({ x: 0, y: 0, width: 146, height: 58, direction: 'right' }),
@@ -99,11 +101,11 @@ test('Capture toast auto-dismisses and both explicit actions cancel its timer', 
   assert.match(source, /CAPTURE_TOAST_DISMISS_MS = 4000/);
   assert.match(source, /return \(\) => \{\s*if \(toastTimer\.current !== null\) window\.clearTimeout\(toastTimer\.current\)/s);
   assert.match(source, /<Link href=\{`\/vault\?item=\$\{saved\}`\} onClick=\{dismissToast\}>/);
-  assert.match(source, /aria-label="Dismiss capture confirmation"[\s\S]*?onClick=\{dismissToast\}/);
+  assert.match(source, /aria-label=\{t\("Dismiss capture confirmation"\)\}[\s\S]*?onClick=\{dismissToast\}/);
 });
 test('Vault cards render voice as transcript provenance without prominent audio chrome', () => {
   const source = fs.readFileSync(path.join(__dirname, '../src/features/vault/vault-page.tsx'), 'utf8');
-  assert.match(source, /item\.type === "audio" && <p className="voice-provenance">Voice transcript<\/p>/);
+  assert.match(source, /item\.type === "audio" && <p className="voice-provenance">\{t\("Voice transcript"\)\}<\/p>/);
   assert.doesNotMatch(source, /className="audio-preview"/);
   assert.match(source, /item\.type !== "audio" && <Icon name=\{itemIcon\[item\.type\]\}/);
 });

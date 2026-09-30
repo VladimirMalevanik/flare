@@ -1,7 +1,13 @@
 import type { AnalysisRun } from "@/lib/data/types";
 import type { FlareDataProvider } from "@/lib/data/provider";
 
-export type AnalyzeState = { busy: boolean; run: AnalysisRun | null; message: string; error: boolean };
+export type AnalyzeState = {
+  busy: boolean;
+  run: AnalysisRun | null;
+  message: string;
+  error: boolean;
+  completion?: { today: boolean; selectedChunkCount: number; hasFlares: boolean };
+};
 const initial: AnalyzeState = { busy: false, run: null, message: "", error: false };
 const retryable = new Set(["rate_limited", "timeout", "network", "provider_transient", "provider_server", "lease_expired"]);
 const requestFailureMessages: Record<string, string> = {
@@ -74,7 +80,8 @@ export class AnalyzeController {
       for (let count = 0; live(); count++) {
         if (run.status === "completed") {
           this.complete();
-          this.update({ busy: false, run, error: false, message: completedMessage(run, false) });
+          this.update({ busy: false, run, error: false, message: completedMessage(run, false),
+            completion: { today: false, selectedChunkCount: run.selectedChunkCount, hasFlares: run.flareIds.length > 0 } });
           return;
         }
         if (run.status === "failed") {
@@ -121,7 +128,8 @@ export class AnalyzeController {
       if (generation !== this.generation || abort.signal.aborted) return;
       if (run.status === "completed") {
         this.complete();
-        this.update({ busy: false, run, error: false, message: completedMessage(run, today) });
+        this.update({ busy: false, run, error: false, message: completedMessage(run, today),
+          completion: { today, selectedChunkCount: run.selectedChunkCount, hasFlares: run.flareIds.length > 0 } });
         return;
       }
       if (run.status === "failed") {
@@ -132,7 +140,9 @@ export class AnalyzeController {
       await this.start();
     } catch {
       if (generation === this.generation) {
-        this.update({ busy: false, run: null, error: true, message: "Today’s insight status is unavailable." });
+        this.update({ busy: false, run: null, error: true, message: today
+          ? "Today’s insight status is unavailable."
+          : "The most recent insight status is unavailable." });
       }
     }
   };

@@ -112,6 +112,7 @@ test('zero-Flares completion refreshes real feed and says none found', async () 
   await f.controller.start(); assert.equal(f.refreshed(),1); assert.match(f.states.at(-1).message,/No new Flares/);
   assert.match(f.states.at(-1).message,/Analyzed 2 selected text sections/);
   assert.match(f.states.at(-1).message,/Later additions cannot change this run’s result/);
+  assert.deepEqual(f.states.at(-1).completion,{today:false,selectedChunkCount:2,hasFlares:false});
 });
 test('a new workspace day clears an old empty result and starts a new run', async () => {
   const old={...completed,id:'old',flareIds:[],selectedChunkCount:1};
@@ -141,6 +142,13 @@ test('a recent run from the prior local day is not described as today’s insigh
   await f.controller.resume('old',isCurrentDailyCycle(previous));
   assert.match(f.states.at(-1).message,/Analyzed 2 selected text sections/);
   assert.doesNotMatch(f.states.at(-1).message,/Today’s/);
+  assert.deepEqual(f.states.at(-1).completion,{today:false,selectedChunkCount:2,hasFlares:false});
+});
+test('recent-run lookup failure does not claim it is today’s insight', async () => {
+  const f=setup({startAnalysis:()=>assert.fail(),getAnalysisRun:async()=>{throw Error('unavailable');}});
+  await f.controller.resume('old',false);
+  assert.equal(f.states.at(-1).message,'The most recent insight status is unavailable.');
+  assert.equal(f.states.at(-1).error,true);
 });
 test('consumed quota copy does not claim that a retained run completed', () => {
   const message=dailyStatusMessage({state:'consumed'},null);

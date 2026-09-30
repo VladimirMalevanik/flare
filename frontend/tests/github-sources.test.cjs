@@ -33,6 +33,7 @@ function harness(initialSource, available = []) {
   }).outputText;
   const exports = {};
   const sandbox = { exports, window: { location: { assign(url) { calls.push(['redirect', url]); } } }, require(name) {
+    if (name === '@/i18n/provider') return require('./i18n-utils.cjs').i18nMock();
     if (name === 'react/jsx-runtime') return jsx;
     if (name === 'next/link') return { default: 'a' };
     if (name === 'react') return {

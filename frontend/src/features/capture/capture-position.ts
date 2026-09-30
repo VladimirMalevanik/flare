@@ -6,6 +6,12 @@ export const ORB_EDGE_PADDING = 12;
 export const PANEL_EDGE_MARGIN = 16;
 export const HOVER_INLINE_PADDING = 7;
 
+export const CAPTURE_PANEL_SIZES = {
+  small: { width: 410, height: 174, textareaHeight: 66 },
+  medium: { width: 500, height: 204, textareaHeight: 88 },
+  large: { width: 610, height: 254, textareaHeight: 138 },
+} as const;
+
 function clamp(value: number, min: number, max: number) {
   if (max < min) return (min + max) / 2;
   return Math.min(Math.max(value, min), max);

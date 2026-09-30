@@ -19,6 +19,8 @@ function load(relative, mocks = {}, globals = {}) {
     exports,
     require(name) {
       if (name in mocks) return mocks[name];
+      if (name === "@/i18n/provider") return require("./i18n-utils.cjs").i18nMock();
+      if (name === "@/components/language-selector") return { LanguageSelector: "language-selector" };
       if (name === "@/lib/support") {
         return {
           DEFAULT_SUPPORT_EMAIL: "support@flare4u.tech",

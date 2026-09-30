@@ -4,16 +4,16 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
 import { BrandMark } from "@/components/brand-mark";
+import { LanguageSelector } from "@/components/language-selector";
+import { useI18n } from "@/i18n/provider";
 import {
   AuthRequestError,
   authRequest,
 } from "@/lib/auth/session";
 import { DEFAULT_SUPPORT_EMAIL, supportMailto } from "@/lib/support";
 
-const neutralResendMessage =
-  "If verification is available for that address, a new email will arrive shortly.";
-
 export function AuthForm({ register = false }: { register?: boolean }) {
+  const { t, message } = useI18n();
   const [pending, setPending] = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState("");
@@ -56,15 +56,15 @@ export function AuthForm({ register = false }: { register?: boolean }) {
         setVerificationEmail(email);
         setNotice(
           caught.code === "email_delivery_failed"
-            ? caught.message
-            : "Check your inbox and verify your email before signing in.",
+            ? "emailDeliveryFailed"
+            : "verificationRequired",
         );
       } else {
-        setError(
-          caught instanceof Error
-            ? caught.message
-            : "Unable to sign in. Please retry.",
-        );
+        setError(caught instanceof AuthRequestError && caught.code === "invalid_credentials"
+          ? "errorCredentials"
+          : caught instanceof AuthRequestError && caught.code === "registration_unavailable"
+            ? "registrationUnavailable"
+            : "authFallback");
       }
       setPending(false);
     }
@@ -76,13 +76,9 @@ export function AuthForm({ register = false }: { register?: boolean }) {
     setError("");
     try {
       await authRequest("resend-verification", { email: verificationEmail });
-      setNotice(neutralResendMessage);
-    } catch (caught) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : "Unable to request a new email. Please retry.",
-      );
+      setNotice("neutralResend");
+    } catch {
+      setError("resendFallback");
     } finally {
       setResending(false);
     }
@@ -91,6 +87,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
   return (
     <main className="auth-page">
       <section className="auth-panel" aria-labelledby="auth-title">
+        <div className="auth-language"><LanguageSelector /></div>
         <div className="brand">
           <span className="brand-mark">
             <BrandMark size={32} />
@@ -99,18 +96,18 @@ export function AuthForm({ register = false }: { register?: boolean }) {
         </div>
         <header className="page-heading">
           <h1 id="auth-title">
-            {register ? "Create your workspace" : "Welcome back"}
+            {register ? t("createYourWorkspace") : t("welcomeBack")}
           </h1>
           <p>
             {register
-              ? "One place for your startup context."
-              : "Sign in to your Flare workspace."}
+              ? t("registerDescription")
+              : t("loginDescription")}
           </p>
         </header>
         <form onSubmit={submit} className="auth-form" aria-busy={pending}>
           {register && (
             <label>
-              Full name
+              {t("fullName")}
               <input
                 name="name"
                 autoComplete="name"
@@ -121,7 +118,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
             </label>
           )}
           <label>
-            Email
+            {t("email")}
             <input
               name="email"
               type="email"
@@ -132,7 +129,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
             />
           </label>
           <label>
-            Password
+            {t("password")}
             <input
               name="password"
               type="password"
@@ -146,7 +143,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
           </label>
           {register && (
             <p id="password-help" className="muted">
-              Use at least 8 characters.
+              {t("passwordHelp")}
             </p>
           )}
           {register && (
@@ -158,23 +155,22 @@ export function AuthForm({ register = false }: { register?: boolean }) {
                 disabled={pending}
               />
               <span>
-                I agree to the <Link href="/terms">Terms of Service</Link> and
-                acknowledge the <Link href="/privacy">Privacy Policy</Link>.
+                {t("agreePrefix")} <Link href="/terms">{t("termsOfService")}</Link> {t("agreeMiddle")} <Link href="/privacy">{t("privacyPolicy")}</Link>.
               </span>
             </label>
           )}
-          {notice && <p role="status">{notice}</p>}
+          {notice && <p role="status">{message(notice)}</p>}
           {error && (
             <p className="auth-error" role="alert">
-              {error}
+              {message(error)}
             </p>
           )}
           <button className="button primary" disabled={pending}>
             {pending
-              ? "Please wait…"
+              ? t("pleaseWait")
               : register
-                ? "Create account"
-                : "Sign in"}
+                ? t("createAccount")
+                : t("signIn")}
           </button>
           {verificationEmail && (
             <button
@@ -183,20 +179,20 @@ export function AuthForm({ register = false }: { register?: boolean }) {
               onClick={resend}
               disabled={resending}
             >
-              {resending ? "Requesting…" : "Resend verification email"}
+              {resending ? t("requesting") : t("resendVerification")}
             </button>
           )}
         </form>
         <p className="auth-alternative">
-          {register ? "Already have an account? " : "New to Flare? "}
+          {register ? t("alreadyHaveAccount") : t("newToFlare")} {" "}
           <Link href={register ? "/login" : "/register"}>
-            {register ? "Sign in" : "Create account"}
+            {register ? t("signIn") : t("createAccount")}
           </Link>
         </p>
-        <nav className="auth-legal-links" aria-label="Legal and support">
-          <Link href="/privacy">Privacy</Link>
-          <Link href="/terms">Terms</Link>
-          <a href={supportMailto("Flare support request")}>Contact support</a>
+        <nav className="auth-legal-links" aria-label={t("legalAndSupport")}>
+          <Link href="/privacy">{t("privacy")}</Link>
+          <Link href="/terms">{t("terms")}</Link>
+          <a href={supportMailto("Flare support request")}>{t("contactSupport")}</a>
         </nav>
         <p className="muted auth-support-email">{DEFAULT_SUPPORT_EMAIL}</p>
       </section>
