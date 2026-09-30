@@ -1,6 +1,7 @@
 """Durable orchestration around the pure Block 2 analyzer. No HTTP entry point."""
 import asyncio
 from dataclasses import asdict
+import logging
 import math
 import random
 import re
@@ -18,6 +19,7 @@ from app.models.database import WorkspaceIdentity
 from app.workers.config import WorkerSettings, pipeline_revision
 
 RETRYABLE = {'rate_limited', 'timeout', 'network', 'provider_transient', 'provider_server'}
+logger = logging.getLogger(__name__)
 
 
 def retry_delay(error: AnalysisError, attempt: int, settings: WorkerSettings) -> float | None:
@@ -127,5 +129,9 @@ class AnalysisProcessor:
                     except Exception:
                         # Do not persist/log exception text, evidence or SDK request bodies.
                         error, metadata = 'internal_error', None
-        return await asyncio.to_thread(self.jobs.finish, claim, result=result, metadata=metadata,
-                                       error=error, retry_seconds=delay)
+        status = await asyncio.to_thread(self.jobs.finish, claim, result=result, metadata=metadata,
+                                         error=error, retry_seconds=delay)
+        if status == 'completed' and result is not None:
+            logger.info('analysis_stage selected_chunks=%d observations=%d',
+                        len(evidence), len(result['observations']))
+        return status

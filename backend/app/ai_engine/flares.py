@@ -247,6 +247,9 @@ def candidate_fingerprint(workspace_id: UUID, revision: str, candidate: FlareCan
 class FlareResult:
     candidates: FlareCandidates
     metadata: AnalysisMetadata
+    # Number returned by the provider before evidence and quality checks.
+    # Counts are safe to log; candidate text and source content are not.
+    submitted_count: int | None = None
 
 
 class FlareDetector(Protocol):

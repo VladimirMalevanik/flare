@@ -1,5 +1,6 @@
 """No retrieval: Stage 2 consumes the completed parent's pinned evidence only."""
 import asyncio
+import logging
 from uuid import uuid4
 
 from app.ai_engine.analysis import Evidence, TextAnalysis
@@ -8,6 +9,8 @@ from app.ai_engine.flares import FlareCandidates, validate_candidates
 from app.ai_engine.flare_prompts import PROMPT_VERSION, SCHEMA_VERSION
 from app.models.flare_runs import FlareRuns
 from app.services.analysis_jobs import retry_delay, safe_metadata
+
+logger = logging.getLogger(__name__)
 
 
 class FlareProcessor:
@@ -22,6 +25,7 @@ class FlareProcessor:
         if claim is None:
             return None
         error=metadata=result=delay=None
+        submitted_count=None
         if claim['generation_revision']!=self.flare.revision(self.ai):
             error='generation_mismatch'
         else:
@@ -44,6 +48,7 @@ class FlareProcessor:
                         or metadata['prompt_version']!=PROMPT_VERSION or metadata['schema_version']!=SCHEMA_VERSION):
                         raise ValueError('Invalid detector metadata')
                     result=[c.model_dump() for c in candidates.flares]
+                    submitted_count=response.submitted_count
                 except AnalysisError as failure:
                     error=failure.code
                     metadata=safe_metadata(failure.metadata)
@@ -55,8 +60,12 @@ class FlareProcessor:
                     error,metadata='invalid_output',None
                 except Exception:
                     error,metadata='internal_error',None
-        return await asyncio.to_thread(self.runs.finish,claim,flares=result,metadata=metadata,
-                                       error=error,retry_seconds=delay)
+        status = await asyncio.to_thread(self.runs.finish,claim,flares=result,metadata=metadata,
+                                         error=error,retry_seconds=delay)
+        if status == 'completed' and result is not None:
+            logger.info('flare_stage observations=%d submitted_candidates=%s accepted_candidates=%d',
+                        len(analysis.observations), submitted_count, len(result))
+        return status
 
 
 class PipelineProcessor:

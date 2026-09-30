@@ -8,7 +8,7 @@ import {
   type DailyAnalysisStatus,
 } from "@/lib/data";
 import { AnalyzeController, type AnalyzeState } from "./analyze-controller";
-import { dailyStatusMessage } from "./daily-status-copy";
+import { dailyRunChanged, dailyStatusMessage, isCurrentDailyCycle } from "./daily-status-copy";
 
 export function AnalyzeAction() {
   const session = useSession();
@@ -17,6 +17,7 @@ export function AnalyzeAction() {
   useEffect(() => { refreshRef.current = refresh; }, [refresh]);
   const [state, setState] = useState<AnalyzeState>({ busy: false, run: null, message: "", error: false });
   const [daily, setDaily] = useState<DailyAnalysisStatus | null>(null);
+  const dailyRef = useRef<DailyAnalysisStatus | null>(null);
   const [dailyLoading, setDailyLoading] = useState(true);
   const controller = useRef<AnalyzeController | null>(null);
   useEffect(() => {
@@ -32,6 +33,8 @@ export function AnalyzeAction() {
       try {
         const value = await dataProvider.getDailyAnalysisStatus();
         if (!live) return;
+        if (dailyRunChanged(dailyRef.current, value)) controller.current?.reset();
+        dailyRef.current = value;
         setDaily(value);
         if (["scheduled", "refreshing", "ready", "queued", "processing"].includes(value.state)) {
           nextDelay = 15_000;
@@ -54,6 +57,7 @@ export function AnalyzeAction() {
   const viewer = session?.workspace.role === "viewer";
   const pending = state.run && ["pending", "processing"].includes(state.run.status);
   const canResume = Boolean(daily?.runId && ["queued", "processing", "completed", "failed"].includes(daily.state));
+  const currentCycle = isCurrentDailyCycle(daily);
   const dailyReserved = daily ? !daily.canRequestToday : false;
   const scheduledFor = daily?.scheduledFor
     ? `${new Intl.DateTimeFormat("en", {
@@ -65,7 +69,7 @@ export function AnalyzeAction() {
   const scheduledMessage = dailyStatusMessage(daily, scheduledFor);
   const trigger = () => {
     if (daily?.runId && canResume) {
-      void controller.current?.resume(daily.runId);
+      void controller.current?.resume(daily.runId, currentCycle);
       return;
     }
     void controller.current?.start();
@@ -80,9 +84,9 @@ export function AnalyzeAction() {
         {state.busy
           ? "Analyzing…"
           : pending || canResume
-            ? "Check today’s insight"
+            ? currentCycle ? "Check today’s insight" : "Check recent insight"
             : daily?.state === "failed" || daily?.state === "consumed"
-              ? "Next insight tomorrow"
+              ? currentCycle ? "Next insight tomorrow" : "Next insight later"
             : dailyReserved
               ? "Scheduled for today"
               : state.error

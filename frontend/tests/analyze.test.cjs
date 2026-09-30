@@ -7,7 +7,7 @@ require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileMo
 ).outputText, filename);
 const { AnalyzeController } = require('../src/features/analyze/analyze-controller.ts');
 const { ApiDataProvider, FlareApiError } = require('../src/lib/data/api-provider.ts');
-const { dailyStatusMessage } = require('../src/features/analyze/daily-status-copy.ts');
+const { dailyRunChanged, dailyStatusMessage, isCurrentDailyCycle } = require('../src/features/analyze/daily-status-copy.ts');
 const pending = { id: 'run', status:'pending',stage:'analysis',selectedChunkCount:2,flareIds:[],error:null };
 const completed = {...pending,status:'completed',stage:'completed',flareIds:['flare']};
 function setup(provider, sleep = async () => {}, maxPolls = 40) {
@@ -110,6 +110,37 @@ test('controller maps each proven no-context reason and keeps unknown 422 generi
 test('zero-Flares completion refreshes real feed and says none found', async () => {
   const f=setup({startAnalysis:async()=>({...completed,flareIds:[]}),getAnalysisRun:()=>assert.fail()});
   await f.controller.start(); assert.equal(f.refreshed(),1); assert.match(f.states.at(-1).message,/No new Flares/);
+  assert.match(f.states.at(-1).message,/Analyzed 2 selected text sections/);
+  assert.match(f.states.at(-1).message,/Later additions cannot change this run’s result/);
+});
+test('a new workspace day clears an old empty result and starts a new run', async () => {
+  const old={...completed,id:'old',flareIds:[],selectedChunkCount:1};
+  const next={...completed,id:'next',selectedChunkCount:3};
+  let posts=0;
+  const f=setup({startAnalysis:async()=>{posts++;return next;},getAnalysisRun:async id=>{assert.equal(id,'old');return old;}});
+  const yesterday={localDate:'2026-09-29',runId:'old'};
+  const today={localDate:'2026-09-30',runId:null};
+  await f.controller.resume('old');
+  assert.match(f.states.at(-1).message,/Analyzed 1 selected text section\./);
+  assert.equal(dailyRunChanged(yesterday,today),true);
+  f.controller.reset();
+  assert.deepEqual(f.states.at(-1),{busy:false,run:null,message:'',error:false});
+  await f.controller.start();
+  assert.equal(posts,1);
+  assert.match(f.states.at(-1).message,/Analyzed 3 selected text sections\./);
+  assert.equal(dailyRunChanged(today,{...today,runId:'next'}),false);
+  assert.equal(dailyRunChanged({...today,runId:'next'},today),true);
+});
+test('a recent run from the prior local day is not described as today’s insight', async () => {
+  const previous={state:'completed',localDate:'2026-09-30',runId:'old',timezone:'Europe/Moscow',scheduledFor:'2026-09-29T20:30:00Z'};
+  assert.equal(isCurrentDailyCycle(previous),false);
+  assert.match(dailyStatusMessage(previous,null),/most recent insight/);
+  assert.doesNotMatch(dailyStatusMessage(previous,null),/Today’s|tomorrow/);
+  assert.equal(isCurrentDailyCycle({...previous,scheduledFor:'2026-09-29T21:30:00Z'}),true);
+  const f=setup({startAnalysis:()=>assert.fail(),getAnalysisRun:async()=>({...completed,id:'old',flareIds:[]})});
+  await f.controller.resume('old',isCurrentDailyCycle(previous));
+  assert.match(f.states.at(-1).message,/Analyzed 2 selected text sections/);
+  assert.doesNotMatch(f.states.at(-1).message,/Today’s/);
 });
 test('consumed quota copy does not claim that a retained run completed', () => {
   const message=dailyStatusMessage({state:'consumed'},null);

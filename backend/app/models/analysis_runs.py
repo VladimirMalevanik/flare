@@ -68,21 +68,58 @@ class AnalysisRuns:
         max_sources = min(ai.max_sources, 100)
         candidate_limit = min(max_sources * 4, 400)
         candidates = connection.execute("""
-            WITH recent AS MATERIALIZED (
-                SELECT d.id,d.current_version_id,d.updated_at FROM public.documents d
+            WITH history AS MATERIALIZED (
+                SELECT s.chunk_id,c.document_version_id,
+                       max(coalesce(cycle.refreshed_at,cycle.created_at)) AS last_selected_at
+                FROM public.analysis_cycle_sources s
+                JOIN public.analysis_cycles cycle
+                  ON (cycle.workspace_id,cycle.id)=(s.workspace_id,s.cycle_id)
+                JOIN public.chunks c ON (c.workspace_id,c.id)=(s.workspace_id,s.chunk_id)
+                WHERE s.workspace_id=%s
+                GROUP BY s.chunk_id,c.document_version_id
+            ), recent AS MATERIALIZED (
+                SELECT d.workspace_id,d.id,d.current_version_id,d.updated_at,
+                       max(history.last_selected_at) AS document_last_selected_at
+                FROM public.documents d
                 JOIN public.document_versions v ON(v.workspace_id,v.id)=(d.workspace_id,d.current_version_id)
-                WHERE d.source_type IN ('note','file','url','audio')
+                LEFT JOIN history ON history.document_version_id=d.current_version_id
+                WHERE d.workspace_id=%s AND d.source_type IN ('note','file','url','audio')
                   AND d.deleted_at IS NULL AND v.state='ready'
-                  AND EXISTS(SELECT 1 FROM public.chunks c WHERE c.document_version_id=v.id AND c.workspace_id=d.workspace_id)
-                ORDER BY d.updated_at DESC,d.id DESC LIMIT 200
+                  AND EXISTS(SELECT 1 FROM public.chunks c
+                             WHERE c.document_version_id=v.id AND c.workspace_id=d.workspace_id
+                               AND octet_length(c.content)<=%s)
+                GROUP BY d.workspace_id,d.id,d.current_version_id,d.updated_at
+                ORDER BY document_last_selected_at ASC NULLS FIRST,d.updated_at DESC,d.id DESC
+                LIMIT 200
+            ), scored AS (
+                SELECT d.id AS document_id,d.updated_at,chosen.id AS chunk_id,chosen.ordinal,
+                       d.document_last_selected_at,chosen.last_selected_at
+                FROM recent d
+                CROSS JOIN LATERAL (
+                    SELECT c.id,c.ordinal,history.last_selected_at
+                    FROM public.chunks c
+                    LEFT JOIN history ON history.chunk_id=c.id
+                    WHERE (c.workspace_id,c.document_version_id)=(d.workspace_id,d.current_version_id)
+                      AND octet_length(c.content)<=%s
+                    ORDER BY history.last_selected_at ASC NULLS FIRST,c.ordinal,c.id
+                    LIMIT %s
+                ) chosen
+            ), ranked AS (
+                SELECT scored.*,
+                       row_number() OVER (PARTITION BY document_id
+                           ORDER BY last_selected_at ASC NULLS FIRST,ordinal,chunk_id) AS document_round
+                FROM scored
             )
-            SELECT c.id,c.content FROM recent d CROSS JOIN LATERAL (
-                SELECT c.id,c.content,c.ordinal FROM public.chunks c
-                WHERE c.document_version_id=d.current_version_id AND octet_length(c.content)<=%s
-                ORDER BY c.ordinal,c.id LIMIT %s
-            ) c ORDER BY d.updated_at DESC,d.id DESC,c.ordinal,c.id LIMIT %s
-        """, (ai.max_input_bytes, max_sources, candidate_limit)).fetchall()
-        selected = select_context(candidates, ai)
+            SELECT c.id,c.content FROM ranked r
+            JOIN public.chunks c ON (c.workspace_id,c.id)=(%s,r.chunk_id)
+            ORDER BY r.document_round,r.document_last_selected_at ASC NULLS FIRST,
+                     r.updated_at DESC,r.document_id DESC,
+                     r.last_selected_at ASC NULLS FIRST,r.ordinal,r.chunk_id
+            LIMIT %s
+        """, (identity.workspace_id, identity.workspace_id, ai.max_input_bytes,
+              ai.max_input_bytes, max_sources, identity.workspace_id,
+              candidate_limit)).fetchall()
+        selected = select_context(candidates, ai, preserve_order=True)
         if not selected:
             stats = connection.execute("""
                 SELECT

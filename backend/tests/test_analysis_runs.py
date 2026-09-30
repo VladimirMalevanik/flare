@@ -20,6 +20,7 @@ from app.ai_engine.flare_config import FlareSettings
 from app.services.flare_generation import FlareProcessor
 from app.models.flare_runs import FlareRuns
 from app.services.item_service import ItemService
+from app.services.import_service import ImportService
 from app.workers.config import WorkerSettings
 from app.main import create_app
 from test_analysis_jobs import jobs, admin_url, executor_role, FakeAnalyzer
@@ -44,6 +45,36 @@ def start(jobs, key=None, ai=None):
 def snapshot(admin_url, run_id):
     with psycopg.connect(admin_url) as c:
         return c.execute('SELECT s.chunk_id FROM analysis_runs r JOIN analysis_job_sources s ON s.job_id=r.analysis_job_id WHERE r.id=%s ORDER BY s.ordinal', (run_id,)).fetchall()
+
+
+def move_daily_slot_to_past(admin_url, identity, run_id):
+    # Advance the disposable fixture by one workspace day without waiting.
+    with psycopg.connect(admin_url) as connection:
+        connection.execute(
+            """UPDATE public.analysis_cycles
+                  SET local_date=local_date-1,
+                      scheduled_for=scheduled_for-interval '2 days'
+                WHERE analysis_run_id=%s""", (run_id,),
+        )
+        connection.execute(
+            """UPDATE public.analysis_daily_quotas
+                  SET local_date=local_date-1,
+                      scheduled_for=scheduled_for-interval '2 days'
+                WHERE workspace_id=%s""", (identity.workspace_id,),
+        )
+
+
+@pytest.fixture
+def test_importer(jobs, admin_url):
+    identity = jobs[2][0]
+    yield ImportService(jobs[0].database, identity)
+    # Import batches reference the fixture's auth user and must be removed
+    # before the jobs fixture deletes that user.
+    with psycopg.connect(admin_url) as connection:
+        connection.execute(
+            'DELETE FROM public.import_batches WHERE workspace_id=%s',
+            (identity.workspace_id,),
+        )
 
 
 def test_public_auth_body_and_headers(jobs):
@@ -129,6 +160,69 @@ def test_selection_bounds_determinism_and_isolation(jobs, admin_url):
         assert all(row[2] == jobs[2][0].workspace_id for row in rows)
     from app.ai_engine.analysis import Evidence
     assert request_size_bytes(build_bounded_request([Evidence(source_id=str(r[0]),content=r[1]) for r in rows], ai)) <= ai.max_input_bytes
+
+
+def test_long_recent_files_do_not_hide_older_relevant_note(jobs, admin_url, test_importer):
+    identity = jobs[2][0]
+    note = ItemService(jobs[0].database, identity).create_note(
+        title='Project target', content='Our goal is to release the MVP next week.'
+    )
+    with jobs[0].database.workspace_transaction(identity) as connection:
+        goal_chunk = connection.execute(
+            'SELECT id FROM public.chunks WHERE document_version_id=%s',
+            (note.current_version_id,),
+        ).fetchone()['id']
+    content = 'Routine archive entry without a project signal.\n' * 600
+    for index in range(4):
+        unique_content = content + str(index)
+        test_importer.create_import(
+            format='txt', file_name=f'archive-{index}.txt', file_type='text/plain',
+            file_size=len(unique_content.encode('utf-8')), content=unique_content,
+        )
+
+    run = start(jobs)
+    selected = {row[0] for row in snapshot(admin_url, run['id'])}
+    assert goal_chunk in selected
+    assert len(selected) <= AISettings().max_sources
+
+
+def test_next_daily_run_uses_unseen_chunks_from_a_long_file(jobs, admin_url, test_importer):
+    identity = jobs[2][0]
+    with psycopg.connect(admin_url) as connection:
+        connection.execute(
+            'UPDATE public.documents SET deleted_at=now() WHERE workspace_id=%s',
+            (identity.workspace_id,),
+        )
+    content = 'Routine archive entry without a project signal.\n' * 1000
+    test_importer.create_import(
+        format='txt', file_name='long-source.txt', file_type='text/plain',
+        file_size=len(content.encode('utf-8')), content=content,
+    )
+    first = start(jobs)
+    first_chunks = {row[0] for row in snapshot(admin_url, first['id'])}
+    assert len(first_chunks) == AISettings().max_sources
+
+    move_daily_slot_to_past(admin_url, identity, first['id'])
+    second = start(jobs)
+    second_chunks = {row[0] for row in snapshot(admin_url, second['id'])}
+    assert len(second_chunks) == AISettings().max_sources
+    assert first_chunks.isdisjoint(second_chunks)
+
+
+def test_next_daily_run_rotates_across_unseen_documents(jobs, admin_url):
+    identity = jobs[2][0]
+    items = ItemService(jobs[0].database, identity)
+    for index in range(10):
+        items.create_note(title=f'Archive {index}', content=f'Saved status for archive {index}.')
+
+    first = start(jobs)
+    first_chunks = {row[0] for row in snapshot(admin_url, first['id'])}
+    assert len(first_chunks) == AISettings().max_sources
+    move_daily_slot_to_past(admin_url, identity, first['id'])
+    second = start(jobs)
+    second_chunks = {row[0] for row in snapshot(admin_url, second['id'])}
+    assert len(second_chunks) == AISettings().max_sources
+    assert first_chunks.isdisjoint(second_chunks)
 
 
 def test_recent_selection_prioritizes_an_edited_old_source_beyond_created_limit(jobs, admin_url):

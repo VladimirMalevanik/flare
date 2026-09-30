@@ -200,7 +200,22 @@ def test_sdk_contract_and_safe_result():
             return await detector.detect(EMPTY,SOURCES)
     result=asyncio.run(run())
     assert len(calls)==1 and len(result.candidates.flares)==1 and result.metadata.validation_outcome=='valid'
+    assert result.submitted_count == 1
     assert 'hidden provider reasoning sentinel' not in repr(result)
+
+
+def test_detector_reports_candidates_removed_by_quality_checks():
+    weak = candidate()
+    weak['action'] = 'Improve communication.'
+    def handler(request):
+        return httpx.Response(200, json=completion(json.dumps({'flares': [weak]})))
+    async def run():
+        async with GroqFlareDetector(AISettings(api_key='fake'),
+                                      transport=httpx.MockTransport(handler)) as detector:
+            return await detector.detect(EMPTY, SOURCES)
+    result = asyncio.run(run())
+    assert result.submitted_count == 1
+    assert result.candidates.flares == []
 
 
 def test_support_prompt_contract_and_unchanged_schema():
