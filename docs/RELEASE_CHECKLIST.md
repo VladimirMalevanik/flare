@@ -388,9 +388,16 @@ Any unchecked required item is **NO-GO**. Record the decision maker and evidence
 - [ ] Record the SHA-256 and storage location of the pre-release web, API, and worker
   rollback zips before deploying.
 - [ ] Record the most recent restorable Azure PostgreSQL backup or restore point.
-- [ ] On an application-only regression, redeploy the saved OneDeploy artifacts in
-  compatibility order, then rerun worker `/ready`, API `/health` and `/ready`, public
-  `/api/ready`, authentication, Note/Vault, and read-only Flare checks.
+- [ ] Before redeploying the prior backend artifacts, confirm their required schema
+  revision. An API artifact built for 0017 requires exactly 0017 and fails `/ready`
+  against 0018.
+  Have the database owner choose a reviewed 0018-to-0017 downgrade, a forward fix,
+  or a controlled restore before rolling back the API and worker. Downgrading 0018
+  drops compact analysis selection history; selections already removed by queue
+  retention cannot be reconstructed if 0018 is applied again.
+- [ ] Redeploy the saved OneDeploy artifacts in compatibility order only after the
+  chosen schema is compatible, then rerun worker `/ready`, API `/health` and `/ready`,
+  public `/api/ready`, authentication, Note/Vault, and read-only Flare checks.
 - [ ] Because the B1 production apps have no deployment slots, record the rollback
   start/end time and expected user-visible interruption.
 - [ ] Do not automatically run `alembic downgrade`. Migrations may intentionally
