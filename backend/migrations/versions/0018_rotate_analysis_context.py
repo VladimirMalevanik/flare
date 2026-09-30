@@ -51,7 +51,10 @@ def upgrade() -> None:
                     excluded.last_selected_at);
             RETURN NEW;
         END $$;
-        ALTER FUNCTION public.record_analysis_chunk_selection() OWNER TO {owner};
+        -- Keep this SECURITY INVOKER trigger owned by the migration role. The
+        -- runtime executor has DML access to the history table, but production
+        -- correctly does not grant it CREATE on the public schema. Transferring
+        -- function ownership to that role would make this migration fail.
         REVOKE ALL ON FUNCTION public.record_analysis_chunk_selection() FROM PUBLIC;
         CREATE TRIGGER analysis_cycle_source_record_selection
             AFTER INSERT ON public.analysis_cycle_sources
