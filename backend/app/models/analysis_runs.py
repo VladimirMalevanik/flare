@@ -69,14 +69,10 @@ class AnalysisRuns:
         candidate_limit = min(max_sources * 4, 400)
         candidates = connection.execute("""
             WITH history AS MATERIALIZED (
-                SELECT s.chunk_id,c.document_version_id,
-                       max(coalesce(cycle.refreshed_at,cycle.created_at)) AS last_selected_at
-                FROM public.analysis_cycle_sources s
-                JOIN public.analysis_cycles cycle
-                  ON (cycle.workspace_id,cycle.id)=(s.workspace_id,s.cycle_id)
-                JOIN public.chunks c ON (c.workspace_id,c.id)=(s.workspace_id,s.chunk_id)
-                WHERE s.workspace_id=%s
-                GROUP BY s.chunk_id,c.document_version_id
+                SELECT h.chunk_id,c.document_version_id,h.last_selected_at
+                FROM public.analysis_chunk_selection_history h
+                JOIN public.chunks c ON (c.workspace_id,c.id)=(h.workspace_id,h.chunk_id)
+                WHERE h.workspace_id=%s
             ), recent AS MATERIALIZED (
                 SELECT d.workspace_id,d.id,d.current_version_id,d.updated_at,
                        max(history.last_selected_at) AS document_last_selected_at
@@ -110,7 +106,7 @@ class AnalysisRuns:
                            ORDER BY last_selected_at ASC NULLS FIRST,ordinal,chunk_id) AS document_round
                 FROM scored
             )
-            SELECT c.id,c.content FROM ranked r
+            SELECT c.id,c.content,r.last_selected_at IS NULL AS unseen FROM ranked r
             JOIN public.chunks c ON (c.workspace_id,c.id)=(%s,r.chunk_id)
             ORDER BY r.document_round,r.document_last_selected_at ASC NULLS FIRST,
                      r.updated_at DESC,r.document_id DESC,

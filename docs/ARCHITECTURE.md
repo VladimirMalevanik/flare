@@ -216,12 +216,16 @@ or the worker.
 | Identity | `auth_users`, `auth_sessions`, `auth_email_verifications` | User, revocable sessions, and verification tokens |
 | Tenancy | `workspaces`, `workspace_members` | Workspace boundary and owner/editor/viewer role |
 | Knowledge | `documents`, `document_versions`, `chunks` | Soft-deleted document, immutable published version, ordered evidence chunks |
-| Analysis | `analysis_jobs`, `analysis_job_sources`, `analysis_runs`, `analysis_schedules`, `analysis_daily_quotas`, `analysis_cycles`, `analysis_cycle_sources` | Durable extraction job, retention-safe daily quota, schedule, immutable T-30 snapshot, and public idempotent run |
+| Analysis | `analysis_jobs`, `analysis_job_sources`, `analysis_runs`, `analysis_schedules`, `analysis_daily_quotas`, `analysis_cycles`, `analysis_cycle_sources`, `analysis_chunk_selection_history` | Durable extraction job, retention-safe daily quota, schedule, immutable T-30 snapshot, compact selection history, and public idempotent run |
 | Flares | `flare_generation_runs`, `insights`, `insight_sources` | Durable generation stage, typed Flare, and exact evidence quote |
 | Notifications | `scheduled_analysis_notifications` | Durable titles-only email outbox for successful scheduled Flare runs |
 | GitHub | `github_connection_states`, `github_connections` | One-time state and one selected repository per workspace |
 | Imports | `import_batches` | Idempotent bounded text-import status and canonical document link |
 | Analytics | `activity_events` | Bounded allowlisted product events without source bodies |
+
+Downgrading schema revision 0018 removes the compact selection history. A
+subsequent upgrade restores history from cycle sources that still exist, but
+selections whose cycles were already removed by retention cannot be recovered.
 
 The initial schema retains nullable pgvector capacity, but the current Analyze flow
 uses bounded recency and keyword signals rather than vector retrieval. Published

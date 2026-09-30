@@ -1,4 +1,6 @@
-"""Rotate scheduled context using existing daily cycle source history."""
+"""Rotate context using selection history that survives run retention."""
+
+import os
 
 from alembic import op
 
@@ -10,8 +12,74 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Replace only the existing worker capability. PostgreSQL retains its owner
-    # and EXECUTE grants; this migration creates no new tables or permissions.
+    owner = "flare_owner" if os.getenv("FLARE_DATABASE_PROVIDER") == "yandex" else "flare_job_executor"
+    op.execute(
+        f"""
+        -- Cycle sources are immutable snapshots, but the cycle and its run are
+        -- removed by queue retention. Keep only each live chunk's most recent
+        -- selection, independent of those short-lived rows.
+        CREATE TABLE public.analysis_chunk_selection_history (
+            workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+            chunk_id uuid NOT NULL,
+            last_selected_at timestamptz NOT NULL,
+            PRIMARY KEY (workspace_id, chunk_id),
+            FOREIGN KEY (workspace_id, chunk_id)
+                REFERENCES public.chunks(workspace_id, id) ON DELETE CASCADE
+        );
+        REVOKE ALL ON public.analysis_chunk_selection_history FROM PUBLIC;
+        GRANT SELECT ON public.analysis_chunk_selection_history TO flare_app;
+        GRANT SELECT,INSERT,UPDATE,DELETE ON public.analysis_chunk_selection_history TO {owner};
+        CREATE POLICY selection_history_member_read
+            ON public.analysis_chunk_selection_history TO flare_app USING (
+                workspace_id = nullif(current_setting('app.workspace_id',true),'')::uuid
+                AND EXISTS (SELECT 1 FROM public.workspace_members m
+                    WHERE m.workspace_id=analysis_chunk_selection_history.workspace_id
+                      AND m.user_id=nullif(current_setting('app.user_id',true),'')));
+        CREATE POLICY selection_history_executor
+            ON public.analysis_chunk_selection_history TO {owner}
+            USING (true) WITH CHECK (true);
+
+        CREATE FUNCTION public.record_analysis_chunk_selection() RETURNS trigger
+        LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
+        BEGIN
+            INSERT INTO public.analysis_chunk_selection_history (
+                workspace_id,chunk_id,last_selected_at)
+            VALUES (NEW.workspace_id,NEW.chunk_id,clock_timestamp())
+            ON CONFLICT (workspace_id,chunk_id) DO UPDATE
+                SET last_selected_at=greatest(
+                    analysis_chunk_selection_history.last_selected_at,
+                    excluded.last_selected_at);
+            RETURN NEW;
+        END $$;
+        ALTER FUNCTION public.record_analysis_chunk_selection() OWNER TO {owner};
+        REVOKE ALL ON FUNCTION public.record_analysis_chunk_selection() FROM PUBLIC;
+        CREATE TRIGGER analysis_cycle_source_record_selection
+            AFTER INSERT ON public.analysis_cycle_sources
+            FOR EACH ROW EXECUTE FUNCTION public.record_analysis_chunk_selection();
+
+        -- Preserve selections made before this migration, including manual
+        -- cycles. The source FK ensures each referenced chunk still exists.
+        INSERT INTO public.analysis_chunk_selection_history (
+            workspace_id,chunk_id,last_selected_at)
+        SELECT s.workspace_id,s.chunk_id,
+               max(coalesce(c.refreshed_at,c.created_at))
+          FROM public.analysis_cycle_sources s
+          JOIN public.analysis_cycles c
+            ON (c.workspace_id,c.id)=(s.workspace_id,s.cycle_id)
+         GROUP BY s.workspace_id,s.chunk_id
+        ON CONFLICT (workspace_id,chunk_id) DO UPDATE
+            SET last_selected_at=greatest(
+                analysis_chunk_selection_history.last_selected_at,
+                excluded.last_selected_at);
+        -- The migration role can populate every tenant before FORCE RLS takes
+        -- effect. This DDL transaction also holds the source trigger lock,
+        -- preventing a concurrent insert from falling between backfill and
+        -- trigger installation.
+        ALTER TABLE public.analysis_chunk_selection_history ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE public.analysis_chunk_selection_history FORCE ROW LEVEL SECURITY;
+        """
+    )
+    # CREATE OR REPLACE retains the restricted worker EXECUTE grant and owner.
     op.execute(
         """
         CREATE OR REPLACE FUNCTION public.load_analysis_cycle_candidates(
@@ -40,14 +108,10 @@ def upgrade() -> None:
                 RETURN jsonb_build_object('error','authorization_revoked'); END IF;
 
             WITH history AS MATERIALIZED (
-                SELECT s.chunk_id,c.document_version_id,
-                       max(coalesce(prior.refreshed_at,prior.created_at)) AS last_selected_at
-                FROM public.analysis_cycle_sources s
-                JOIN public.analysis_cycles prior
-                  ON (prior.workspace_id,prior.id)=(s.workspace_id,s.cycle_id)
-                JOIN public.chunks c ON (c.workspace_id,c.id)=(s.workspace_id,s.chunk_id)
-                WHERE s.workspace_id=cycle.workspace_id
-                GROUP BY s.chunk_id,c.document_version_id
+                SELECT h.chunk_id,c.document_version_id,h.last_selected_at
+                FROM public.analysis_chunk_selection_history h
+                JOIN public.chunks c ON (c.workspace_id,c.id)=(h.workspace_id,h.chunk_id)
+                WHERE h.workspace_id=cycle.workspace_id
             ), candidate_documents AS MATERIALIZED (
                 SELECT d.workspace_id,d.id,d.current_version_id,d.updated_at,
                        max(history.last_selected_at) AS document_last_selected_at
@@ -84,9 +148,10 @@ def upgrade() -> None:
                            ORDER BY last_selected_at ASC NULLS FIRST,ordinal,chunk_id) AS document_round
                 FROM scored
             )
-            SELECT jsonb_agg(jsonb_build_object('id',q.id,'content',q.content) ORDER BY q.row_order)
+            SELECT jsonb_agg(jsonb_build_object(
+                'id',q.id,'content',q.content,'unseen',q.unseen) ORDER BY q.row_order)
             INTO candidates FROM (
-                SELECT c.id,c.content,
+                SELECT c.id,c.content,r.last_selected_at IS NULL AS unseen,
                        row_number() OVER (
                            ORDER BY r.document_round,r.document_last_selected_at ASC NULLS FIRST,
                                     r.updated_at DESC,r.document_id DESC,
@@ -163,5 +228,15 @@ def downgrade() -> None:
             ) q;
             RETURN jsonb_build_object('candidates',coalesce(candidates,'[]'::jsonb));
         END $$;
+        """
+    )
+    # Emergency rollback removes the compact rotation metadata. Selections
+    # whose cycles still exist are backfilled if 0018 is applied again; older
+    # selections already removed by retention cannot be reconstructed.
+    op.execute(
+        """
+        DROP TRIGGER analysis_cycle_source_record_selection ON public.analysis_cycle_sources;
+        DROP FUNCTION public.record_analysis_chunk_selection();
+        DROP TABLE public.analysis_chunk_selection_history;
         """
     )

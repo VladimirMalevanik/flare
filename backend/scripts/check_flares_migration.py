@@ -139,14 +139,16 @@ def main(*, verify_analysis_runs=False):
                     assert conn.execute('SELECT count(*) FROM analysis_schedules').fetchone() == (0,)
                     assert conn.execute('SELECT count(*) FROM analysis_cycles').fetchone() == (0,)
                     assert conn.execute('SELECT count(*) FROM analysis_cycle_sources').fetchone() == (0,)
+                    assert conn.execute('SELECT count(*) FROM analysis_chunk_selection_history').fetchone() == (0,)
                     assert conn.execute('SELECT count(*) FROM scheduled_analysis_notifications').fetchone() == (0,)
                     protected = conn.execute("""SELECT count(*) FROM pg_class
                         WHERE relname IN ('github_connection_states','github_connections',
                                          'activity_events','import_batches','analysis_schedules',
                                          'analysis_cycles','analysis_cycle_sources',
+                                         'analysis_chunk_selection_history',
                                          'scheduled_analysis_notifications')
                         AND relrowsecurity AND relforcerowsecurity""").fetchone()
-                    assert protected == (8,)
+                    assert protected == (9,)
                     assert not conn.execute(
                         "SELECT has_table_privilege('flare_worker','github_connections','SELECT')"
                     ).fetchone()[0]
@@ -155,6 +157,9 @@ def main(*, verify_analysis_runs=False):
                     ).fetchone()[0]
                     assert not conn.execute(
                         "SELECT has_table_privilege('flare_worker','analysis_cycles','SELECT')"
+                    ).fetchone()[0]
+                    assert not conn.execute(
+                        "SELECT has_table_privilege('flare_worker','analysis_chunk_selection_history','SELECT')"
                     ).fetchone()[0]
                 print(f'PASS ({args.provider}): 0007 -> 0018; all existing data preserved; repeat upgrade; email, GitHub, analytics, import provenance, daily-analysis RLS, legal acceptance and worker isolation')
             print(f'PASS ({args.provider}): 0005 -> 0006; eleven tables preserved; historical ordinals preserved; repeat startup; legacy identity/RLS; old-parent enqueue; atomic handoff')

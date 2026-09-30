@@ -323,23 +323,41 @@ def test_legal_acceptance_migration_is_private_and_immutable(monkeypatch):
     assert 'DELETE ON public.auth_legal_acceptances' not in sql
 
 
-def test_context_rotation_migration_replaces_only_existing_capability_and_restores_0015(monkeypatch):
+@pytest.mark.parametrize('provider,owner', [
+    ('local', 'flare_job_executor'),
+    ('yandex', 'flare_owner'),
+])
+def test_context_rotation_migration_keeps_history_private_and_restores_0015(
+    monkeypatch, provider, owner,
+):
     migration = load_migration('0018_rotate_analysis_context.py')
     operation = FakeOp()
     monkeypatch.setattr(migration, 'op', operation)
+    monkeypatch.setenv('FLARE_DATABASE_PROVIDER', provider)
 
     migration.upgrade()
-    assert len(operation.statements) == 1
-    upgrade_sql = operation.statements.pop()
+    assert len(operation.statements) == 2
+    history_sql, upgrade_sql = operation.statements
+    assert 'CREATE TABLE public.analysis_chunk_selection_history' in history_sql
+    assert 'REFERENCES public.chunks(workspace_id, id) ON DELETE CASCADE' in history_sql
+    assert 'FORCE ROW LEVEL SECURITY' in history_sql
+    assert f'TO {owner}' in history_sql
+    assert 'TO flare_worker' not in history_sql
+    assert 'AFTER INSERT ON public.analysis_cycle_sources' in history_sql
+    assert 'max(coalesce(c.refreshed_at,c.created_at))' in history_sql
+    assert history_sql.index('GROUP BY s.workspace_id,s.chunk_id') < history_sql.index(
+        'ALTER TABLE public.analysis_chunk_selection_history FORCE ROW LEVEL SECURITY'
+    )
     assert 'CREATE OR REPLACE FUNCTION public.load_analysis_cycle_candidates' in upgrade_sql
+    assert 'public.analysis_chunk_selection_history h' in upgrade_sql
+    assert "'unseen',q.unseen" in upgrade_sql
     assert 'CROSS JOIN LATERAL' in upgrade_sql
     assert 'LIMIT p_max_sources' in upgrade_sql
-    for forbidden in ('CREATE TABLE', 'CREATE POLICY', 'GRANT ', 'REVOKE ', 'ALTER FUNCTION'):
-        assert forbidden not in upgrade_sql
 
     migration.downgrade()
-    assert len(operation.statements) == 1
-    downgrade_sql = operation.statements.pop()
+    assert len(operation.statements) == 4
+    downgrade_sql = operation.statements[2]
+    assert 'DROP TABLE public.analysis_chunk_selection_history' in operation.statements[3]
     legacy_source = (VERSIONS / '0015_daily_analysis_schedule.py').read_text()
     legacy_start = legacy_source.index('CREATE FUNCTION public.load_analysis_cycle_candidates')
     legacy_end = legacy_source.index('END $$;', legacy_start) + len('END $$;')
