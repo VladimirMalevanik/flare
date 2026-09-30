@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "@/i18n/provider";
 import { useEffect, useRef, useState } from "react";
 import { useSession } from "@/components/auth-session";
 import { useWorkspace } from "@/components/workspace-context";
@@ -11,6 +12,8 @@ import { AnalyzeController, type AnalyzeState } from "./analyze-controller";
 import { dailyStatusMessage } from "./daily-status-copy";
 
 export function AnalyzeAction() {
+  const { t, locale, label, message } = useI18n();
+
   const session = useSession();
   const { refresh } = useWorkspace();
   const refreshRef = useRef(refresh);
@@ -56,13 +59,15 @@ export function AnalyzeAction() {
   const canResume = Boolean(daily?.runId && ["queued", "processing", "completed", "failed"].includes(daily.state));
   const dailyReserved = daily ? !daily.canRequestToday : false;
   const scheduledFor = daily?.scheduledFor
-    ? `${new Intl.DateTimeFormat("en", {
+    ? `${new Intl.DateTimeFormat(locale, {
         dateStyle: "medium",
         timeStyle: "short",
         timeZone: daily.timezone,
       }).format(new Date(daily.scheduledFor))} (${daily.timezone})`
     : null;
-  const scheduledMessage = dailyStatusMessage(daily, scheduledFor);
+  const scheduledMessage = daily?.state === "scheduled" && daily.scheduledFor
+    ? t("scheduledInsight", { date: scheduledFor ?? "" })
+    : label(dailyStatusMessage(daily, scheduledFor));
   const trigger = () => {
     if (daily?.runId && canResume) {
       void controller.current?.resume(daily.runId);
@@ -78,22 +83,22 @@ export function AnalyzeAction() {
         onClick={trigger}
       >
         {state.busy
-          ? "Analyzing…"
+          ? t("Analyzing…")
           : pending || canResume
-            ? "Check today’s insight"
+            ? t("Check today’s insight")
             : daily?.state === "failed" || daily?.state === "consumed"
-              ? "Next insight tomorrow"
+              ? t("Next insight tomorrow")
             : dailyReserved
-              ? "Scheduled for today"
+              ? t("Scheduled for today")
               : state.error
-                ? "Retry Analyze"
-                : "Analyze today"}
+                ? t("Retry Analyze")
+                : t("Analyze today")}
       </button>
       <p className={state.error ? "error-text meta" : "muted meta"} role={state.error ? "alert" : "status"}>
         {viewer
-          ? "Only owners and editors can analyze context."
-          : state.message || scheduledMessage || "Run one insight per workspace day using the latest saved context."}
-        {dataProviderMode === "mock" && " Demo mode."}
+          ? t("Only owners and editors can analyze context.")
+          : (state.message ? message(state.message) : scheduledMessage) || t("Run one insight per workspace day using the latest saved context.")}
+        {dataProviderMode === "mock" && <> {t("Demo mode.")}</>}
       </p>
     </div>
   );

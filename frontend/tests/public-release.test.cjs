@@ -15,7 +15,7 @@ test("public landing page exposes product, account, and legal routes", () => {
 });
 
 test("macOS download page points both architectures at stable release assets", () => {
-  const source = read("../src/app/download/page.tsx");
+  const source = read("../src/features/download/download-page.tsx");
   const desktopPackage = JSON.parse(read("../../desktop/package.json"));
   assert.equal(desktopPackage.build.artifactName, "Flare-macOS-${arch}.${ext}");
   assert.match(
@@ -28,7 +28,7 @@ test("macOS download page points both architectures at stable release assets", (
   assert.match(source, /href=\{INTEL_URL\}/);
   assert.match(source, /Apple silicon/);
   assert.match(source, /Intel/);
-  assert.match(source, /Privacy &amp;[\s\S]*Security/);
+  assert.match(source, /Privacy &[\s\S]*Security/);
   assert.match(source, /not yet notarized/);
 });
 

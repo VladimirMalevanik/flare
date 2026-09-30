@@ -8,11 +8,12 @@ import { Capture } from "@/features/capture/capture";
 import { dataProvider } from "@/lib/data";
 import { Dialog } from "./dialog";
 import { BrandMark } from "./brand-mark";
+import { useI18n } from "@/i18n/provider";
 const navigation = [
-  { href: "/insights", label: "Flares", icon: "insights" },
-  { href: "/vault", label: "Vault", icon: "vault" },
-  { href: "/sources", label: "Sources", icon: "sources" },
-  { href: "/settings", label: "Settings", icon: "settings" },
+  { href: "/insights", label: "flares", icon: "insights" },
+  { href: "/vault", label: "vault", icon: "vault" },
+  { href: "/sources", label: "sources", icon: "sources" },
+  { href: "/settings", label: "settings", icon: "settings" },
 ] as const;
 export function AppShell({ children }: { children: ReactNode }) {
   return (
@@ -22,6 +23,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 function Shell({ children }: { children: ReactNode }) {
+  const { t, message } = useI18n();
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   const { dark, setTheme, openCapture, revision, notice, profile } =
@@ -58,7 +60,7 @@ function Shell({ children }: { children: ReactNode }) {
           </span>
           <span>
             <strong>Flare</strong>
-            <small>Startup Context</small>
+            <small>{t("startupContext")}</small>
           </span>
         </Link>
         <button
@@ -69,9 +71,9 @@ function Shell({ children }: { children: ReactNode }) {
           }}
         >
           <Icon name="plus" />
-          Capture<kbd>⌘K</kbd>
+          {t("capture")}<kbd>⌘K</kbd>
         </button>
-        <nav aria-label="Primary navigation">
+        <nav aria-label={t("primaryNavigation")}>
           {navigation.map((entry, i) => (
             <Link
               key={entry.href}
@@ -81,7 +83,7 @@ function Shell({ children }: { children: ReactNode }) {
               className={`nav-link ${pathname === entry.href ? "active" : ""}`}
             >
               <Icon name={entry.icon} />
-              <span>{entry.label}</span>
+              <span>{t(entry.label)}</span>
               {i < 3 && <span className="count">{counts[i]}</span>}
             </Link>
           ))}
@@ -90,22 +92,21 @@ function Shell({ children }: { children: ReactNode }) {
       <div className="sidebar-footer">
         <label className="theme-row">
           <Icon name="moon" />
-          <span>Dark Mode</span>
+          <span>{t("darkMode")}</span>
           <input
             className="switch"
             type="checkbox"
             checked={dark}
             onChange={() => setTheme(dark ? "light" : "dark")}
-            aria-label="Dark Mode"
+            aria-label={t("darkMode")}
           />
         </label>
         <Link href="/settings" className="profile">
           <span className="avatar">{initials}</span>
           <span>
-            {profile.name || "Unnamed profile"}
-            <small>{profile.role || "No role set"}</small>
+            {profile.name || t("unnamedProfile")}
+            <small>{profile.role || t("noRole")}</small>
           </span>
-          <Icon name="chevron" />
         </Link>
       </div>
     </>
@@ -113,25 +114,25 @@ function Shell({ children }: { children: ReactNode }) {
   return (
     <>
       <a href="#main-content" className="skip-link">
-        Skip to content
+        {t("skipToContent")}
       </a>
       <aside className="sidebar">{sidebar}</aside>
       <button
         className="mobile-menu icon-button"
-        aria-label="Open navigation"
+        aria-label={t("openNavigation")}
         onClick={() => setDrawer(true)}
       >
         <Icon name="menu" />
       </button>
       {drawer && (
         <Dialog
-          title="Navigation"
+          title={t("navigation")}
           className="nav-drawer"
           onClose={() => setDrawer(false)}
         >
           <button
             className="icon-button drawer-close"
-            aria-label="Close navigation"
+            aria-label={t("closeNavigation")}
             onClick={() => setDrawer(false)}
           >
             <Icon name="close" />
@@ -145,7 +146,7 @@ function Shell({ children }: { children: ReactNode }) {
       </main>
       {notice && (
         <div role="status" className="toast">
-          {notice}
+          {message(notice)}
         </div>
       )}
     </>

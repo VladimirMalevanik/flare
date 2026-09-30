@@ -1,4 +1,5 @@
 "use client";
+import { useI18n } from "@/i18n/provider";
 import Link from "next/link";
 import { AnalyzeAction } from "@/features/analyze/analyze-action";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -17,6 +18,8 @@ const plural: Record<FlareType, string> = {
 };
 const flareTypeFor = (insight: Insight): FlareType => insight.type;
 export function InsightsPage() {
+  const { t, locale, label, message } = useI18n();
+
   const params = useSearchParams();
   const detailId = params.get("insight");
   const [insights, setInsights] = useState<Insight[]>([]);
@@ -132,10 +135,9 @@ export function InsightsPage() {
           <header className="page-heading">
             <p className="eyebrow">
               <span className="dot" />
-              RECENT FLARES · {insights.length} SURFACED
-            </p>
+              {" "}{t("RECENT FLARES ·")}{" "}{insights.length} {" "}{t("SURFACED")}</p>
             <h1>Flares</h1>
-            <p>Things you might have missed, forgotten, or contradicted.</p>
+            <p>{t("Things you might have missed, forgotten, or contradicted.")}</p>
           </header>
           <AnalyzeAction />
         </div>
@@ -146,7 +148,7 @@ export function InsightsPage() {
               setFilter("All");
             }}
           >
-            All <span>{insights.length}</span>
+            {t("All")}{" "}<span>{insights.length}</span>
           </button>
           {flareTypes.map((kind) => (
             <button
@@ -156,7 +158,7 @@ export function InsightsPage() {
                 setFilter(kind);
               }}
             >
-              {plural[kind]}{" "}
+              {label(plural[kind])}{" "}
               <span>
                 {insights.filter((insight) => flareTypeFor(insight) === kind)
                   .length}
@@ -164,30 +166,29 @@ export function InsightsPage() {
             </button>
           ))}
         </div>
-        {detailId && !urlDetail && <p className="state" role="status">Loading Flare…</p>}
+        {detailId && !urlDetail && <p className="state" role="status">{t("Loading Flare…")}</p>}
         {detailId && urlDetail && !urlDetail.value && (
           <p className="state" role={urlDetail.error ? "alert" : "status"}>
-            {urlDetail.error || "Flare not found."}
+            {urlDetail.error ? message(urlDetail.error) : t("Flare not found.")}
           </p>
         )}
         {loading ? (
           <p className="state" role="status">
-            Loading Flares…
-          </p>
+            {t("Loading Flares…")}</p>
         ) : error ? (
           <p className="state error-text" role="alert">
-            {error}
+            {message(error)}
           </p>
         ) : !insights.length ? (
           <div className="state insights-empty-state">
             <span className="empty-state-icon" aria-hidden="true">
               <Icon name="note" />
             </span>
-            <h2>{itemCount ? `${itemCount} item${itemCount === 1 ? "" : "s"} remembered` : "No Flares yet"}</h2>
+            <h2>{itemCount ? t(itemCount === 1 ? "rememberedItem" : "rememberedItems", { count: itemCount }) : t("No Flares yet")}</h2>
             <p>
               {itemCount
-                ? "No completed Flares are available for this workspace."
-                : "Add a note to keep project context here."}
+                ? t("No completed Flares are available for this workspace.")
+                : t("Add a note to keep project context here.")}
             </p>
             {!itemCount && (
               <>
@@ -198,8 +199,7 @@ export function InsightsPage() {
                       openCapture();
                     }}
                   >
-                    Add context
-                  </button>
+                    {t("Add context")}</button>
                   <Link
                     className="button"
                     href="/sources"
@@ -211,16 +211,15 @@ export function InsightsPage() {
                       });
                     }}
                   >
-                    Import from Obsidian
-                  </Link>
+                    {t("Import from Obsidian")}</Link>
                 </div>
               </>
             )}
           </div>
         ) : !visible.length ? (
           <div className="state">
-            <h2>No Flares in this category</h2>
-            <p>Choose another filter to review the available Flares.</p>
+            <h2>{t("No Flares in this category")}</h2>
+            <p>{t("Choose another filter to review the available Flares.")}</p>
           </div>
         ) : (
           <div className="insight-stack">
@@ -255,35 +254,34 @@ export function InsightsPage() {
                     className={`badge kind-${flareTypes.indexOf(flareTypeFor(insight))}`}
                   >
                     <span className="dot" />
-                    {flareTypeFor(insight)}
+                    {label(flareTypeFor(insight))}
                   </span>
                   <span className="muted">
-                    {new Date(insight.createdAt).toLocaleDateString("en-US", {
+                    {new Date(insight.createdAt).toLocaleDateString(locale, {
                       month: "short",
                       day: "numeric",
                     })}
                   </span>
                   {active?.id === insight.id && (
                     <span className="selected-label">
-                      Selected <Icon name="check" />
+                      {t("Selected")}{" "}<Icon name="check" />
                     </span>
                   )}
                 </div>
                 <h2>{insight.title}</h2>
                 <p className="description">{insight.statement}</p>
-                {insight.action && <p className="description"><strong>Next action: </strong>{insight.action}</p>}
+                {insight.action && <p className="description"><strong>{t("Next action:")} </strong>{insight.action}</p>}
                 <div className="callout">
                   <Icon name="info" />
                   <p>
-                    <strong>Why it matters</strong>
+                    <strong>{t("Why it matters")}</strong>
                     <span>{insight.reason}</span>
                   </p>
                 </div>
                 <footer className="card-footer">
                   <span>
                     <Icon name="sources" />
-                    {insight.evidence.length} sources
-                  </span>
+                    {insight.evidence.length} {" "}{t("sources")}</span>
                 </footer>
               </article>
             ))}
@@ -294,38 +292,37 @@ export function InsightsPage() {
         <aside
           className="evidence-panel"
           id="insight-evidence"
-          aria-label="Flare evidence"
+          aria-label={t("Flare evidence")}
         >
           <header>
             <h2>
               <Icon name="note" />
-              Flare Evidence
-            </h2>
+              {" "}{t("Flare Evidence")}</h2>
             <button
               className="icon-button"
-              aria-label="Close evidence"
+              aria-label={t("Close evidence")}
               onClick={closePanel}
             >
               <Icon name="close" />
             </button>
           </header>
           <div className="evidence-body">
-            <p className="eyebrow accent">{flareTypeFor(active)}</p>
+            <p className="eyebrow accent">{label(flareTypeFor(active))}</p>
             <h2>{active.title}</h2>
             <div className="card attention">
-              <h3>Why this requires attention</h3>
+              <h3>{t("Why this requires attention")}</h3>
               <p>{active.reason}</p>
             </div>
-            <h3 className="eyebrow muted">VERIFIABLE QUOTES</h3>
+            <h3 className="eyebrow muted">{t("VERIFIABLE QUOTES")}</h3>
             {active.evidence.map((e, i) => (
               <article className="quote-card" key={`${e.itemId}-${i}`}>
                 <div className="quote-meta">
                   <Link href={`/vault?item=${encodeURIComponent(e.itemId)}`}>{e.sourceTitle}</Link>
-                  <span className="muted">{e.sourceType}</span>
+                  <span className="muted">{label(e.sourceType)}</span>
                 </div>
                 <blockquote>“{e.excerpt}”</blockquote>
                 <Link className="text-button" href={`/vault?item=${encodeURIComponent(e.itemId)}`}>
-                  Open source <Icon name="arrow" />
+                  {t("Open source")}{" "}<Icon name="arrow" />
                 </Link>
               </article>
             ))}
@@ -335,13 +332,12 @@ export function InsightsPage() {
               className="button primary"
               onClick={() =>
                 openCapture(
-                  `Resolution note: ${active.title}\n\n${active.reason}\n\nEvidence:\n${active.evidence.map((e) => `- ${e.sourceTitle}: ${e.excerpt}`).join("\n")}\n\nDecision: `,
+                  t("resolutionDraft", { title: active.title, reason: active.reason, evidence: active.evidence.map((e) => `- ${e.sourceTitle}: ${e.excerpt}`).join("\n") }),
                 )
               }
             >
               <Icon name="note" />
-              Draft Resolution Note
-            </button>
+              {" "}{t("Draft Resolution Note")}</button>
           </footer>
         </aside>
       )}

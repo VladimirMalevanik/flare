@@ -1,7 +1,8 @@
 "use client";
+import { useI18n } from "@/i18n/provider";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { Icon } from "@/components/icons";
 import { useWorkspace } from "@/components/workspace-context";
 import {
@@ -13,6 +14,7 @@ import {
 import { readLocal, writeLocal } from "@/lib/storage/preferences";
 import { transcribeVoice } from "@/lib/voice";
 import {
+  CAPTURE_PANEL_SIZES,
   clampOrbPosition,
   captureTransformOrigin,
   hoverRectFor,
@@ -21,6 +23,8 @@ import {
   type CaptureSize,
 } from "./capture-position";
 import { useVoiceCapture } from "./use-voice-capture";
+
+class CaptureInputError extends Error {}
 
 const ORB_POSITION_KEY = "flare-orb-position-v1";
 const MAX_IMPORT_BYTES = 200_000;
@@ -49,6 +53,8 @@ function elapsed(seconds: number) {
 }
 
 export function Capture() {
+  const { t, locale, message } = useI18n();
+
   const {
     captureOpen,
     openCapture,
@@ -70,7 +76,7 @@ export function Capture() {
   const [orbDragging, setOrbDragging] = useState(false);
   const [orbPosition, setOrbPosition] = useState<CapturePoint | null>(null);
   const [viewport, setViewport] = useState<CaptureSize | null>(null);
-  const [panelSize, setPanelSize] = useState<CaptureSize>({ width: 500, height: 204 });
+  const [panelSize, setPanelSize] = useState<(CaptureSize & { preference: typeof captureOrbSize }) | null>(null);
   const island = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -134,18 +140,17 @@ export function Capture() {
     };
   }, [orbSize]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if ((!captureOpen && !voiceIsland) || !panel.current) return;
     const element = panel.current;
     const measure = () => {
-      const rect = element.getBoundingClientRect();
-      setPanelSize({ width: rect.width, height: rect.height });
+      setPanelSize({ width: element.offsetWidth, height: element.offsetHeight, preference: captureOrbSize });
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [captureOpen, voiceIsland]);
+  }, [captureOpen, voiceIsland, captureOrbSize]);
 
   const close = useCallback(() => {
     if (busy || panelClosing) return;
@@ -281,7 +286,7 @@ export function Capture() {
       const item = file
         ? await (async () => {
             const format = importFormatForFile(file);
-            if (!format) throw new Error("Flare can import CSV, TXT, and Markdown files.");
+            if (!format) throw new CaptureInputError("Flare can import CSV, TXT, and Markdown files.");
             // File.text() strips a UTF-8 BOM while File.size still counts it.
             // Preserve the transport bytes so the server can validate the byte
             // size, deduplicate the exact upload, then intentionally strip the
@@ -290,7 +295,7 @@ export function Capture() {
               fatal: true,
               ignoreBOM: true,
             }).decode(await file.arrayBuffer());
-            if (!content.trim()) throw new Error("The import file is empty.");
+            if (!content.trim()) throw new CaptureInputError("The import file is empty.");
             const imported = await dataProvider.importTextFile({
               format,
               fileName: file.name,
@@ -321,7 +326,7 @@ export function Capture() {
       });
       closeCapture();
     } catch (caught) {
-      setError(dataErrorMessage(caught, "Capture failed. Try again."));
+      setError(caught instanceof CaptureInputError ? caught.message : dataErrorMessage(caught, "Capture failed. Try again."));
     } finally {
       setBusy(false);
     }
@@ -359,13 +364,14 @@ export function Capture() {
       : hovered
         ? "hover"
         : "idle";
-  const expandedWidth = orbSize + 76 + 12 + 14;
+  const expandedWidth = orbSize + Math.max(76, t("Add context").length * 8) + 12 + 14;
   const hoverPlacement = orbPosition && viewport
     ? hoverRectFor(orbPosition, orbSize, expandedWidth, viewport.width)
     : null;
+  const desiredPanelSize = CAPTURE_PANEL_SIZES[captureOrbSize];
   const requestedPanelSize = stage === "voice"
     ? { width: 360, height: 52 }
-    : { width: 500, height: Math.max(204, panelSize.height) };
+    : { width: desiredPanelSize.width, height: Math.max(desiredPanelSize.height, panelSize?.preference === captureOrbSize ? panelSize.height : 0) };
   const panelPlacement = orbPosition && viewport && (stage === "capture" || stage === "voice")
     ? placeCapturePanel(orbPosition, orbSize, requestedPanelSize, viewport)
     : null;
@@ -376,6 +382,9 @@ export function Capture() {
     ? {
         left: panelPlacement.x,
         top: panelPlacement.y,
+        width: panelPlacement.width,
+        "--capture-panel-min-height": `${Math.min(desiredPanelSize.height, panelPlacement.height)}px`,
+        "--capture-textarea-height": `${desiredPanelSize.textareaHeight}px`,
         "--capture-origin-x": `${panelOrigin.x}px`,
         "--capture-origin-y": `${panelOrigin.y}px`,
         "--capture-start-scale-x": `${orbSize / panelPlacement.width}`,
@@ -394,7 +403,8 @@ export function Capture() {
             ? {
                 left: orbPosition.x - orbSize / 2,
                 top: orbPosition.y - orbSize / 2,
-              }
+                "--flare-hover-width": `${expandedWidth}px`,
+              } as CSSProperties
             : undefined
         }
         onMouseEnter={() => setHovered(true)}
@@ -403,7 +413,7 @@ export function Capture() {
         {stage === "idle" || stage === "hover" ? (
           <button
             className="flare-capture-trigger"
-            aria-label="Add context"
+            aria-label={t("Add context")}
             aria-haspopup="dialog"
             aria-expanded={captureOpen}
             onFocus={() => setHovered(true)}
@@ -421,7 +431,7 @@ export function Capture() {
             }}
           >
             <span className="flare-orb" aria-hidden="true" />
-            <span className="flare-capture-label">Add context</span>
+            <span className="flare-capture-label">{t("Add context")}</span>
           </button>
         ) : <span className="flare-capture-anchor" aria-hidden="true" />}
         {voiceIsland ? (
@@ -434,7 +444,7 @@ export function Capture() {
           >
             {voice.state === "recording" ? (
               <>
-                <div className="voice-waveform" aria-label="Recording waveform">
+                <div className="voice-waveform" aria-label={t("Recording waveform")}>
                   {Array.from({ length: 18 }, (_, index) => (
                     <i
                       key={index}
@@ -448,7 +458,7 @@ export function Capture() {
                 <span className="voice-timer">{elapsed(voice.seconds)}</span>
                 <button
                   className="voice-stop"
-                  aria-label="Stop recording"
+                  aria-label={t("Stop recording")}
                   onClick={() => {
                     void dataProvider.trackEvent({ eventType: "capture_voice_stopped", targetType: "capture" });
                     voice.stop();
@@ -460,11 +470,11 @@ export function Capture() {
             ) : (
               <span className="recording-status">
                 {voice.state === "requesting"
-                  ? "Allow microphone…"
-                  : "Finishing recording…"}
+                  ? t("Allow microphone…")
+                  : t("Finishing recording…")}
               </span>
             )}
-            <button className="icon-button" aria-label="Cancel recording" onClick={voice.cancel}>
+            <button className="icon-button" aria-label={t("Cancel recording")} onClick={voice.cancel}>
               <Icon name="close" />
             </button>
           </div>
@@ -473,11 +483,11 @@ export function Capture() {
             ref={panel}
             className={`flare-capture-panel ${panelClosing ? "is-closing" : ""}`}
             role="dialog"
-            aria-label="Capture"
+            aria-label={t("Capture")}
             style={panelStyle}
           >
             <header className="capture-panel-header">
-              <strong>Add context</strong>
+              <strong>{t("Add context")}</strong>
             </header>
             <div
               className="capture-dropzone"
@@ -494,8 +504,8 @@ export function Capture() {
             >
               <textarea
                 autoFocus
-                aria-label="Capture content"
-                placeholder="Type a note or import a text file…"
+                aria-label={t("Capture content")}
+                placeholder={t("Type a note or import a text file…")}
                 rows={3}
                 value={draft}
                 disabled={busy || !!voice.recording}
@@ -520,10 +530,10 @@ export function Capture() {
               {file && (
                 <div className="attachment">
                   <Icon name="file" />
-                  <span>{file.name} · {(file.size / 1024).toFixed(1)} KB</span>
+                  <span>{file.name} · {new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(file.size / 1024)} KB</span>
                   <button
                     className="icon-button"
-                    aria-label="Remove attachment"
+                    aria-label={t("Remove attachment")}
                     disabled={busy}
                     onClick={() => setFile(null)}
                   >
@@ -533,43 +543,40 @@ export function Capture() {
               )}
               {file && (
                 <p className="capture-hint">
-                  {importFormatForFile(file)?.toUpperCase()} import · text is saved to this workspace
-                </p>
+                  {importFormatForFile(file)?.toUpperCase()} {" "}{t("import · text is saved to this workspace")}</p>
               )}
             </div>
             {voice.recording && (
               <div className="capture-hint voice-ready" role="status">
                 <p>
-                  Voice transcription currently uses English. Your recording will be sent to our transcription provider only when you choose Transcribe &amp; save. Flare stores the transcript, not the source audio.
-                </p>
+                  {t("Voice transcription currently uses English. Your recording will be sent to our transcription provider only when you choose Transcribe & save. Flare stores the transcript, not the source audio.")}</p>
                 <div className="form-actions">
                   <button
                     className="button primary"
                     disabled={busy}
                     onClick={() => void submitVoice()}
                   >
-                    {busy ? "Transcribing…" : "Transcribe & save"}
+                    {busy ? t("Transcribing…") : t("Transcribe & save")}
                   </button>
                   <button className="text-button" disabled={busy} onClick={voice.cancel}>
-                    Discard recording
-                  </button>
+                    {t("Discard recording")}</button>
                 </div>
               </div>
             )}
             {voice.error && (
               <div className="capture-error" role="alert">
-                <p>{voice.error}</p>
+                <p>{message(voice.error)}</p>
               </div>
             )}
             {error && (
               <p className="capture-error" role="alert">
-                {error}
+                {message(error)}
               </p>
             )}
             <footer className="capture-actions">
               <button
                 className="icon-button"
-                aria-label="Add file"
+                aria-label={t("Add file")}
                 disabled={busy || voiceIsland || !!voice.recording}
                 onClick={() => fileInput.current?.click()}
               >
@@ -577,8 +584,8 @@ export function Capture() {
               </button>
               <button
                 className="icon-button"
-                aria-label="Record a voice memo"
-                title="Record a voice memo (English transcription)"
+                aria-label={t("Record a voice memo")}
+                title={t("Record a voice memo (English transcription)")}
                 disabled={busy || voiceIsland || !!voice.recording || !!file || !!draft.trim()}
                 onClick={() => {
                   setError("");
@@ -589,19 +596,19 @@ export function Capture() {
                 <Icon name="audio" />
               </button>
               <span className="capture-drop-hint">
-                {dragging ? "Drop CSV, TXT, or Markdown" : "Import CSV, TXT, or Markdown"}
+                {dragging ? t("Drop CSV, TXT, or Markdown") : t("Import CSV, TXT, or Markdown")}
               </span>
               <button
                 className="button primary"
                 disabled={busy || !!voice.recording || (!draft.trim() && !file)}
                 onClick={() => void submit()}
               >
-                {busy ? "Saving…" : file ? "Import" : "Capture"}
+                {busy ? t("Saving…") : file ? t("Import") : t("Capture")}
                 <span className="shortcut">⌘↵</span>
               </button>
               <button
                 className="icon-button capture-close"
-                aria-label="Close capture"
+                aria-label={t("Close capture")}
                 disabled={busy}
                 onClick={close}
               >
@@ -617,7 +624,7 @@ export function Capture() {
         accept=".csv,.txt,.md,.markdown,text/csv,text/plain,text/markdown"
         className="sr-only"
         tabIndex={-1}
-        aria-label="Capture file"
+        aria-label={t("Capture file")}
         onChange={(event) => {
           attach(event.target.files?.[0]);
           event.target.value = "";
@@ -625,13 +632,12 @@ export function Capture() {
       />
       {saved && (
         <div className="toast capture-toast" role="status">
-          <span>Captured in Vault</span>
+          <span>{t("Captured in Vault")}</span>
           <Link href={`/vault?item=${saved}`} onClick={dismissToast}>
-            View item →
-          </Link>
+            {t("View item →")}</Link>
           <button
             className="icon-button"
-            aria-label="Dismiss capture confirmation"
+            aria-label={t("Dismiss capture confirmation")}
             onClick={dismissToast}
           >
             <Icon name="close" />

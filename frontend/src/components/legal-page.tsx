@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { BrandMark } from "./brand-mark";
+import { LegalChrome } from "./legal-chrome";
 
 export function LegalPage({ title, updated, children }: { title: string; updated: string; children: ReactNode }) {
   return (
@@ -11,18 +12,16 @@ export function LegalPage({ title, updated, children }: { title: string; updated
           <BrandMark size={28} />
           Flare
         </Link>
-        <Link className="button" href="/register">Get started</Link>
+        <LegalChrome kind="start" />
       </header>
-      <article className="legal-document">
+      <article className="legal-document" lang="en">
         <p className="marketing-kicker">Legal</p>
         <h1>{title}</h1>
         <p className="legal-updated">Last updated: {updated}</p>
         {children}
       </article>
       <footer className="legal-footer">
-        <Link href="/privacy">Privacy Policy</Link>
-        <Link href="/terms">Terms of Service</Link>
-        <Link href="/">Back to Flare</Link>
+        <LegalChrome kind="footer" />
       </footer>
     </main>
   );
