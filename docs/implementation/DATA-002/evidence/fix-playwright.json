@@ -1,0 +1,302 @@
+{
+  "runtimeErrors": [],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 409 (Conflict)",
+    "Failed to load resource: the server responded with a status of 409 (Conflict)",
+    "Failed to load resource: the server responded with a status of 409 (Conflict)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+  ],
+  "unexpectedFailures": [],
+  "httpErrors": [
+    {
+      "url": "http://127.0.0.1:3102/api/imports/packages",
+      "status": 409
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/imports/packages",
+      "status": 409
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/imports/packages",
+      "status": 409
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    },
+    {
+      "url": "http://127.0.0.1:3102/api/integrations/github",
+      "status": 503
+    }
+  ],
+  "analyzeRequests": 1,
+  "totalAnalyzeRequests": 1,
+  "requestIdentity": {
+    "create": 201,
+    "conflicts": [
+      409,
+      409,
+      409
+    ],
+    "retry": 201,
+    "sameSession": true
+  },
+  "accepted": {
+    "latestStatus": "completed_with_skips",
+    "canonicalId": "50374026-feac-47e1-a205-780292963856",
+    "status": "completed_with_skips",
+    "imported": 2,
+    "skipped": 1,
+    "sources": 2,
+    "publications": 1
+  },
+  "duplicateFinalize": {
+    "canonicalStatus": true,
+    "imported": 2,
+    "skipped": 1,
+    "pagedReport": [
+      "notes/alpha.md",
+      "notes/beta.txt",
+      "assets/image.png"
+    ],
+    "vault": "/vault"
+  },
+  "refresh": {
+    "canonicalStatus": true,
+    "imported": 2,
+    "skipped": 1,
+    "pagedReport": [
+      "notes/alpha.md",
+      "notes/beta.txt",
+      "assets/image.png"
+    ],
+    "vault": "/vault"
+  },
+  "navigationBack": {
+    "canonicalStatus": true,
+    "imported": 2,
+    "skipped": 1,
+    "pagedReport": [
+      "notes/alpha.md",
+      "notes/beta.txt",
+      "assets/image.png"
+    ],
+    "vault": "/vault"
+  },
+  "final": {
+    "latestStatus": "duplicate",
+    "canonicalId": "50374026-feac-47e1-a205-780292963856",
+    "status": "completed_with_skips",
+    "imported": 2,
+    "skipped": 1,
+    "sources": 2,
+    "publications": 1
+  },
+  "canonicalOutsideHistory": {
+    "pageSize": 50,
+    "canonicalIncluded": false,
+    "duplicateIncluded": true,
+    "receipt": {
+      "canonicalStatus": true,
+      "imported": 2,
+      "skipped": 1,
+      "pagedReport": [
+        "notes/alpha.md",
+        "notes/beta.txt",
+        "assets/image.png"
+      ],
+      "vault": "/vault"
+    },
+    "tenantSafeDetailReads": 1
+  },
+  "importAnalyzeRequests": 0,
+  "shared": {
+    "funnyMode": true,
+    "muted": true,
+    "freeCurrentDisabled": true,
+    "sandbox": true,
+    "buyButtons": 2,
+    "escapeCancelsRitual": true,
+    "capture": true,
+    "voiceAccessible": true,
+    "fileAccessible": true,
+    "singleAnalyzeRequest": true
+  },
+  "narrowEnglish": {
+    "canonicalStatus": true,
+    "imported": 2,
+    "skipped": 1,
+    "pagedReport": [
+      "notes/alpha.md",
+      "notes/beta.txt",
+      "assets/image.png"
+    ],
+    "vault": "/vault"
+  },
+  "narrowSpanish": {
+    "canonicalStatus": true,
+    "imported": 2,
+    "skipped": 1,
+    "pagedReport": [
+      "notes/alpha.md",
+      "notes/beta.txt",
+      "assets/image.png"
+    ],
+    "vault": "/vault"
+  },
+  "spanishLanguage": "es",
+  "spanishRefresh": {
+    "canonicalStatus": true,
+    "imported": 2,
+    "skipped": 1,
+    "pagedReport": [
+      "notes/alpha.md",
+      "notes/beta.txt",
+      "assets/image.png"
+    ],
+    "vault": "/vault"
+  },
+  "ok": true,
+  "desktopViewport": {
+    "width": 1440,
+    "height": 1100
+  },
+  "narrowViewport": {
+    "width": 390,
+    "height": 844
+  },
+  "runtime": "local webpack development frontend, real API, restricted import worker, disposable self-managed PostgreSQL17",
+  "manualAnalyzeSmoke": "Only the deliberate four-shake Analyze request and its poll were fulfilled with a synthetic pending DTO. All import/history/report requests used the real API and persistence.",
+  "checkout": "Subscription Sandbox UI only; no checkout, provider credentials, entitlement or payment changes."
+}

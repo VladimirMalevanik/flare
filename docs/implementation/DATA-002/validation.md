@@ -65,3 +65,125 @@ A separate running localhost API and actual dedicated worker CLI processed a syn
 ## Remaining verification before production
 
 OPS/Vova must validate the selected storage adapter, actual API/worker topology, physical retirement/deletion and blocked-I/O behavior, Linux/container resource enforcement, cancellation/cleanup under that topology, and sustained concurrent application/database load. They must measure package gate/lock latency and quota-accounting costs, choose final product settings, and define monitoring/retention. These local measured ranges must not be copied into production quotas as if they were approved limits. Owner acceptance and integration of the application/migration branch remain separate from DATA-002 review completion.
+
+## Focused owner-requested correction — 2026-10-02
+
+OWNER ACCEPTANCE PENDING. This cycle fixes the two owner-confirmed defects and
+returns the same DATA-002 to review. The original implementation and evidence
+above remain historical evidence, not newly rerun measurements.
+
+Original published DATA HEAD: `7a37ad7eede0d624c4995141ef9c5410f116c19d`.
+Accepted main product base: `34b5054051c514b66e96bc0baff6a23e8418a9d2`.
+Fresh main immediately before publication:
+`58a1951845f595566c881946c8811e5d0814f290`; its later changes are coordination only.
+Fix branch: `task/data-002-receipt-20261002-fix`.
+Compatible integration base before bugfix:
+`cec7730654a88b1248cdfd086ece00ec8b38bbba`.
+Minimal bugfix commit: `70f8bee3dd18af2388d20d43aa17ea48d58c23c8`.
+`git diff cec7730654a88b1248cdfd086ece00ec8b38bbba..70f8bee3dd18af2388d20d43aa17ea48d58c23c8`
+contains six files, 163 insertions and 13 deletions. Final published HEAD and PR
+are recorded in task-sync and the handoff, separately from this document.
+
+### Corrections and compatibility
+
+Create-session compares the persisted winning request's `source_kind`,
+`file_name` and `file_size` before returning it. The existing SQL workspace lock
+and unique request key serialize admission; the application checks the immutable
+winner even for concurrent reuse. A mismatch returns HTTP 409 with
+`detail=request_key_conflict`. Identical retries preserve the original session,
+reservations, publication and server-owned policy snapshot. Tests cover all three
+changed fields, concurrent identical/conflicting creation, tenant separation,
+revoked write access, changed server policy and completed-session replay/conflict.
+No SQL or migration change was needed.
+
+The adapter/type retain `canonical_id` as `canonicalId`. History, polling and
+action results resolve a duplicate to its authoritative package. When that
+package is outside the history page, the existing tenant-bound detail API loads
+it. Counts, report pagination and Vault link use the resolved ID. Missing or
+invalid canonical results do not create an accepted receipt. Tests exercise the
+actual adapter/component and API/persistence behavior, including fresh mount,
+refresh, navigation back, report pages and one publication after exact replay.
+
+The integration commit resolves the EN/ES dictionary and MVP UI-test conflicts
+by retaining both sides. The automatically merged i18n tests were also inspected.
+Funny mode, Capture/Voice controls, manual Analyze request semantics, mute,
+accessibility and Subscription/Paddle Sandbox remain covered by the full suite
+and focused browser smoke. No WEB ownership/state was changed.
+
+### Actual checks in this cycle
+
+| Check | Actual result |
+| --- | --- |
+| Full backend, fresh isolated self-managed CI topology | **740 passed**, no skips, 2 existing warnings, 36.40 seconds |
+| Focused backend request identity/canonical receipt regressions | **6 passed**, 19 deselected, no skips |
+| Full frontend | **129 passed**, no skips |
+| Focused frontend adapter/component regression file | **11 passed**, no skips |
+| Frontend lint | Passed |
+| Frontend production build | Passed, TypeScript and 20 generated pages |
+| Whitespace | `git diff --check` passed |
+| Migration chain | Sole head **0019**, parent **0018**, no sibling heads |
+| Migration application | Fresh CI legacy-fixture sequence through 0019, legacy verification, repeated upgrade to head passed |
+| Published 0019/SQL snapshot comparison | Both files byte-identical to original DATA HEAD; SHA-256 evidence retained |
+| RLS, tenant isolation, package gates, worker fencing/recovery | Actual migrated restricted-role tests passed in the full backend suite, no skips |
+| AI/Analyze import invariants | Provider-guarded integration tests passed; final browser workspace has 0 analysis jobs, 0 runs and 0 daily quota rows |
+
+Backend warnings remain TestClient/httpx deprecation and the intentional duplicate
+ZIP-name fixture. Dependencies and lockfiles were not changed. The Yandex topology
+was not rerun in this focused cycle; its original results above remain historical.
+
+An intermediate repeat accidentally shared the browser database with a running
+import worker and residual manual-smoke jobs: **735 passed / 5 failed**. The
+failures involved global queue/cleanup expectations. That run is not a pass.
+The runtime was stopped and a second entirely fresh cluster was migrated before
+the final isolated 740-pass run. Browser automation attempts also caught test
+timing mistakes around delayed Capture closing; the final isolated retest below
+completed all assertions. No product change was made to hide these failures.
+
+Logs: [backend suite](evidence/fix-backend-suite.txt),
+[frontend suite](evidence/fix-frontend-suite.txt).
+Migration/RLS/no-Analyze facts:
+[fix-migration-security.json](evidence/fix-migration-security.json).
+
+### Playwright MCP retest
+
+The configured user-level Playwright MCP ran against localhost with a real API,
+restricted dedicated import worker, disposable PostgreSQL17 and synthetic ZIPs.
+An isolated browser context avoided interference from navigation in the shared
+tab. No cookies, session values or credentials were exported into evidence.
+
+All import/create/history/report traffic used real persistence. All three changed
+request identities returned 409; identical retry returned the same session.
+The accepted Notion package had 2 imported and 1 skipped file. Exact duplicate
+finalize, refresh and navigation back retained the same canonical result, all
+three report entries and `/vault`. Publication/source counts stayed **1 / 2**.
+The real history-page boundary was exercised with 49 cancelled synthetic sessions:
+the returned 50 rows contained the duplicate but excluded its canonical row;
+refresh fetched the canonical package through the detail API and retained the
+same receipt. No extra publication was created by those sessions.
+
+Desktop 1440×1100 and narrow 390×844 passed in EN/ES, including ES refresh.
+Funny mode/mute, Escape cancellation, Capture, accessible file/Voice controls and
+Free/Pro/Team Sandbox subscription UI passed. Four intentional keyboard shakes
+produced **one** Analyze request, fulfilled with a synthetic pending DTO; its poll
+was also intercepted. This is frontend request smoke, not a live AI result.
+Import produced **zero** Analyze requests. Voice recording/transcription and
+Paddle checkout were not submitted.
+
+The final isolated run had no runtime exceptions or unexpected failed requests.
+Console errors were the three expected 409 conflict probes and expected 503s from
+the deliberately unconfigured local GitHub integration. No GitHub provider or
+production payment operation was attempted.
+
+Standard Turbopack development mode exposed an existing original-DATA issue:
+`mock-provider.ts` places an import before `"use client"`. The retest used webpack,
+matching the project's production build. This separate issue remains outside
+the two-defect correction and must not be described as fixed.
+
+Machine-readable results: [fix-playwright.json](evidence/fix-playwright.json).
+Screenshots: [desktop EN](evidence/fix-canonical-desktop.png),
+[desktop ES](evidence/fix-canonical-desktop-es.png),
+[narrow EN](evidence/fix-canonical-narrow-en.png),
+[narrow ES](evidence/fix-canonical-narrow-es.png),
+[Subscription Sandbox](evidence/fix-subscription-desktop.png).
+Existing production OPS/Vova gates remain. No finish/done, product merge or
+deployment is authorized by this correction.
