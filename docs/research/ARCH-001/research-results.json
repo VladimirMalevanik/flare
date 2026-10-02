@@ -1,0 +1,167 @@
+{
+  "evidence_class": "offline synthetic design checks and estimated arithmetic",
+  "provider_calls": 0,
+  "measured_provider_usage": null,
+  "production_quality_or_latency_measured": false,
+  "source_sha": "71e26d9cfbfec836770d4e43d4a79fe53bf32686",
+  "checks_passed": [
+    "slice_0_reconstructs_exact_text",
+    "slice_0_utf8_bound",
+    "slice_0_offset_lineage",
+    "slice_1_reconstructs_exact_text",
+    "slice_1_utf8_bound",
+    "slice_1_offset_lineage",
+    "slice_2_reconstructs_exact_text",
+    "slice_2_utf8_bound",
+    "slice_2_offset_lineage",
+    "large_import_admits_only_one_reserved_call",
+    "unknown_timeout_does_not_refund",
+    "paid_120b_same_tokens_cost_twice_20b",
+    "current_retrieval_filters_workspace_version_deletion",
+    "citation_uses_original_substring",
+    "summary_paraphrase_not_valid_original_quote",
+    "omitted_completion_is_unknown_not_unfinished",
+    "paired_goal_and_completion_can_fit_five_source_limit"
+  ],
+  "utf8_fixtures": [
+    {
+      "characters": 200000,
+      "utf8_bytes": 200000,
+      "slices": 50
+    },
+    {
+      "characters": 68000,
+      "utf8_bytes": 120000,
+      "slices": 30
+    },
+    {
+      "characters": 36000,
+      "utf8_bytes": 42000,
+      "slices": 11
+    }
+  ],
+  "reservation_simulation": {
+    "requests_considered": 10000,
+    "admitted": 1,
+    "illustrative_usd_cap": "0.00105",
+    "per_call_upper_reservation": "0.0006072"
+  },
+  "cost_sensitivity_estimates": [
+    {
+      "sections": 100,
+      "assumed_input_tokens_per_section_including_envelope": 2000,
+      "assumed_total_completion_tokens_per_section": 500,
+      "standard_20b_usd_estimate_no_retries": "0.0300",
+      "batch_20b_usd_estimate_if_eligible_no_retries": "0.01500",
+      "serial_days_at_illustrative_20k_enrichment_tokens_per_day": 13
+    },
+    {
+      "sections": 1000,
+      "assumed_input_tokens_per_section_including_envelope": 2000,
+      "assumed_total_completion_tokens_per_section": 500,
+      "standard_20b_usd_estimate_no_retries": "0.3000",
+      "batch_20b_usd_estimate_if_eligible_no_retries": "0.15000",
+      "serial_days_at_illustrative_20k_enrichment_tokens_per_day": 125
+    },
+    {
+      "sections": 10000,
+      "assumed_input_tokens_per_section_including_envelope": 2000,
+      "assumed_total_completion_tokens_per_section": 500,
+      "standard_20b_usd_estimate_no_retries": "3.0000",
+      "batch_20b_usd_estimate_if_eligible_no_retries": "1.50000",
+      "serial_days_at_illustrative_20k_enrichment_tokens_per_day": 1250
+    }
+  ],
+  "source_inventory": [
+    {
+      "path": "backend/app/config.py",
+      "source_sha": "71e26d9cfbfec836770d4e43d4a79fe53bf32686",
+      "sha256": "ddc2dc7e807f29d85c56e6050959d0722c3f554333c2120dd51fac2fd4a344e9",
+      "lines": 262
+    },
+    {
+      "path": "backend/app/services/context_selection.py",
+      "source_sha": "71e26d9cfbfec836770d4e43d4a79fe53bf32686",
+      "sha256": "942b8399f454bce791ec9415ee01b2e939465a7f17db1823c8221ee815654607",
+      "lines": 58
+    },
+    {
+      "path": "backend/app/models/analysis_runs.py",
+      "source_sha": "71e26d9cfbfec836770d4e43d4a79fe53bf32686",
+      "sha256": "e73f89244b99d1affe39d58504e17278243f3ecf402a7bd6c8ec49b06c75aee9",
+      "lines": 145
+    },
+    {
+      "path": "backend/migrations/versions/0018_rotate_analysis_context.py",
+      "source_sha": "71e26d9cfbfec836770d4e43d4a79fe53bf32686",
+      "sha256": "85ee6475b0d6a52895714006de698cc310c48e37a31e558c10f82620fc01e260",
+      "lines": 245
+    },
+    {
+      "path": "backend/app/services/item_service.py",
+      "source_sha": "71e26d9cfbfec836770d4e43d4a79fe53bf32686",
+      "sha256": "411bedd7a81a3becd762565475213cc0886bb596d76d8668bf57e4e53563d4c4",
+      "lines": 463
+    },
+    {
+      "path": "backend/app/services/import_service.py",
+      "source_sha": "71e26d9cfbfec836770d4e43d4a79fe53bf32686",
+      "sha256": "560d8771d1f4cf28d04abdaa2dd2de3cc317b02abd411686d73fb6854b38a1f6",
+      "lines": 554
+    },
+    {
+      "path": "backend/app/models/tables.py",
+      "source_sha": "71e26d9cfbfec836770d4e43d4a79fe53bf32686",
+      "sha256": "f82542afbe2a5a874a412a919ecd32de4ed0ec3a073fa8b974d59303fcdcdeff",
+      "lines": 285
+    },
+    {
+      "path": "backend/app/models/flares.py",
+      "source_sha": "71e26d9cfbfec836770d4e43d4a79fe53bf32686",
+      "sha256": "0167dfa058cb594fe2e070ec0291cccb7b85b0a5b7586c54545cd3c351c952d8",
+      "lines": 32
+    },
+    {
+      "path": "backend/app/ai_engine/enrichment_prompts.py",
+      "source_sha": "71e26d9cfbfec836770d4e43d4a79fe53bf32686",
+      "sha256": "7e3a46f7fbe6b6a880ac21d056736e957e3bedd232f287e8fb77cce051aa0958",
+      "lines": 35
+    },
+    {
+      "path": "backend/app/ai_engine/prompts/enrichment.md",
+      "source_sha": "71e26d9cfbfec836770d4e43d4a79fe53bf32686",
+      "sha256": "d44b2d0e68e789bffe95dd5ab5cc515d9c1c5aebe7f5de31be1eb0b21dc613ed",
+      "lines": 45
+    },
+    {
+      "path": "backend/app/ai_engine/prompts/flare_generation.md",
+      "source_sha": "71e26d9cfbfec836770d4e43d4a79fe53bf32686",
+      "sha256": "24073ca3b03afc761a4fb914a8f5cbfb9185073fca1c2fdcea0e1a59801ea7a9",
+      "lines": 59
+    },
+    {
+      "path": "backend/app/ai_engine/groq_structured.py",
+      "source_sha": "71e26d9cfbfec836770d4e43d4a79fe53bf32686",
+      "sha256": "490c551f9bb1c6ad03c85a1fffbd974e812e8cd63e60cadab89ca644d830b91a",
+      "lines": 24
+    },
+    {
+      "path": "backend/app/ai_engine/flare_config.py",
+      "source_sha": "71e26d9cfbfec836770d4e43d4a79fe53bf32686",
+      "sha256": "f87172c262de5359811a7d1ccb919cbb0b2022434cee116ee7de29e2a2912101",
+      "lines": 36
+    },
+    {
+      "path": "backend/db/schema.sql",
+      "source_sha": "71e26d9cfbfec836770d4e43d4a79fe53bf32686",
+      "sha256": "1e7936b5e4cc869ceeb19820312d8f9941fbd12859bcfd44449899b57a17891b",
+      "lines": 204
+    },
+    {
+      "path": "docs/ANALYZE_QUOTA_DECISION.md",
+      "source_sha": "71e26d9cfbfec836770d4e43d4a79fe53bf32686",
+      "sha256": "56807d504a88e07460e33479335a5bab2e7037174a7f883c58b404c5cade2efc",
+      "lines": 84
+    }
+  ]
+}
