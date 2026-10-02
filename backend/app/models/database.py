@@ -14,7 +14,7 @@ from psycopg_pool import ConnectionPool
 from pwdlib import PasswordHash
 
 
-CURRENT_SCHEMA_REVISION = "0018"
+CURRENT_SCHEMA_REVISION = "0019"
 TENANT_TABLES = (
     "workspaces",
     "workspace_members",
@@ -31,6 +31,10 @@ TENANT_TABLES = (
     "github_connections",
     "activity_events",
     "import_batches",
+    "import_packages",
+    "import_package_entries",
+    "import_objects",
+    "import_publications",
     "analysis_schedules",
     "analysis_daily_quotas",
     "analysis_cycles",
@@ -111,6 +115,10 @@ def _connection_is_ready(connection: Connection) -> bool:
                UNION ALL SELECT 1 FROM public.github_connection_states
                UNION ALL SELECT 1 FROM public.github_connections
                UNION ALL SELECT 1 FROM public.activity_events
+               UNION ALL SELECT 1 FROM (SELECT workspace_id FROM public.import_packages) visible_packages
+               UNION ALL SELECT 1 FROM (SELECT workspace_id FROM public.import_package_entries) visible_package_entries
+               UNION ALL SELECT 1 FROM (SELECT workspace_id FROM public.import_objects) visible_objects
+               UNION ALL SELECT 1 FROM (SELECT workspace_id FROM public.import_publications) visible_publications
                UNION ALL SELECT 1 FROM public.import_batches
                UNION ALL SELECT 1 FROM public.analysis_schedules
                UNION ALL SELECT 1 FROM public.analysis_daily_quotas

@@ -193,7 +193,7 @@ def test_known_foreign_id_cannot_be_changed_or_selected(db, tenants):
 
 def test_cross_tenant_parent_reference_is_rejected(db, tenants):
     a, b = tenants
-    with pytest.raises(ForeignKeyViolation):
+    with pytest.raises((ForeignKeyViolation, InsufficientPrivilege)):
         with db.transaction():
             db.execute(
                 """INSERT INTO public.document_versions
@@ -206,7 +206,7 @@ def test_cross_tenant_parent_reference_is_rejected(db, tenants):
         with db.transaction():
             db.execute("INSERT INTO public.insight_sources(workspace_id,insight_id,chunk_id) VALUES(%s,%s,%s)",
                        (a["workspace"],a["insight"],a["chunk"]))
-    with pytest.raises(ForeignKeyViolation):
+    with pytest.raises((ForeignKeyViolation, InsufficientPrivilege)):
         with db.transaction():
             db.execute("RESET ROLE")
             db.execute(

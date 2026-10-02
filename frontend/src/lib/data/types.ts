@@ -15,6 +15,8 @@ export interface Item {
   title: string;
   content: string;
   sourceUrl?: string;
+  importPackageId?: string;
+  relativePath?: string;
   fileName?: string;
   fileSize?: number;
   status: ItemStatus;
@@ -48,6 +50,8 @@ export interface CreateItemInput {
   title?: string;
   content?: string;
   sourceUrl?: string;
+  importPackageId?: string;
+  relativePath?: string;
   fileName?: string;
   fileSize?: number;
   fileType?: string;
@@ -60,6 +64,8 @@ export interface UpdateItemInput {
   title?: string;
   content?: string;
   sourceUrl?: string;
+  importPackageId?: string;
+  relativePath?: string;
   fileName?: string;
   fileSize?: number;
   fileType?: string;
@@ -177,3 +183,17 @@ export interface DailyAnalysisStatus {
     };
   };
 }
+
+export type ZipSourceKind = "notion" | "obsidian";
+export type ImportPackageStatus = "uploading" | "staged" | "queued" | "processing" | "retry_wait" | "completed" | "completed_with_skips" | "failed" | "cancelled" | "expired" | "duplicate";
+export type ImportPackage = {
+  id: string; sourceKind: ZipSourceKind; fileName: string; fileSize: number;
+  status: ImportPackageStatus; phase: "upload" | "inspect" | "parse" | "publish" | "complete";
+  entryCount: number | null; supportedCount: number; skippedCount: number; importedCount: number; chunkCount: number;
+  failedCount: number; errorCode: string | null; retryable: boolean;
+};
+export type ImportPackageEntry = {
+  ordinal: number; path: string; fileBytes: number; skipReason: string | null;
+  status: "pending" | "prepared" | "skipped" | "published" | "failed"; documentId: string | null;
+};
+export type ImportPackageReport = { entries: ImportPackageEntry[]; nextCursor: number | null };

@@ -27,6 +27,7 @@ function load(relative, mocks = {}, globals = {}) {
     if (name === '@/features/funny/funny-sounds') return { playFunnySound() {}, speakFunnyLine() {}, stopFunnySounds() {} };
     if (name === '@/features/funny/funny-effects') return { FunnyEffects: 'funny-effects' };
     if (name === '@/lib/support') return { DEFAULT_SUPPORT_EMAIL: 'support@flare4u.tech', supportMailto: () => 'mailto:support@flare4u.tech' };
+    if (name === "./zip-import") return { ZipImport: () => null };
     throw Error(`Unexpected import ${name}`);
   } });
   return exports;
