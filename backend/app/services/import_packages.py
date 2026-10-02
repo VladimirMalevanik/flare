@@ -21,7 +21,13 @@ class ImportPackageService:
             raise ImportPackageError('invalid_file')
         result = self.repo.action('create', payload={'sourceKind':source_kind,'fileName':file_name,'fileSize':file_size,
             'requestKey':str(request_key),'policy':asdict(self.policy)})
-        return self.repo.get(UUID(result['id']))
+        package = self.repo.get(UUID(result['id']))
+        # SQL serializes workspace/key admission and persists immutable caller
+        # identity. Check its winner, including concurrent retries, before replay.
+        # Server policy may change between retries; it is not request identity.
+        if (package['source_kind'], package['file_name'], package['file_size']) != (source_kind, file_name, file_size):
+            raise ImportPackageError('request_key_conflict')
+        return package
 
     async def upload(self, package_id, stream):
         if not self.storage:

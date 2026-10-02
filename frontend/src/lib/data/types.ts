@@ -188,6 +188,7 @@ export type ZipSourceKind = "notion" | "obsidian";
 export type ImportPackageStatus = "uploading" | "staged" | "queued" | "processing" | "retry_wait" | "completed" | "completed_with_skips" | "failed" | "cancelled" | "expired" | "duplicate";
 export type ImportPackage = {
   id: string; sourceKind: ZipSourceKind; fileName: string; fileSize: number;
+  canonicalId: string | null;
   status: ImportPackageStatus; phase: "upload" | "inspect" | "parse" | "publish" | "complete";
   entryCount: number | null; supportedCount: number; skippedCount: number; importedCount: number; chunkCount: number;
   failedCount: number; errorCode: string | null; retryable: boolean;

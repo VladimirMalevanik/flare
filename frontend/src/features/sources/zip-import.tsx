@@ -25,6 +25,17 @@ export function importErrorLabel(code: string) {
   return "Import could not continue. Check the file and try again.";
 }
 
+async function resolveImportReceipt(job: ImportPackage, history: ImportPackage[] = [], signal?: AbortSignal): Promise<ImportPackage> {
+  if (job.status !== "duplicate") return job;
+  if (!job.canonicalId || job.canonicalId === job.id) throw new Error("Missing canonical import");
+  const canonical = history.find((entry) => entry.id === job.canonicalId)
+    ?? await dataProvider.getImportPackage(job.canonicalId, signal);
+  if (canonical.id !== job.canonicalId || canonical.sourceKind !== job.sourceKind || canonical.status === "duplicate") {
+    throw new Error("Invalid canonical import");
+  }
+  return canonical;
+}
+
 export function ZipImport({ sourceKind }: { sourceKind: ZipSourceKind }) {
   const { t, label, message } = useI18n();
   const [capabilities, setCapabilities] = useState<{ available: boolean; maxUploadBytes: number | null } | null>(null);
@@ -40,14 +51,18 @@ export function ZipImport({ sourceKind }: { sourceKind: ZipSourceKind }) {
   const requestKey = useRef<{ file: File; key: string } | null>(null);
   useEffect(() => {
     mounted.current = true;
+    let live = true;
+    const controller = new AbortController();
     const initialEpoch = epoch.current;
     void dataProvider.getImportCapabilities().then((value) => {
-      if (mounted.current) setCapabilities(value);
-    }).catch(() => { if (mounted.current) setError("Import history could not be loaded."); });
-    void dataProvider.listImportPackages().then((list) => {
-      if (mounted.current && epoch.current === initialEpoch) setJob(list.find((entry) => entry.sourceKind === sourceKind) ?? null);
-    }).catch(() => { if (mounted.current) setError("Import history could not be loaded."); });
-    return () => { mounted.current = false; upload.current?.abort(); };
+      if (live) setCapabilities(value);
+    }).catch(() => { if (live) setError("Import history could not be loaded."); });
+    void dataProvider.listImportPackages().then(async (list) => {
+      const recent = list.find((entry) => entry.sourceKind === sourceKind);
+      const receipt = recent ? await resolveImportReceipt(recent, list, controller.signal) : null;
+      if (live && epoch.current === initialEpoch) { setJob(receipt); setReport(null); }
+    }).catch(() => { if (live && epoch.current === initialEpoch) setError("Import history could not be loaded."); });
+    return () => { live = false; mounted.current = false; controller.abort(); upload.current?.abort(); };
   }, [sourceKind]);
   useEffect(() => {
     if (!job || !isImportActive(job) || job.status === "uploading" || job.status === "staged") return;
@@ -55,7 +70,7 @@ export function ZipImport({ sourceKind }: { sourceKind: ZipSourceKind }) {
     const pollEpoch = epoch.current;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      void dataProvider.getImportPackage(job.id, controller.signal).then((next) => {
+      void dataProvider.getImportPackage(job.id, controller.signal).then((next) => resolveImportReceipt(next, [], controller.signal)).then((next) => {
         if (live && epoch.current === pollEpoch) { setJob(next); setError(""); }
       }).catch(() => { if (live) setError("Import progress could not be loaded. Refresh to reconnect."); });
     }, 1500);
@@ -82,7 +97,7 @@ export function ZipImport({ sourceKind }: { sourceKind: ZipSourceKind }) {
       setJob(session);
       if (session.status === "uploading") await dataProvider.uploadImportPackage(session.id, file, controller.signal);
       if (controller.signal.aborted || !mounted.current || epoch.current !== operation) return;
-      const next = await dataProvider.importPackageAction(session.id, "finalize");
+      const next = await resolveImportReceipt(await dataProvider.importPackageAction(session.id, "finalize"), [], controller.signal);
       if (mounted.current && epoch.current === operation) { setJob(next); setFile(null); }
     } catch (cause) { if (mounted.current && epoch.current === operation && !controller.signal.aborted) setError(failure(cause)); }
     finally { if (mounted.current && epoch.current === operation) { actionLock.current = false; setBusy(false); } }
@@ -93,7 +108,7 @@ export function ZipImport({ sourceKind }: { sourceKind: ZipSourceKind }) {
     actionLock.current = true;
     if (kind === "cancel") upload.current?.abort();
     setBusy(true); setError("");
-    try { const next = await dataProvider.importPackageAction(job.id, kind); if (mounted.current && epoch.current === operation) setJob(next); }
+    try { const next = await resolveImportReceipt(await dataProvider.importPackageAction(job.id, kind)); if (mounted.current && epoch.current === operation) { setJob(next); setReport(null); } }
     catch (cause) { if (mounted.current && epoch.current === operation) setError(failure(cause)); }
     finally { if (mounted.current && epoch.current === operation) { actionLock.current = false; setBusy(false); } }
   }

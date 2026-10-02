@@ -655,6 +655,7 @@ export function mapImportPackage(value: unknown): ImportPackage {
       || !["upload", "inspect", "parse", "publish", "complete"].includes(phase)
       || !["notion", "obsidian"].includes(sourceKind) || typeof row.retryable !== "boolean") throw new FlareApiError("Invalid import state");
   return { id: stringField(row, "id"), sourceKind: sourceKind as ZipSourceKind, fileName: stringField(row, "file_name"), fileSize: countField(row, "file_size"),
+    canonicalId: nullableString(row, "canonical_id"),
     status: status as ImportPackage["status"], phase: phase as ImportPackage["phase"], entryCount: row.entry_count === null ? null : countField(row, "entry_count"),
     supportedCount: countField(row, "prepared_count"), skippedCount: countField(row, "skipped_count"), importedCount: countField(row, "published_count"),
     chunkCount: countField(row, "chunk_count"), failedCount: countField(row, "failed_count"), errorCode: nullableString(row, "error_code"), retryable: row.retryable };

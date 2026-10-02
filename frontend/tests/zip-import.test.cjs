@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const fixture = (patch = {}) => ({ id:'package-1',sourceKind:'obsidian',fileName:'snapshot.zip',fileSize:100,
-  status:'queued',phase:'inspect',entryCount:null,supportedCount:0,importedCount:0,skippedCount:0,chunkCount:0,failedCount:0,errorCode:null,retryable:false,...patch });
+  canonicalId:null,status:'queued',phase:'inspect',entryCount:null,supportedCount:0,importedCount:0,skippedCount:0,chunkCount:0,failedCount:0,errorCode:null,retryable:false,...patch });
 const jsx = { jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}) };
 function nodes(node) {
   if (!node || typeof node !== 'object') return [];
@@ -88,12 +88,15 @@ test('provider request sends raw ZIP with cookie, no-store, abort, strict DTO an
  Module._resolveFilename=function(request,parent,...args){return resolve.call(this,request.startsWith('@/')?path.join(__dirname,'../src',request.slice(2)):request,parent,...args);};
  require.extensions['.ts']=(module,filename)=>module._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,filename);
  const {ApiDataProvider,mapImportPackage}=require('../src/lib/data/api-provider.ts');
- const dto={id:'id',source_kind:'notion',file_name:'a.zip',file_size:4,status:'queued',phase:'inspect',entry_count:null,prepared_count:0,published_count:0,skipped_count:0,chunk_count:0,failed_count:0,error_code:null,retryable:false};
+ const dto={canonical_id:null,id:'id',source_kind:'notion',file_name:'a.zip',file_size:4,status:'queued',phase:'inspect',entry_count:null,prepared_count:0,published_count:0,skipped_count:0,chunk_count:0,failed_count:0,error_code:null,retryable:false};
  const provider=new ApiDataProvider({baseUrl:'/api',fallback:new Proxy({}, {get(){throw Error('fallback');}})});
  const file=new Blob(['ZIP!']);const signal=new AbortController().signal;
  global.fetch=async(url,init)=>{assert.equal(url,'/api/imports/packages/id/upload');assert.equal(init.body,file);assert.equal(init.signal,signal);assert.equal(init.headers['Content-Type'],'application/octet-stream');assert.equal(init.credentials,'include');assert.equal(init.cache,'no-store');return new Response(JSON.stringify(dto));};
  assert.equal((await provider.uploadImportPackage('id',file,signal)).sourceKind,'notion');
- for(const changed of [{status:'unknown'},{prepared_count:-1},{entry_count:'40'},{retryable:'false'}])assert.throws(()=>mapImportPackage({...dto,...changed}));
+ assert.equal(mapImportPackage({...dto,status:'duplicate',canonical_id:'accepted-id'}).canonicalId,'accepted-id');
+ global.fetch=async(url,init)=>{assert.equal(url,'/api/imports/packages/duplicate/finalize');assert.equal(init.method,'POST');return new Response(JSON.stringify({...dto,id:'accepted-id',status:'completed',phase:'complete',entry_count:1,prepared_count:1,published_count:1}));};
+ const finalized=await provider.importPackageAction('duplicate','finalize');assert.equal(finalized.id,'accepted-id');assert.equal(finalized.importedCount,1);assert.equal(finalized.status,'completed');
+ for(const changed of [{status:'unknown'},{prepared_count:-1},{entry_count:'40'},{retryable:'false'},{canonical_id:42}])assert.throws(()=>mapImportPackage({...dto,...changed}));
  global.fetch=async()=>new Response('{}',{status:503});await assert.rejects(provider.createImportPackage({}));
  Module._resolveFilename=resolve;
 });
@@ -113,4 +116,42 @@ test('double click and unmount during creation cannot upload or finalize twice',
  assert.deepEqual(calls,['create']);
  app.dispose();resolveCreate(fixture({status:'uploading'}));await new Promise(r=>setImmediate(r));
  assert.deepEqual(calls,['create']);
+});
+
+
+for (const inHistory of [true, false]) test(`duplicate-first history resolves canonical counts, paged report and Vault across refresh/navigation (in page: ${inHistory})`, async () => {
+ const canonical=fixture({id:'accepted',status:'completed_with_skips',phase:'complete',entryCount:3,supportedCount:2,importedCount:2,skippedCount:1});
+ const duplicate=fixture({id:'duplicate',status:'duplicate',canonicalId:'accepted',phase:'complete'});
+ const calls=[];
+ const provider={
+  async getImportPackage(id){calls.push(['get',id]);assert.equal(id,'accepted');return canonical;},
+  async getImportPackageReport(id,after){calls.push(['report',id,after]);assert.equal(id,'accepted');return {entries:[{ordinal:after+1,path:after<0?'canonical/note.md':'canonical/image.png',status:after<0?'published':'skipped',skipReason:after<0?null:'unsupported_format'}],nextCursor:after<0?0:null};}
+ };
+ for (const visit of ['fresh mount','refresh','navigation back']) {
+  const app=harness(provider,inHistory?[duplicate,canonical]:[duplicate]);app.render();await app.effects();
+  assert.match(text(app.render()),/Imported with skipped files/);assert.match(text(app.render()),/Imported\s*:\s*2/);assert.match(text(app.render()),/Skipped\s*:\s*1/);
+  assert.ok(nodes(app.render()).some(n=>n.type==='a'&&n.props.href==='/vault'),visit);
+  await app.click('View import report');await app.click('More files');assert.match(text(app.render()),/canonical\/note.md/);assert.match(text(app.render()),/canonical\/image.png/);
+  app.dispose();
+ }
+ assert.equal(calls.filter(c=>c[0]==='get').length,inHistory?0:3);
+ assert.equal(calls.filter(c=>c[0]==='report').length,6);
+});
+
+test('missing canonical result shows a recoverable error and no invented success/report/Vault', async () => {
+ const app=harness({async getImportPackage(){throw Error('not found');}},[fixture({status:'duplicate',canonicalId:'missing'})]);
+ app.render();await app.effects();assert.match(text(app.render()),/Import history could not be loaded/);
+ assert.doesNotMatch(text(app.render()),/Import complete|Imported with skipped files/);
+ assert.ok(!nodes(app.render()).some(n=>n.type==='a'&&n.props.href==='/vault'));
+ assert.ok(!app.buttons().some(n=>text(n)==='View import report'));
+});
+
+test('duplicate finalize uses the authoritative canonical result immediately',async()=>{
+ const canonical=fixture({id:'accepted',status:'completed_with_skips',phase:'complete',entryCount:2,supportedCount:1,importedCount:1,skippedCount:1});
+ const calls=[];
+ const app=harness({async createImportPackage(){return fixture({status:'uploading'});},async uploadImportPackage(){return fixture({status:'staged'});},
+  async importPackageAction(){return canonical;},async getImportPackageReport(id){calls.push(id);return{entries:[{ordinal:0,path:'accepted.md',status:'published'}],nextCursor:null};}});
+ app.render();await app.effects();app.select();await app.click('Import ZIP');assert.match(text(app.render()),/Imported\s*:\s*1/);
+ await app.click('View import report');assert.deepEqual(calls,['accepted']);assert.match(text(app.render()),/accepted.md/);
+ assert.ok(nodes(app.render()).some(n=>n.type==='a'&&n.props.href==='/vault'));
 });

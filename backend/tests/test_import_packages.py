@@ -397,3 +397,89 @@ def test_retry_now_accelerates_retry_wait_without_a_duplicate_session(env):
         assert r.status_code==200 and r.json()['id']==id
         assert ImportProcessor(jobs,storage).process_one()=='completed'
         assert len(client.get('/items').json())==1
+
+
+@pytest.mark.parametrize('changed', [
+    {'sourceKind': 'notion'}, {'fileName': 'different.zip'}, {'fileSize': 101},
+])
+def test_create_request_key_binds_accepted_identity_without_side_effects(env, changed):
+    e, storage, jobs = env
+    ws, user = uuid4(), 'identity|' + uuid4().hex
+    payload = {'sourceKind': 'obsidian', 'fileName': 'snapshot.zip', 'fileSize': 100, 'requestKey': str(uuid4())}
+    with e.client(workspace_id=ws, user_id=user, import_storage=storage) as client:
+        accepted = client.post('/imports/packages', json=payload)
+        assert accepted.status_code == 201
+        before = admin(e, 'SELECT * FROM import_packages WHERE workspace_id=%s', (ws,))
+        identical = client.post('/imports/packages', json=payload)
+        assert identical.status_code == 201 and identical.json() == accepted.json()
+        conflict = client.post('/imports/packages', json={**payload, **changed})
+        assert conflict.status_code == 409 and conflict.json() == {'detail': 'request_key_conflict'}
+        assert admin(e, 'SELECT * FROM import_packages WHERE workspace_id=%s', (ws,)) == before
+        assert admin(e, 'SELECT count(*),sum(file_size) FROM import_packages WHERE workspace_id=%s', (ws,)) == [(1, 100)]
+        assert client.get('/imports/packages/publications').json()['publications'] == []
+        assert client.get('/items').json() == []
+        assert admin(e, 'SELECT count(*) FROM import_objects WHERE workspace_id=%s', (ws,)) == [(0,)]
+        # Configuration is server-owned: retry keeps the admission policy snapshot.
+        with e.client(workspace_id=ws, user_id=user, import_storage=storage,
+                      import_policy=replace(ImportPolicy(), compressed_bytes=1, workspace_concurrency=1)) as reconfigured:
+            retry = reconfigured.post('/imports/packages', json=payload)
+            assert retry.status_code == 201 and retry.json() == accepted.json()
+        with e.client(import_storage=storage) as other:
+            independent = other.post('/imports/packages', json=payload)
+            assert independent.status_code == 201 and independent.json()['id'] != accepted.json()['id']
+        admin(e, "UPDATE workspace_members SET role='viewer' WHERE workspace_id=%s AND user_id=%s", (ws, user))
+        assert client.post('/imports/packages', json=payload).status_code == 403
+
+
+@pytest.mark.parametrize('conflicting', [False, True])
+def test_concurrent_create_reuse_has_one_immutable_identity_and_reservation(env, conflicting):
+    e, storage, jobs = env
+    ws, user = uuid4(), 'identity-race|' + uuid4().hex
+    payload = {'sourceKind': 'obsidian', 'fileName': 'snapshot.zip', 'fileSize': 100, 'requestKey': str(uuid4())}
+    requests = [payload, {**payload, **({'fileName': 'other.zip', 'fileSize': 200} if conflicting else {})}]
+    with e.client(workspace_id=ws, user_id=user, import_storage=storage) as client:
+        # Initialize the synthetic tenant before exercising only create admission.
+        assert client.get('/items').status_code == 200
+        with ThreadPoolExecutor(2) as pool:
+            responses = list(pool.map(lambda body: client.post('/imports/packages', json=body), requests))
+        assert sorted(r.status_code for r in responses) == ([201, 409] if conflicting else [201, 201])
+        winner = next(r.json() for r in responses if r.status_code == 201)
+        assert len(client.get('/imports/packages').json()) == 1
+        if not conflicting:
+            assert responses[0].json() == responses[1].json()
+        for body in requests:
+            retry = client.post('/imports/packages', json=body)
+            identical = (body['sourceKind'], body['fileName'], body['fileSize']) == (winner['source_kind'], winner['file_name'], winner['file_size'])
+            assert retry.status_code == (201 if identical else 409)
+        assert admin(e, 'SELECT count(*),sum(file_size) FROM import_packages WHERE workspace_id=%s', (ws,)) == [(1, winner['file_size'])]
+        assert admin(e, 'SELECT count(*) FROM import_objects WHERE workspace_id=%s', (ws,)) == [(0,)]
+        assert client.get('/imports/packages/publications').json()['publications'] == []
+
+
+def test_duplicate_history_keeps_canonical_receipt_and_one_publication(env):
+    e, storage, jobs = env
+    raw = archive_bytes([('a.md', 'canonical text'), ('image.png', b'skipped')])
+    with e.client(import_storage=storage) as client:
+        key = uuid4()
+        canonical_id = session(client, raw, key=key)
+        assert client.post(f'/imports/packages/{canonical_id}/finalize').status_code == 200
+        assert ImportProcessor(jobs, storage).process_one() == 'completed'
+        canonical = client.get(f'/imports/packages/{canonical_id}').json()
+        payload = {'sourceKind': 'obsidian', 'fileName': 'snapshot.zip', 'fileSize': len(raw), 'requestKey': str(key)}
+        before = admin(e, 'SELECT * FROM import_packages WHERE id=%s', (UUID(canonical_id),))
+        assert client.post('/imports/packages', json=payload).json() == canonical
+        conflict = client.post('/imports/packages', json={**payload, 'fileName': 'different.zip'})
+        assert conflict.status_code == 409 and conflict.json() == {'detail': 'request_key_conflict'}
+        assert admin(e, 'SELECT * FROM import_packages WHERE id=%s', (UUID(canonical_id),)) == before
+        duplicate_id = session(client, raw)
+        finalized = client.post(f'/imports/packages/{duplicate_id}/finalize')
+        assert finalized.status_code == 200 and finalized.json() == canonical
+        history = client.get('/imports/packages').json()
+        assert history[0]['id'] == duplicate_id and history[0]['status'] == 'duplicate'
+        assert history[0]['canonical_id'] == canonical_id
+        assert client.get(f'/imports/packages/{history[0]["canonical_id"]}').json() == canonical
+        assert canonical['status'] == 'completed_with_skips'
+        assert (canonical['published_count'], canonical['skipped_count']) == (1, 1)
+        assert len(client.get(f'/imports/packages/{canonical_id}/entries').json()['entries']) == 2
+        assert len(client.get('/items').json()) == 1
+        assert len(client.get('/imports/packages/publications').json()['publications']) == 1
