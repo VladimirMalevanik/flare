@@ -1,13 +1,18 @@
 "use client";
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useState,
+  type Dispatch,
   type ReactNode,
+  type SetStateAction,
 } from "react";
 import { useSession } from "./auth-session";
 import { readLocal, writeLocal } from "@/lib/storage/preferences";
+import { INITIAL_FUNNY_RITUAL, type FunnyRitualState } from "@/features/funny/funny-state";
+import { stopFunnySounds } from "@/features/funny/funny-sounds";
 export type Theme = "system" | "light" | "dark";
 export type CaptureOrbSize = "small" | "medium" | "large";
 export interface Profile {
@@ -37,6 +42,14 @@ interface WorkspaceState {
   setCompact: (value: boolean) => void;
   captureOrbSize: CaptureOrbSize;
   setCaptureOrbSize: (value: CaptureOrbSize) => void;
+  funnyMode: boolean;
+  setFunnyMode: (value: boolean) => void;
+  funnySounds: boolean;
+  setFunnySounds: (value: boolean) => void;
+  funnyRitual: FunnyRitualState;
+  setFunnyRitual: Dispatch<SetStateAction<FunnyRitualState>>;
+  funnyAudioPaused: boolean;
+  setFunnyAudioPaused: (value: boolean) => void;
   profile: Profile;
   updateProfile: (changes: Partial<Profile>) => void;
   notice: string;
@@ -49,6 +62,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [compact, updateCompact] = useState(false);
   const [captureOrbSize, updateCaptureOrbSize] =
     useState<CaptureOrbSize>("medium");
+  const [funnyMode, updateFunnyMode] = useState(false);
+  const [funnySounds, updateFunnySounds] = useState(true);
+  const [funnyRitual, setFunnyRitual] = useState(INITIAL_FUNNY_RITUAL);
+  const [funnyAudioPaused, updateFunnyAudioPaused] = useState(false);
   const [captureOpen, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [revision, setRevision] = useState(0);
@@ -64,6 +81,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       updateTheme(selected);
       setDark(selected === "dark" || (selected === "system" && media.matches));
       updateCompact(readLocal<boolean>("flare-compact", false) === true);
+      const storedFunnyMode = readLocal<boolean>("flare-funny-mode-v1", false) === true;
+      const storedFunnySounds = readLocal<boolean>("flare-funny-sounds-v1", true) !== false;
+      updateFunnyMode(storedFunnyMode);
+      updateFunnySounds(storedFunnySounds);
+      if (!storedFunnyMode) {
+        setFunnyRitual((current) => ({ ...INITIAL_FUNNY_RITUAL, requestId: current.requestId }));
+      }
+      if (!storedFunnyMode || !storedFunnySounds) stopFunnySounds();
       const storedOrbSize = readLocal<CaptureOrbSize>(
         "flare-capture-orb-size-v1",
         "medium",
@@ -92,6 +117,37 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
     document.documentElement.dataset.compact = String(compact);
   }, [dark, compact]);
+  useEffect(() => {
+    document.documentElement.dataset.funnyMode = String(funnyMode);
+    return () => {
+      delete document.documentElement.dataset.funnyMode;
+    };
+  }, [funnyMode]);
+  const setFunnyMode = (value: boolean) => {
+    updateFunnyMode(value);
+    if (!value) {
+      stopFunnySounds();
+      setFunnyRitual((current) => ({ ...INITIAL_FUNNY_RITUAL, requestId: current.requestId }));
+    }
+    try {
+      writeLocal("flare-funny-mode-v1", value);
+    } catch {
+      setNotice("Funny mode changed for this visit. Browser storage is unavailable.");
+    }
+  };
+  const setFunnySounds = (value: boolean) => {
+    updateFunnySounds(value);
+    if (!value) stopFunnySounds();
+    try {
+      writeLocal("flare-funny-sounds-v1", value);
+    } catch {
+      setNotice("Funny sounds changed for this visit. Browser storage is unavailable.");
+    }
+  };
+  const setFunnyAudioPaused = useCallback((value: boolean) => {
+    if (value) stopFunnySounds();
+    updateFunnyAudioPaused(value);
+  }, []);
   const setTheme = (value: Theme) => {
     updateTheme(value);
     setDark(
@@ -146,6 +202,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setCompact,
         captureOrbSize,
         setCaptureOrbSize,
+        funnyMode,
+        setFunnyMode,
+        funnySounds,
+        setFunnySounds,
+        funnyRitual,
+        setFunnyRitual,
+        funnyAudioPaused,
+        setFunnyAudioPaused,
         profile: session ? { ...profile, name: session.user.name, email: session.user.email, role: session.workspace.role } : profile,
         updateProfile,
         captureOpen,

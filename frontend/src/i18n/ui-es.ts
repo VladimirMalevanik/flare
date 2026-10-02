@@ -1,6 +1,20 @@
 import type { uiEn } from "./ui-en";
 
 export const uiEs = {
+  "Funny mode": "Modo divertido",
+  "More color. A Magic 8-ball. Same real Flares. Shake the ball to start a new analysis. Saved in this browser.": "Más color. Una bola mágica 8. Los mismos Flares reales. Agita la bola para iniciar un nuevo análisis. Se guarda en este navegador.",
+  "Funny sounds": "Sonidos divertidos",
+  "Tiny button boops and an English voice nudge. Always quiet while recording voice.": "Sonidos cortos en los botones y una indicación de voz en inglés. Siempre en silencio mientras grabas una nota de voz.",
+  "Funny mode changed for this visit. Browser storage is unavailable.": "El modo divertido se cambió para esta visita. El almacenamiento del navegador no está disponible.",
+  "Funny sounds changed for this visit. Browser storage is unavailable.": "Los sonidos divertidos se cambiaron para esta visita. El almacenamiento del navegador no está disponible.",
+  "Shake the 8-ball": "Agita la bola 8",
+  "MAGIC 8-BALL · REAL EVIDENCE": "BOLA MÁGICA 8 · EVIDENCIA REAL",
+  "Shake instructions": "Arrastra la bola 8 de un lado a otro. O selecciónala con el teclado y pulsa Espacio / Enter.",
+  "Shake progress": "{count} / {total} sacudidas · el análisis no empieza hasta que agites la bola.",
+  "Cancel · Esc": "Cancelar · Esc",
+  "Got it": "Entendido",
+  "Magic 8-ball: add context": "Bola mágica 8: añadir contexto",
+  "Shake the Magic 8-ball. Drag back and forth, or press Space or Enter four times.": "Agita la bola mágica 8. Arrástrala de un lado a otro o pulsa Espacio o Enter cuatro veces.",
   "Unable to open your workspace": "No se pudo abrir tu espacio de trabajo",
   "Please check your connection and try again.": "Comprueba tu conexión e inténtalo de nuevo.",
   "Try again": "Intentar de nuevo",
