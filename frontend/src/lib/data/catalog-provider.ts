@@ -1,3 +1,4 @@
+import type { ImportPackage, ImportPackageReport, ZipSourceKind } from "./types";
 import type { AnalyticsEventInput, FlareDataProvider } from "./provider";
 import { sourceCatalog } from "./source-catalog";
 import type {
@@ -32,6 +33,13 @@ export class ProductionCatalogProvider implements FlareDataProvider {
   private unavailable(): never {
     throw new Error("This operation requires the Flare API.");
   }
+
+  async createImportPackage(_input: { sourceKind: ZipSourceKind; fileName: string; fileSize: number; requestKey: string }): Promise<ImportPackage> { throw new Error("ZIP imports require the Flare API."); }
+  async uploadImportPackage(_id: string, _file: File, _signal?: AbortSignal): Promise<ImportPackage> { throw new Error("ZIP imports require the Flare API."); }
+  async importPackageAction(_id: string, _action: "finalize" | "cancel" | "retry"): Promise<ImportPackage> { throw new Error("ZIP imports require the Flare API."); }
+  async getImportPackage(_id: string, _signal?: AbortSignal): Promise<ImportPackage> { throw new Error("ZIP imports require the Flare API."); }
+  async listImportPackages(): Promise<ImportPackage[]> { return []; }
+  async getImportPackageReport(_id: string, _after?: number): Promise<ImportPackageReport> { throw new Error("ZIP imports require the Flare API."); }
 
   async listSources(): Promise<Source[]> {
     return cloneSources();

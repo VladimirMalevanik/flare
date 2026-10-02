@@ -17,6 +17,7 @@ class Settings:
     database_url: str | None
     cors_origins: list[str]
     environment: str = "production"
+    import_staging_root: str | None = None
     session_lifetime_seconds: int = 604800
     session_idle_seconds: int = 86400
     dev_mode: bool = False

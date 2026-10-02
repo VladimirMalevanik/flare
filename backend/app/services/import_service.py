@@ -226,11 +226,12 @@ class ImportService:
         file_type: str | None,
         file_size: int,
         content: str,
+        limits=None,
     ) -> PreparedImport:
         normalized_name = _validate_file_name(file_name, format)
         normalized_type = _validate_file_type(file_type, format)
         raw_bytes = _utf8_bytes(content)
-        if len(raw_bytes) > MAX_IMPORT_BYTES:
+        if len(raw_bytes) > (limits.file_bytes if limits else MAX_IMPORT_BYTES):
             raise ImportValidationError(
                 "payload_too_large",
                 f"content exceeds the {MAX_IMPORT_BYTES:,}-byte import limit",
@@ -254,10 +255,10 @@ class ImportService:
             raise ImportValidationError("empty_file", "content must contain UTF-8 text")
         content_hash = sha256(text.encode("utf-8")).hexdigest()
         file_hash = sha256(raw_bytes).hexdigest()
-        target_bytes = IMPORT_CHUNK_TARGET_BYTES
+        target_bytes = limits.chunk_bytes if limits else IMPORT_CHUNK_TARGET_BYTES
 
         if format == "csv":
-            records = _parse_csv(text)
+            records = _parse_csv(text, limits=limits)
             chunks = _csv_chunks(records, target_bytes)
             row_count: int | None = len(records) - 1
         elif format == "md":
@@ -268,7 +269,7 @@ class ImportService:
             row_count = None
         if not chunks or any(not chunk.content for chunk in chunks):
             raise ImportValidationError("empty_file", "content must contain UTF-8 text")
-        if len(chunks) > MAX_IMPORT_CHUNKS:
+        if len(chunks) > (limits.chunks_file if limits else MAX_IMPORT_CHUNKS):
             raise ImportValidationError(
                 "too_many_chunks",
                 "Import would exceed the 2000-chunk safety limit; split the file into smaller files",
@@ -331,7 +332,7 @@ def _reject_binary_text(content: str) -> None:
         raise ImportValidationError("binary_content", "content must be UTF-8 text, not binary data")
 
 
-def _parse_csv(text: str) -> tuple[CsvRecord, ...]:
+def _parse_csv(text: str, *, limits=None) -> tuple[CsvRecord, ...]:
     physical_lines = text.splitlines(keepends=True)
     reader = csv.reader(io.StringIO(text, newline=""), strict=True)
     records: list[CsvRecord] = []
@@ -353,7 +354,7 @@ def _parse_csv(text: str) -> tuple[CsvRecord, ...]:
             if not raw:
                 raise ImportValidationError("invalid_csv", "CSV contains an invalid empty record")
             record_number = len(records) + 1
-            if record_number > MAX_IMPORT_ROWS + 1:
+            if record_number > (limits.csv_rows if limits else MAX_IMPORT_ROWS) + 1:
                 raise ImportValidationError(
                     "too_many_rows",
                     "CSV exceeds the 20000-row import safety limit",
@@ -366,6 +367,9 @@ def _parse_csv(text: str) -> tuple[CsvRecord, ...]:
                     line_end=max(1, end_line),
                 )
             )
+            if limits and (len(raw.encode("utf-8")) > limits.csv_row_bytes
+                    or any(len(cell.encode("utf-8")) > limits.csv_field_bytes for cell in row)):
+                raise ImportValidationError("csv_bound", "CSV record exceeds configured bounds")
             rows.append(row)
             pending_prefix = ""
             pending_line_start = None

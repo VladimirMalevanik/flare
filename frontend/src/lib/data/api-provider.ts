@@ -1,3 +1,4 @@
+import type { ImportPackage, ImportPackageReport, ZipSourceKind } from "./types";
 import type { AnalyticsEventInput, FlareDataProvider } from "./provider";
 import type {
   AnalysisRun,
@@ -99,6 +100,8 @@ function mapItem(value: unknown): Item {
     }),
     relatedItemIds: relatedIds,
     ...(typeof dto.sourceUrl === "string" ? { sourceUrl: dto.sourceUrl } : {}),
+    ...(typeof dto.importPackageId === "string" ? { importPackageId: dto.importPackageId } : {}),
+    ...(typeof dto.relativePath === "string" ? { relativePath: dto.relativePath } : {}),
     ...(typeof dto.fileName === "string" ? { fileName: dto.fileName } : {}),
     ...(typeof dto.fileSize === "number" ? { fileSize: dto.fileSize } : {}),
     ...(typeof dto.fileType === "string" ? { fileType: dto.fileType } : {}),
@@ -379,6 +382,37 @@ export class ApiDataProvider implements FlareDataProvider {
     return response.json();
   }
 
+  async createImportPackage(input: { sourceKind: ZipSourceKind; fileName: string; fileSize: number; requestKey: string }): Promise<ImportPackage> {
+    return mapImportPackage(await this.request("/imports/packages", { method: "POST", body: JSON.stringify(input) }));
+  }
+  async uploadImportPackage(id: string, file: File, signal?: AbortSignal): Promise<ImportPackage> {
+    return mapImportPackage(await this.request(`/imports/packages/${encodeURIComponent(id)}/upload`, {
+      method: "PUT", body: file, signal, headers: { "Content-Type": "application/octet-stream" },
+    }));
+  }
+  async importPackageAction(id: string, action: "finalize" | "cancel" | "retry"): Promise<ImportPackage> {
+    return mapImportPackage(await this.request(`/imports/packages/${encodeURIComponent(id)}/${action}`, { method: "POST" }));
+  }
+  async getImportPackage(id: string, signal?: AbortSignal): Promise<ImportPackage> {
+    return mapImportPackage(await this.request(`/imports/packages/${encodeURIComponent(id)}`, { signal }));
+  }
+  async listImportPackages(): Promise<ImportPackage[]> {
+    const body = await this.request("/imports/packages");
+    if (!Array.isArray(body)) throw new FlareApiError("Invalid import response");
+    return body.map(mapImportPackage);
+  }
+  async getImportPackageReport(id: string, after = -1): Promise<ImportPackageReport> {
+    const body = asRecord(await this.request(`/imports/packages/${encodeURIComponent(id)}/entries?after=${after}`));
+    if (!Array.isArray(body.entries)) throw new FlareApiError("Invalid import report");
+    return { entries: body.entries.map((value) => {
+      const row = asRecord(value);
+      const status = stringField(row, "status");
+      if (!["pending", "prepared", "skipped", "published"].includes(status)) throw new FlareApiError("Invalid entry status");
+      return { ordinal: countField(row, "ordinal"), path: stringField(row, "path"), fileBytes: countField(row, "file_bytes"),
+        skipReason: nullableString(row, "skip_reason"), status: status as ImportPackageReport["entries"][number]["status"], documentId: nullableString(row, "document_id") };
+    }), nextCursor: body.nextCursor === null ? null : countField(body, "nextCursor") };
+  }
+
   async startAnalysis(key: string, signal?: AbortSignal): Promise<AnalysisRun> {
     return mapAnalysisRun(await this.request("/analyze", {
       method: "POST", headers: { "Idempotency-Key": key }, body: "{}", signal,
@@ -600,4 +634,23 @@ export class ApiDataProvider implements FlareDataProvider {
   resetDemoData(): Promise<void> {
     return this.fallback.resetDemoData();
   }
+}
+
+function countField(row: Record<string, unknown>, key: string): number {
+  const value = row[key];
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) throw new FlareApiError("Invalid import count");
+  return value;
+}
+function nullableString(row: Record<string, unknown>, key: string): string | null {
+  return row[key] === null ? null : stringField(row, key);
+}
+export function mapImportPackage(value: unknown): ImportPackage {
+  const row = asRecord(value), status = stringField(row, "status"), phase = stringField(row, "phase"), sourceKind = stringField(row, "source_kind");
+  if (!["uploading", "staged", "queued", "processing", "retry_wait", "completed", "completed_with_skips", "failed", "cancelled", "expired", "duplicate"].includes(status)
+      || !["upload", "inspect", "parse", "publish", "complete"].includes(phase)
+      || !["notion", "obsidian"].includes(sourceKind) || typeof row.retryable !== "boolean") throw new FlareApiError("Invalid import state");
+  return { id: stringField(row, "id"), sourceKind: sourceKind as ZipSourceKind, fileName: stringField(row, "file_name"), fileSize: countField(row, "file_size"),
+    status: status as ImportPackage["status"], phase: phase as ImportPackage["phase"], entryCount: row.entry_count === null ? null : countField(row, "entry_count"),
+    supportedCount: countField(row, "prepared_count"), skippedCount: countField(row, "skipped_count"), importedCount: countField(row, "published_count"),
+    chunkCount: countField(row, "chunk_count"), errorCode: nullableString(row, "error_code"), retryable: row.retryable };
 }

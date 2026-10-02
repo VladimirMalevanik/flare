@@ -18,6 +18,9 @@ from app.api.analysis import router as analysis_router
 from app.api.analysis_schedule import router as analysis_schedule_router
 from app.api.github import router as github_router
 from app.api.imports import router as imports_router
+from app.api.import_packages import router as import_packages_router
+from app.import_staging import LocalStagedObjects
+from app.import_staging.policy import ImportPolicy
 from app.api.export import router as export_router
 from app.api.voice import router as voice_router
 from app.api import ops
@@ -39,8 +42,15 @@ def create_app(
     *,
     database: Database | None = None,
     email_sender: EmailSender | None = None,
+    import_storage=None,
+    import_policy: ImportPolicy | None = None,
 ) -> FastAPI:
     configured = application_settings or settings
+    if configured.environment == "production" and configured.import_staging_root:
+        raise ValueError("Production ZIP staging requires an OPS-approved adapter")
+    staging = import_storage
+    if staging is None and configured.import_staging_root:
+        staging = LocalStagedObjects(configured.import_staging_root)
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
@@ -79,6 +89,9 @@ def create_app(
                 managed_database.close()
 
     application = FastAPI(title="Flare API", version="0.2.0", lifespan=lifespan)
+    application.state.import_storage = staging
+    application.state.import_policy = import_policy or ImportPolicy.from_environment(
+        production=configured.environment == "production" and staging is not None)
     application.state.settings = configured
     application.state.database = database
     application.state.email_sender = email_sender
@@ -146,6 +159,7 @@ def create_app(
         ]}, status_code=422)
 
     application.include_router(auth_router)
+    application.include_router(import_packages_router)
     application.include_router(imports_router)
     application.include_router(flares_router)
     application.include_router(analysis_router)
