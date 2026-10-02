@@ -1,0 +1,279 @@
+{
+  "environment": {
+    "python": "3.14.6 (main, Jun 10 2026, 10:03:53) [Clang 21.0.0 (clang-2100.0.123.102)]",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "cpu_count": 12
+  },
+  "method": "Deflate level 6. Three fresh subprocess reads per case. Timed central-directory parse, streaming decompression, SHA-256, strict UTF-8 decode; no extraction, DB, chunking, network or AI. 64KiB read buffer. Generation excluded; local cache may be warm.",
+  "security_fixtures": [
+    {
+      "name": "valid_relative",
+      "compressed_bytes": 153,
+      "expected": "accepted",
+      "actual": "accepted",
+      "passed": true
+    },
+    {
+      "name": "parent_traversal",
+      "compressed_bytes": 143,
+      "expected": "unsafe_path",
+      "actual": "unsafe_path",
+      "passed": true
+    },
+    {
+      "name": "absolute",
+      "compressed_bytes": 139,
+      "expected": "unsafe_path",
+      "actual": "unsafe_path",
+      "passed": true
+    },
+    {
+      "name": "windows_drive",
+      "compressed_bytes": 143,
+      "expected": "unsafe_path",
+      "actual": "unsafe_path",
+      "passed": true
+    },
+    {
+      "name": "backslash",
+      "compressed_bytes": 143,
+      "expected": "unsafe_path",
+      "actual": "unsafe_path",
+      "passed": true
+    },
+    {
+      "name": "duplicate",
+      "compressed_bytes": 228,
+      "expected": "path_collision",
+      "actual": "path_collision",
+      "passed": true
+    },
+    {
+      "name": "case_collision",
+      "compressed_bytes": 228,
+      "expected": "path_collision",
+      "actual": "path_collision",
+      "passed": true
+    },
+    {
+      "name": "unicode_collision",
+      "compressed_bytes": 246,
+      "expected": "path_collision",
+      "actual": "path_collision",
+      "passed": true
+    },
+    {
+      "name": "symlink",
+      "compressed_bytes": 131,
+      "expected": "special_entry",
+      "actual": "special_entry",
+      "passed": true
+    },
+    {
+      "name": "encrypted_flags",
+      "compressed_bytes": 153,
+      "expected": "encrypted",
+      "actual": "encrypted",
+      "passed": true
+    },
+    {
+      "name": "too_many_entries",
+      "compressed_bytes": 1157,
+      "expected": "entry_count",
+      "actual": "entry_count",
+      "passed": true
+    },
+    {
+      "name": "too_deep",
+      "compressed_bytes": 157,
+      "expected": "path_depth",
+      "actual": "path_depth",
+      "passed": true
+    },
+    {
+      "name": "per_file_bytes",
+      "compressed_bytes": 127,
+      "expected": "file_bytes",
+      "actual": "file_bytes",
+      "passed": true
+    },
+    {
+      "name": "aggregate_bytes",
+      "compressed_bytes": 210,
+      "expected": "expanded_bytes",
+      "actual": "expanded_bytes",
+      "passed": true
+    },
+    {
+      "name": "compressed_bytes",
+      "compressed_bytes": 153,
+      "expected": "compressed_bytes",
+      "actual": "compressed_bytes",
+      "passed": true
+    },
+    {
+      "name": "high_ratio",
+      "compressed_bytes": 257,
+      "expected": "compression_ratio",
+      "actual": "compression_ratio",
+      "passed": true
+    },
+    {
+      "name": "bad_crc",
+      "compressed_bytes": 119,
+      "expected": "bad_zip_or_crc",
+      "actual": "bad_zip_or_crc",
+      "passed": true
+    },
+    {
+      "name": "invalid_zip",
+      "compressed_bytes": 9,
+      "expected": "bad_zip_or_crc",
+      "actual": "bad_zip_or_crc",
+      "passed": true
+    }
+  ],
+  "cases": [
+    {
+      "name": "100_notes_4KiB",
+      "samples": [
+        {
+          "entry_count": 100,
+          "compressed_bytes": 330613,
+          "expanded_bytes": 409600,
+          "directory_seconds": 0.0020930410246364772,
+          "total_seconds": 0.005627833015751094,
+          "python_peak_allocated_bytes": 314975,
+          "process_peak_rss_bytes": 27541504,
+          "content_sha256": "d308d86c6bafa81bec79ec2f889fb5927ea6b3bdbbadd04719d61958c4704ef0"
+        },
+        {
+          "entry_count": 100,
+          "compressed_bytes": 330613,
+          "expanded_bytes": 409600,
+          "directory_seconds": 0.001850334054324776,
+          "total_seconds": 0.005205250054132193,
+          "python_peak_allocated_bytes": 314975,
+          "process_peak_rss_bytes": 27443200,
+          "content_sha256": "d308d86c6bafa81bec79ec2f889fb5927ea6b3bdbbadd04719d61958c4704ef0"
+        },
+        {
+          "entry_count": 100,
+          "compressed_bytes": 330613,
+          "expanded_bytes": 409600,
+          "directory_seconds": 0.0018924159812740982,
+          "total_seconds": 0.005243416002485901,
+          "python_peak_allocated_bytes": 314975,
+          "process_peak_rss_bytes": 27508736,
+          "content_sha256": "d308d86c6bafa81bec79ec2f889fb5927ea6b3bdbbadd04719d61958c4704ef0"
+        }
+      ]
+    },
+    {
+      "name": "1000_notes_4KiB",
+      "samples": [
+        {
+          "entry_count": 1000,
+          "compressed_bytes": 3305959,
+          "expanded_bytes": 4096000,
+          "directory_seconds": 0.015168667014222592,
+          "total_seconds": 0.047170709003694355,
+          "python_peak_allocated_bytes": 890043,
+          "process_peak_rss_bytes": 28786688,
+          "content_sha256": "7e84133741047e7a2073107d71fe90d062a89a8c40f3d60f3d336cc7cc08eced"
+        },
+        {
+          "entry_count": 1000,
+          "compressed_bytes": 3305959,
+          "expanded_bytes": 4096000,
+          "directory_seconds": 0.015540875028818846,
+          "total_seconds": 0.04770595900481567,
+          "python_peak_allocated_bytes": 890043,
+          "process_peak_rss_bytes": 28753920,
+          "content_sha256": "7e84133741047e7a2073107d71fe90d062a89a8c40f3d60f3d336cc7cc08eced"
+        },
+        {
+          "entry_count": 1000,
+          "compressed_bytes": 3305959,
+          "expanded_bytes": 4096000,
+          "directory_seconds": 0.01628849998814985,
+          "total_seconds": 0.04806200001621619,
+          "python_peak_allocated_bytes": 890043,
+          "process_peak_rss_bytes": 28950528,
+          "content_sha256": "7e84133741047e7a2073107d71fe90d062a89a8c40f3d60f3d336cc7cc08eced"
+        }
+      ]
+    },
+    {
+      "name": "1000_notes_64KiB",
+      "samples": [
+        {
+          "entry_count": 1000,
+          "compressed_bytes": 50609812,
+          "expanded_bytes": 65536000,
+          "directory_seconds": 0.015719208982773125,
+          "total_seconds": 0.18013250001240522,
+          "python_peak_allocated_bytes": 1020030,
+          "process_peak_rss_bytes": 29196288,
+          "content_sha256": "034299554ac0c7365174ba1c404bd882399a72bec502640dfeb63e2d6b82727b"
+        },
+        {
+          "entry_count": 1000,
+          "compressed_bytes": 50609812,
+          "expanded_bytes": 65536000,
+          "directory_seconds": 0.01672483398579061,
+          "total_seconds": 0.17760358401574194,
+          "python_peak_allocated_bytes": 1020030,
+          "process_peak_rss_bytes": 29196288,
+          "content_sha256": "034299554ac0c7365174ba1c404bd882399a72bec502640dfeb63e2d6b82727b"
+        },
+        {
+          "entry_count": 1000,
+          "compressed_bytes": 50609812,
+          "expanded_bytes": 65536000,
+          "directory_seconds": 0.015918915974907577,
+          "total_seconds": 0.17834866599878296,
+          "python_peak_allocated_bytes": 1020030,
+          "process_peak_rss_bytes": 29130752,
+          "content_sha256": "034299554ac0c7365174ba1c404bd882399a72bec502640dfeb63e2d6b82727b"
+        }
+      ]
+    },
+    {
+      "name": "8MiB_repeated",
+      "samples": [
+        {
+          "entry_count": 1,
+          "compressed_bytes": 8317,
+          "expanded_bytes": 8388608,
+          "directory_seconds": 0.0004822090268135071,
+          "total_seconds": 0.006650083989370614,
+          "python_peak_allocated_bytes": 425240,
+          "process_peak_rss_bytes": 27983872,
+          "content_sha256": "0c77bc0a0795a93612d45256897456d0fcb24f151c44c150d07ecd03f4ef5168"
+        },
+        {
+          "entry_count": 1,
+          "compressed_bytes": 8317,
+          "expanded_bytes": 8388608,
+          "directory_seconds": 0.0005023340345360339,
+          "total_seconds": 0.006656750047113746,
+          "python_peak_allocated_bytes": 425240,
+          "process_peak_rss_bytes": 27885568,
+          "content_sha256": "0c77bc0a0795a93612d45256897456d0fcb24f151c44c150d07ecd03f4ef5168"
+        },
+        {
+          "entry_count": 1,
+          "compressed_bytes": 8317,
+          "expanded_bytes": 8388608,
+          "directory_seconds": 0.00047008402179926634,
+          "total_seconds": 0.005729958997108042,
+          "python_peak_allocated_bytes": 425240,
+          "process_peak_rss_bytes": 27410432,
+          "content_sha256": "0c77bc0a0795a93612d45256897456d0fcb24f151c44c150d07ecd03f4ef5168"
+        }
+      ]
+    }
+  ]
+}
