@@ -22,6 +22,8 @@ jobs:
       API_INTERNAL_URL: https://flare-api-vm-260914.azurewebsites.net
       NEXT_PUBLIC_API_URL: /api
       NEXT_PUBLIC_DATA_PROVIDER: api
+      NEXT_PUBLIC_PADDLE_CLIENT_TOKEN: ${{ vars.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN }}
+      NEXT_PUBLIC_PADDLE_PRO_PRICE_ID: ${{ vars.NEXT_PUBLIC_PADDLE_PRO_PRICE_ID || 'pri_01m3y1nvmgw2avt60bz87161c2' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

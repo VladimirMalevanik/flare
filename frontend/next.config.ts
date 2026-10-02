@@ -4,17 +4,21 @@ const scriptPolicy = process.env.NODE_ENV === "production"
   ? "script-src 'self' 'unsafe-inline'"
   : "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
 
+// App Router navigation keeps the original document's CSP. These exact Sandbox
+// origins must also be allowed when users reach Settings from another page.
+// Paddle.js itself is loaded lazily, only after the Pro checkout button is used.
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
-  "connect-src 'self'",
+  "connect-src 'self' https://sandbox-api.paddle.com",
   "font-src 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
-  "img-src 'self' data:",
+  "frame-src 'self' https://sandbox-buy.paddle.com https://sandbox-cdn.paddle.com",
+  "img-src 'self' data: https://sandbox-cdn.paddle.com",
   "object-src 'none'",
-  scriptPolicy,
-  "style-src 'self' 'unsafe-inline'",
+  `${scriptPolicy} https://cdn.paddle.com`,
+  "style-src 'self' 'unsafe-inline' https://sandbox-cdn.paddle.com",
 ].join("; ");
 
 const securityHeaders = [
