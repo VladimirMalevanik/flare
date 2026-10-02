@@ -1,0 +1,77 @@
+{
+  "checked_at": "2026-10-02T07:16:45.628527+00:00",
+  "scripts": [
+    {
+      "url": "https://flare4u.tech/_next/static/chunks/4bd1b696-92152b0f5947070d.js",
+      "bytes": 201054,
+      "sha256": "8dc2c1d71557b434c654ec58acb1441bc0fb200c520ff548f606d88e689ee643",
+      "markers": []
+    },
+    {
+      "url": "https://flare4u.tech/_next/static/chunks/794-d1a40dcf24d651d9.js",
+      "bytes": 240795,
+      "sha256": "6faa7e3b69df2ae34032f0eb1e042ac3716c41336a3927d377abf34cb7a26082",
+      "markers": []
+    },
+    {
+      "url": "https://flare4u.tech/_next/static/chunks/main-app-53ebbb4dcf47be4a.js",
+      "bytes": 513,
+      "sha256": "fc2bf8659c8cb370bdf9da64b4fd2a21d9dd70fb28f4808d3634e8fd9f6cdd60",
+      "markers": []
+    },
+    {
+      "url": "https://flare4u.tech/_next/static/chunks/500-b13bb91f5a6311b6.js",
+      "bytes": 8631,
+      "sha256": "90b50c491e9d92c4274ce087933c46c73aeae42f49ae1ae9896587b77a4ce95e",
+      "markers": []
+    },
+    {
+      "url": "https://flare4u.tech/_next/static/chunks/437-7e7ba7e560ca162a.js",
+      "bytes": 14252,
+      "sha256": "12fed7d6e38cde30a6eebf75ef5eaa9fd123a810f1bbce7b2ba8c6eef688db9e",
+      "markers": []
+    },
+    {
+      "url": "https://flare4u.tech/_next/static/chunks/592-3e9940ff8febf10f.js",
+      "bytes": 82961,
+      "sha256": "453c18b6f3dc39f4499a16e811198be2099e504d44a130c51f87b81fe5bd639b",
+      "markers": []
+    },
+    {
+      "url": "https://flare4u.tech/_next/static/chunks/app/page-a4607f8988904b83.js",
+      "bytes": 17103,
+      "sha256": "939d7a54cf8e63e7e34dcd75086e03f8a0c3c3613e225f0c709cfa7c6eb7930e",
+      "markers": []
+    },
+    {
+      "url": "https://flare4u.tech/_next/static/chunks/app/layout-fa5c15c25de17b8a.js",
+      "bytes": 238,
+      "sha256": "71326a505171ce865add6ba18978056d4e1afd18bbd53aaf60f7d59a60c06145",
+      "markers": []
+    },
+    {
+      "url": "https://flare4u.tech/_next/static/chunks/app/error-7eb3ec0d7046c2b8.js",
+      "bytes": 637,
+      "sha256": "53aa763f35f05ed8d7a76e083506656356935c23374cd306d53387dc3bb3a400",
+      "markers": []
+    },
+    {
+      "url": "https://flare4u.tech/_next/static/chunks/polyfills-42372ed130431b0a.js",
+      "bytes": 112594,
+      "sha256": "0973c1d64c88adc8e3c950410cb58b288f72118d5965b78049438deb8f2f9683",
+      "markers": []
+    },
+    {
+      "url": "https://flare4u.tech/_next/static/chunks/webpack-9ca43f4ce1bb8938.js",
+      "bytes": 3326,
+      "sha256": "15e21eb90db8e51ecfea091bfd97f09fcf874c1f79faf85e3a4a5bf88f56812e",
+      "markers": []
+    }
+  ],
+  "public_response_headers": {
+    "Content-Security-Policy": "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Cache-Control": "private, no-cache, no-store, max-age=0, must-revalidate"
+  },
+  "limitations": "Static landing assets only; no runtime browser network observation or authenticated routes; server-side injection/configuration cannot be excluded."
+}

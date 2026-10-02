@@ -1,0 +1,88 @@
+[
+  {
+    "checked_at": "2026-10-02T07:15:33.385040+00:00",
+    "url": "https://flare4u.tech/",
+    "status": 200,
+    "final_url": "https://flare4u.tech/",
+    "content_type": "text/html; charset=utf-8",
+    "html_bytes_read": 16628,
+    "telemetry_markers": [],
+    "script_srcs": [
+      "/_next/static/chunks/4bd1b696-92152b0f5947070d.js",
+      "/_next/static/chunks/794-d1a40dcf24d651d9.js",
+      "/_next/static/chunks/main-app-53ebbb4dcf47be4a.js",
+      "/_next/static/chunks/500-b13bb91f5a6311b6.js",
+      "/_next/static/chunks/437-7e7ba7e560ca162a.js",
+      "/_next/static/chunks/592-3e9940ff8febf10f.js",
+      "/_next/static/chunks/app/page-a4607f8988904b83.js",
+      "/_next/static/chunks/app/layout-fa5c15c25de17b8a.js",
+      "/_next/static/chunks/app/error-7eb3ec0d7046c2b8.js",
+      "/_next/static/chunks/polyfills-42372ed130431b0a.js",
+      "/_next/static/chunks/webpack-9ca43f4ce1bb8938.js"
+    ]
+  },
+  {
+    "checked_at": "2026-10-02T07:15:34.481345+00:00",
+    "url": "https://flare4u.tech/login",
+    "status": 200,
+    "final_url": "https://flare4u.tech/login",
+    "content_type": "text/html; charset=utf-8",
+    "html_bytes_read": 7942,
+    "telemetry_markers": []
+  },
+  {
+    "checked_at": "2026-10-02T07:15:35.359521+00:00",
+    "url": "https://flare4u.tech/api/health",
+    "status": 200,
+    "final_url": "https://flare4u.tech/api/health",
+    "content_type": "application/json",
+    "body": "{\"status\":\"ok\"}"
+  },
+  {
+    "checked_at": "2026-10-02T07:15:36.193145+00:00",
+    "url": "https://flare4u.tech/api/ready",
+    "status": 200,
+    "final_url": "https://flare4u.tech/api/ready",
+    "content_type": "application/json",
+    "body": "{\"status\":\"ready\"}"
+  },
+  {
+    "checked_at": "2026-10-02T07:15:37.193655+00:00",
+    "url": "https://flare-api-vm-260914.azurewebsites.net/health",
+    "status": 200,
+    "final_url": "https://flare-api-vm-260914.azurewebsites.net/health",
+    "content_type": "application/json",
+    "body": "{\"status\":\"ok\"}"
+  },
+  {
+    "checked_at": "2026-10-02T07:15:38.323885+00:00",
+    "url": "https://flare-api-vm-260914.azurewebsites.net/ready",
+    "status": 200,
+    "final_url": "https://flare-api-vm-260914.azurewebsites.net/ready",
+    "content_type": "application/json",
+    "body": "{\"status\":\"ready\"}"
+  },
+  {
+    "checked_at": "2026-10-02T07:15:39.574651+00:00",
+    "url": "https://flare-worker-vm-260914.azurewebsites.net/ready",
+    "status": 200,
+    "final_url": "https://flare-worker-vm-260914.azurewebsites.net/ready",
+    "content_type": "application/json",
+    "body": "{\"status\":\"ready\",\"role\":\"worker\"}"
+  },
+  {
+    "checked_at": "2026-10-02T07:15:40.465308+00:00",
+    "url": "https://www.flare4u.tech/login",
+    "status": 200,
+    "final_url": "https://flare4u.tech/login",
+    "content_type": "text/html; charset=utf-8",
+    "html_bytes_read": 7942,
+    "telemetry_markers": []
+  },
+  {
+    "checked_at": "2026-10-02T07:15:42.312968+00:00",
+    "url": "https://flare4u.tech/api/analytics/events",
+    "status": 401,
+    "body": "{\"detail\":\"Authentication required\"}"
+  }
+]

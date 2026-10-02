@@ -1,0 +1,456 @@
+{
+  "source_sha": "7d734d4deabb90eb0d22a6e2840bf8755f44c13b",
+  "checked_at": "2026-10-02T07:28:19.398863+00:00",
+  "files": [
+    {
+      "path": "docs/RELEASE_CHECKLIST.md",
+      "sha256": "b28df77e03ba45cbaead794047c003d5e12e25e0b81ad8f9205d86ae969e3e83",
+      "line_count": 414,
+      "anchors": [
+        {
+          "text": "Current release status",
+          "line": 8
+        },
+        {
+          "text": "Current production topology",
+          "line": 15
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/azure-appservice-release.yml",
+      "sha256": "ca1d1593a7dc0e24e4908600c3b3e6c272652da22f77a0e2c5448c412d5a0b58",
+      "line_count": 176,
+      "anchors": [
+        {
+          "text": "API_INTERNAL_URL",
+          "line": 22
+        },
+        {
+          "text": "gh release",
+          "line": 173
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/azure-web-artifact.yml",
+      "sha256": "a8c6ef129651133edee1e206f746582dd518c7d81bf43ef41abcb01072c19834",
+      "line_count": 68,
+      "anchors": [
+        {
+          "text": "NEXT_PUBLIC_DATA_PROVIDER",
+          "line": 26
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/production-smoke.yml",
+      "sha256": "8fca26d2e6dc3460621c28341c3e712db39f4ab218737b00bbf094afe8289687",
+      "line_count": 41,
+      "anchors": [
+        {
+          "text": "Check public API proxy",
+          "line": 17
+        }
+      ]
+    },
+    {
+      "path": "backend/deploy/bootstrap_flare_api.sh",
+      "sha256": "424a4c10b4327226950ab8f5ffc2296314eb9ebe4a24435cc02d3f32432eddad",
+      "line_count": 24,
+      "anchors": [
+        {
+          "text": "--no-access-log",
+          "line": 24
+        }
+      ]
+    },
+    {
+      "path": "backend/app/main.py",
+      "sha256": "653538f8cfd1e9fd5384cd333fb69faf37d119da2cbe0ae1913f0b286579f11d",
+      "line_count": 162,
+      "anchors": [
+        {
+          "text": "async def safe_request_log",
+          "line": 108
+        }
+      ]
+    },
+    {
+      "path": "frontend/next.config.ts",
+      "sha256": "d57dafbac5574fd5f70ee0679e38ba8f6b39df8801a8073c001543f6ec4fc41a",
+      "line_count": 55,
+      "anchors": [
+        {
+          "text": "connect-src 'self'",
+          "line": 10
+        },
+        {
+          "text": "async redirects",
+          "line": 39
+        }
+      ]
+    },
+    {
+      "path": "frontend/package.json",
+      "sha256": "76e06efe002bfc21c20fcddc9518f03cb54e155a92c386cf26b938690e0ef599",
+      "line_count": 8,
+      "anchors": [
+        {
+          "text": "dependencies",
+          "line": 6
+        }
+      ]
+    },
+    {
+      "path": "backend/pyproject.toml",
+      "sha256": "c25cabc49267418f959625bb35ed88a4b3c51886d30a9211f02efa2b2ae74979",
+      "line_count": 31,
+      "anchors": [
+        {
+          "text": "dependencies =",
+          "line": 10
+        }
+      ]
+    },
+    {
+      "path": "backend/app/api/analytics.py",
+      "sha256": "05c21c1540a140106944d1c95f45bcccc1b98ba50f374f6126cd623571cbec67",
+      "line_count": 67,
+      "anchors": [
+        {
+          "text": "Depends(verified_user)",
+          "line": 25
+        },
+        {
+          "text": "@router.get",
+          "line": 59
+        }
+      ]
+    },
+    {
+      "path": "backend/app/models/events.py",
+      "sha256": "64c207076c1a7fb0041cc54a4b71b1e46660d817602001674e841461e7892c33",
+      "line_count": 125,
+      "anchors": [
+        {
+          "text": "class ActivityEvent:",
+          "line": 18
+        },
+        {
+          "text": "_SUMMARY_SQL",
+          "line": 38
+        },
+        {
+          "text": "reserve_client_event_slot",
+          "line": 94
+        }
+      ]
+    },
+    {
+      "path": "backend/app/services/analytics_service.py",
+      "sha256": "90425ee2c7650e02d4fb92aa0af2ce3e3ef58dcec8bf43a640064c522c4b8ab6",
+      "line_count": 395,
+      "anchors": [
+        {
+          "text": "ALLOWED_EVENTS =",
+          "line": 39
+        },
+        {
+          "text": "CLIENT_EVENTS =",
+          "line": 70
+        },
+        {
+          "text": "MAX_CLIENT_EVENTS_PER_HOUR",
+          "line": 231
+        },
+        {
+          "text": "def track_event_best_effort",
+          "line": 319
+        }
+      ]
+    },
+    {
+      "path": "backend/migrations/versions/0012_activity_events_and_source_types.py",
+      "sha256": "a3671ebcdac83692a34a9712a8c599ebd9a85d47360eb826cb191961e99beb1a",
+      "line_count": 94,
+      "anchors": [
+        {
+          "text": "CREATE TABLE public.activity_events",
+          "line": 36
+        },
+        {
+          "text": "activity_event_actor_insert",
+          "line": 73
+        }
+      ]
+    },
+    {
+      "path": "backend/app/api/routes.py",
+      "sha256": "24046e77ad079941fa748a5c712dfda980ca43332eb7b595ff4901ac68c4871c",
+      "line_count": 288,
+      "anchors": [
+        {
+          "text": "event_type=\"item_created\"",
+          "line": 143
+        }
+      ]
+    },
+    {
+      "path": "backend/app/api/imports.py",
+      "sha256": "4c944ef512b1428298b85bad518986b2e4257e1951d7f1ce9f36732b913377a7",
+      "line_count": 130,
+      "anchors": [
+        {
+          "text": "def _track_safely",
+          "line": 66
+        },
+        {
+          "text": "if not result.created",
+          "line": 111
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/lib/data/api-provider.ts",
+      "sha256": "bd5c065efc999d34c8b900fed6fd0ea61042aeec73d75574aa1e98970c2a1c6b",
+      "line_count": 603,
+      "anchors": [
+        {
+          "text": "async trackEvent",
+          "line": 584
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/features/auth/auth-form.tsx",
+      "sha256": "ff9984ca30c67ef373fe233cbfb6b3769c8af917950bea050e970ee4ce01cf8f",
+      "line_count": 201,
+      "anchors": [
+        {
+          "text": "const result = await authRequest",
+          "line": 32
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/features/capture/capture.tsx",
+      "sha256": "62297c39d5b937ded46e4b4e7c4f2a5911047a3cfed6d24319ad02a47051fdc4",
+      "line_count": 649,
+      "anchors": [
+        {
+          "text": "eventType: \"capture_started\"",
+          "line": 171
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/features/insights/view-analytics.ts",
+      "sha256": "7222773c76883337262c70b17d4dfde9b4f2065fb095d5e3d5ec44054cd9196c",
+      "line_count": 23,
+      "anchors": [
+        {
+          "text": "export function nextFlareViewEvent",
+          "line": 7
+        }
+      ]
+    },
+    {
+      "path": "backend/app/api/auth.py",
+      "sha256": "3de4a88b0ff75d12f210862beb81f8905f49426b7015b46bade13374acfa88a3",
+      "line_count": 297,
+      "anchors": [
+        {
+          "text": "class RegisterRequest",
+          "line": 48
+        },
+        {
+          "text": "@router.post(\"/register\"",
+          "line": 178
+        }
+      ]
+    },
+    {
+      "path": "backend/app/services/auth_service.py",
+      "sha256": "0316d89ff255d703c954e5f757de7063756f8dcaebbdafba1f95289dd28ff299",
+      "line_count": 249,
+      "anchors": [
+        {
+          "text": "def register",
+          "line": 83
+        },
+        {
+          "text": "if verification_token is None",
+          "line": 104
+        }
+      ]
+    },
+    {
+      "path": "backend/app/models/auth.py",
+      "sha256": "6a5dab75acd749e70394342b5cd308a3031ef37d2230869ea9f90fcef2ed706c",
+      "line_count": 167,
+      "anchors": [
+        {
+          "text": "def touch",
+          "line": 98
+        },
+        {
+          "text": "def consume_and_verify_email",
+          "line": 134
+        },
+        {
+          "text": "def mark_email_verified",
+          "line": 154
+        }
+      ]
+    },
+    {
+      "path": "backend/migrations/versions/0004_auth.py",
+      "sha256": "23908f23e9ec54b39e1ed7763e0f593f24ea4dedeeed130098d6fc85593e71f9",
+      "line_count": 85,
+      "anchors": [
+        {
+          "text": "CREATE TABLE public.auth_users",
+          "line": 24
+        },
+        {
+          "text": "CREATE TABLE public.auth_sessions",
+          "line": 33
+        }
+      ]
+    },
+    {
+      "path": "backend/migrations/versions/0008_email_verification.py",
+      "sha256": "cb82f65e9e13a4f894e0cf248665c81087e038b440fd422879879b3cf4e6b644",
+      "line_count": 80,
+      "anchors": [
+        {
+          "text": "Users created before this migration",
+          "line": 59
+        }
+      ]
+    },
+    {
+      "path": "backend/migrations/versions/0007_analysis_runs.py",
+      "sha256": "1237f9df2d461ed9e28788fd0141a32116ae16cd01224957151c6bc63c512139",
+      "line_count": 178,
+      "anchors": [
+        {
+          "text": "CREATE FUNCTION public.read_analysis_run",
+          "line": 131
+        }
+      ]
+    },
+    {
+      "path": "backend/migrations/versions/0015_daily_analysis_schedule.py",
+      "sha256": "25034b65feb7ab3a730a90383ad60147a3677ad9e71c63aa5e5e28057f0618f2",
+      "line_count": 1006,
+      "anchors": [
+        {
+          "text": "CREATE FUNCTION public.activity_event_maintenance",
+          "line": 806
+        }
+      ]
+    },
+    {
+      "path": "backend/app/api/schemas.py",
+      "sha256": "5be40984782e9f610ffc89e7ea930726db6c72d71af9b3b70eac0853fd82d37e",
+      "line_count": 341,
+      "anchors": [
+        {
+          "text": "activity_event_retention_days: int",
+          "line": 271
+        }
+      ]
+    },
+    {
+      "path": "backend/app/workers/scheduler.py",
+      "sha256": "ce2fc0da4ec75d642c00cc5f6fb509ee77f3e11d4b34e94049efe4b0ee1319d5",
+      "line_count": 130,
+      "anchors": [
+        {
+          "text": "def ",
+          "line": 21
+        }
+      ]
+    },
+    {
+      "path": "backend/app/workers/analysis_worker.py",
+      "sha256": "04d2b4946ab07726979b63f998a0af9238e2ad48def4505a8291cca7a20da2c7",
+      "line_count": 105,
+      "anchors": [
+        {
+          "text": "def ",
+          "line": 29
+        }
+      ]
+    }
+  ],
+  "attribution_instrumentation_search": {
+    "argv": [
+      "rg",
+      "-n",
+      "-i",
+      "utm_|referrer|referral|attribution|visitor_id|appinsights|applicationinsights|azure-monitor|opentelemetry",
+      "frontend/src",
+      "backend/app",
+      ".github",
+      "backend/deploy",
+      "-g",
+      "!.env*",
+      "-g",
+      "!*.lock"
+    ],
+    "exit_code": 0,
+    "hits": [
+      "backend/app/main.py:117:            response.headers[\"Referrer-Policy\"] = \"strict-origin-when-cross-origin\"",
+      "frontend/src/features/vault/vault-page.tsx:462:                rel=\"noreferrer\""
+    ],
+    "interpretation": "Only referrer-policy/header declarations, not acquisition capture or Azure instrumentation. Negative source search does not prove no portal configuration."
+  },
+  "tracked_infrastructure_filename_matches": [],
+  "limitations": [
+    "No .env or credential file contents read.",
+    "No Azure CLI or Azure management connector available; no credential inspection attempted.",
+    "Source observation and public deployment observations are separate snapshots.",
+    "No account/event writes, private telemetry reads or production database queries."
+  ],
+  "coordination": {
+    "claim": {
+      "ok": true,
+      "base_sha": "1dc923c0ea80a43cab908f81c6eb644ae017a392",
+      "commit_sha": "7d734d4deabb90eb0d22a6e2840bf8755f44c13b",
+      "changed_paths": [
+        "project-ops/STATUS.md",
+        "project-ops/work/ACTIVE.md",
+        "project-ops/work/NEXT.md"
+      ]
+    },
+    "scope_publication_sha": "6c62eaa9e05b103ecee1b20e42f68d34cc0d7d00",
+    "prepublish_context_sha": "062a75f599bf896d19fef591a1650b989c2ffff0",
+    "active_tasks": [
+      {
+        "id": "GROWTH-001",
+        "scope": [
+          "docs/research/GROWTH-001/"
+        ],
+        "action": "Read-only Azure/repository inventory, acquisition and funnel comparison; only GROWTH report artifacts"
+      },
+      {
+        "id": "DATA-001",
+        "scope": [
+          "docs/research/DATA-001/"
+        ],
+        "action": "Inspect repository and primary documentation; measure bounded synthetic ZIP processing; design ingestion contract only"
+      }
+    ],
+    "arch_report_head": "d2fef70c545bc0229487c637315279985b9d4682",
+    "arch_report_review": "Section 6 shared outcome proposals are consistent: import publication and Analyze outcomes are distinct from enrichment readiness, without content/per-chunk funnel payloads. This is compatibility inspection, not owner acceptance.",
+    "main_advance_diff": [
+      "project-ops/STATUS.md",
+      "project-ops/updates/2026-10.md",
+      "project-ops/work/ACTIVE.md",
+      "project-ops/work/REVIEW.md"
+    ]
+  }
+}
