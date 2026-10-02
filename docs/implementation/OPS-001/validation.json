@@ -1,0 +1,153 @@
+{
+  "task": "OPS-001",
+  "validated_at_utc": "2026-10-02T09:33:16.789066+00:00",
+  "source_base_sha": "99fa263724cabfb82245aa4d225a215d6ae60b00",
+  "scope": "docs/implementation/OPS-001/",
+  "checks_passed": 34,
+  "checks_total": 34,
+  "checks": [
+    {
+      "name": "regular artifacts without symlinks",
+      "passed": true
+    },
+    {
+      "name": "dated report and owner",
+      "passed": true
+    },
+    {
+      "name": "claim/base/branch provenance",
+      "passed": true
+    },
+    {
+      "name": "classification: VERIFIED DEPLOYED FACT",
+      "passed": true
+    },
+    {
+      "name": "classification: REPOSITORY DECLARATION",
+      "passed": true
+    },
+    {
+      "name": "classification: AZURE PLATFORM CAPABILITY",
+      "passed": true
+    },
+    {
+      "name": "classification: OWNER DECISION NEEDED",
+      "passed": true
+    },
+    {
+      "name": "classification: UNKNOWN / EVIDENCE REQUIRED",
+      "passed": true
+    },
+    {
+      "name": "exact blockers B1 through B8",
+      "passed": true
+    },
+    {
+      "name": "pending Vova decisions D1 through D8",
+      "passed": true
+    },
+    {
+      "name": "operator evidence E1 through E7",
+      "passed": true
+    },
+    {
+      "name": "independent DATA application delivery",
+      "passed": true
+    },
+    {
+      "name": "no inferred acceptance",
+      "passed": true
+    },
+    {
+      "name": "declared topology conflict",
+      "passed": true
+    },
+    {
+      "name": "no safe load target claim",
+      "passed": true
+    },
+    {
+      "name": "no Azure control-plane inventory claim",
+      "passed": true
+    },
+    {
+      "name": "report.md balanced fences",
+      "passed": true
+    },
+    {
+      "name": "report.md table columns",
+      "passed": true
+    },
+    {
+      "name": "report.md local links",
+      "passed": true
+    },
+    {
+      "name": "report.md pinned source paths and line anchors",
+      "passed": true
+    },
+    {
+      "name": "at least 20 pinned source references",
+      "passed": true
+    },
+    {
+      "name": "operator-evidence.md balanced fences",
+      "passed": true
+    },
+    {
+      "name": "operator-evidence.md table columns",
+      "passed": true
+    },
+    {
+      "name": "operator-evidence.md local links",
+      "passed": true
+    },
+    {
+      "name": "operator-evidence.md pinned source paths and line anchors",
+      "passed": true
+    },
+    {
+      "name": "six dated unauthenticated GET observations",
+      "passed": true
+    },
+    {
+      "name": "probe allowlist and successful outcomes",
+      "passed": true
+    },
+    {
+      "name": "live CSP evidence",
+      "passed": true
+    },
+    {
+      "name": "report.md forbidden secret/resource-ID patterns",
+      "passed": true
+    },
+    {
+      "name": "operator-evidence.md forbidden secret/resource-ID patterns",
+      "passed": true
+    },
+    {
+      "name": "public-probes.json forbidden secret/resource-ID patterns",
+      "passed": true
+    },
+    {
+      "name": "all substantive changes in declared directory",
+      "passed": true
+    },
+    {
+      "name": "only expected report artifacts",
+      "passed": true
+    },
+    {
+      "name": "git diff whitespace",
+      "passed": true
+    }
+  ],
+  "artifact_sha256": {
+    "report.md": "65d5f8b16b9f4c9d43ab1ad024b581db82a7d837fd798c0043a004cd7b2f17fa",
+    "operator-evidence.md": "8e8a69769886dd5a7f2f13657e156998f06c69d43e5f6d882fec821749f2ed60",
+    "public-probes.json": "a01a09bab7122d8842559d805070980917b53d9404e8e838826a69871e4451c9",
+    "validate_report.py": "9abb2edc26a4440b998de6771891ef57b1d99d8f5d2bab21ace596530f5d4718"
+  },
+  "limitations": "Offline documentation/scope/redaction checks only; no Azure inventory, capacity, acceptance or production mutation verification. Pattern scan is not proof of arbitrary-secret detection; manual review is also required."
+}
