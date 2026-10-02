@@ -23,6 +23,8 @@ import {
   type CaptureSize,
 } from "./capture-position";
 import { useVoiceCapture } from "./use-voice-capture";
+import { advanceFunnyShake, beginShake, funnyMessage, moveShake, REQUIRED_SHAKES, type ShakeTracker } from "@/features/funny/funny-state";
+import { playFunnySound } from "@/features/funny/funny-sounds";
 
 class CaptureInputError extends Error {}
 
@@ -36,6 +38,7 @@ type PointerStart = {
   orbX: number;
   orbY: number;
   moved: boolean;
+  ritual: boolean;
 };
 
 function importFormatForFile(file: File): ImportFormat | null {
@@ -63,6 +66,8 @@ export function Capture() {
     setDraft,
     refresh,
     captureOrbSize,
+    funnyMode, funnySounds, funnyRitual, setFunnyRitual,
+    funnyAudioPaused, setFunnyAudioPaused,
   } = useWorkspace();
   const orbSize =
     captureOrbSize === "small" ? 36 : captureOrbSize === "large" ? 52 : 44;
@@ -86,6 +91,19 @@ export function Capture() {
   const closeTimer = useRef<number | null>(null);
   const voice = useVoiceCapture();
   const voiceIsland = !["idle", "error", "ready"].includes(voice.state);
+  const ritualActive = funnyMode && ["armed", "shaken", "thinking"].includes(funnyRitual.phase);
+  const shakeTracker = useRef<ShakeTracker | null>(null);
+  const [shakeOffset, setShakeOffset] = useState(0);
+
+  useEffect(() => {
+    setFunnyAudioPaused(voiceIsland);
+    return () => setFunnyAudioPaused(false);
+  }, [voiceIsland, voice.state, setFunnyAudioPaused]);
+
+  const shakeBall = () => {
+    setFunnyRitual(advanceFunnyShake);
+    playFunnySound("shake", funnySounds && !funnyAudioPaused);
+  };
 
   useEffect(() => () => {
     if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
@@ -229,12 +247,24 @@ export function Capture() {
       orbX: rect.left + rect.width / 2,
       orbY: rect.top + rect.height / 2,
       moved: false,
+      ritual: ritualActive,
     };
+    shakeTracker.current = ritualActive ? beginShake(event.clientX, event.clientY, event.timeStamp) : null;
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const moveOrb = (event: React.PointerEvent<HTMLButtonElement>) => {
     const start = pointerStart.current;
     if (!start || start.pointerId !== event.pointerId) return;
+    if (start.ritual) {
+      if (shakeTracker.current) {
+        const next = moveShake(shakeTracker.current, event.clientX, event.clientY, event.timeStamp);
+        shakeTracker.current = next.tracker;
+        if (next.shake && ritualActive) shakeBall();
+      }
+      start.moved = true;
+      setShakeOffset(Math.max(-24, Math.min(24, event.clientX - start.pointerX)));
+      return;
+    }
     const distance = Math.hypot(
       event.clientX - start.pointerX,
       event.clientY - start.pointerY,
@@ -254,8 +284,10 @@ export function Capture() {
     const start = pointerStart.current;
     if (!start || start.pointerId !== event.pointerId) return;
     pointerStart.current = null;
+    shakeTracker.current = null;
     event.currentTarget.releasePointerCapture(event.pointerId);
     suppressClick.current = true;
+    if (start.ritual) { setShakeOffset(0); return; }
     if (start.moved) {
       if (!viewport) return;
       const next = clampOrbPosition({
@@ -275,6 +307,8 @@ export function Capture() {
   };
   const cancelOrbDrag = () => {
     pointerStart.current = null;
+    shakeTracker.current = null;
+    setShakeOffset(0);
     setOrbDragging(false);
   };
 
@@ -361,7 +395,7 @@ export function Capture() {
     ? "voice"
     : captureOpen
       ? "capture"
-      : hovered
+      : hovered && !funnyMode
         ? "hover"
         : "idle";
   const expandedWidth = orbSize + Math.max(76, t("Add context").length * 8) + 12 + 14;
@@ -396,7 +430,7 @@ export function Capture() {
     <>
       <div
         ref={island}
-        className={`flare-capture orb-size-${captureOrbSize} flare-capture--${stage} flare-capture--expand-${hoverPlacement?.direction ?? "right"} ${dragging ? "is-dragging" : ""} ${orbDragging ? "is-orb-dragging" : ""}`}
+        className={`flare-capture orb-size-${captureOrbSize} flare-capture--${stage} flare-capture--expand-${hoverPlacement?.direction ?? "right"} ${dragging ? "is-dragging" : ""} ${orbDragging ? "is-orb-dragging" : ""} ${funnyMode ? "flare-capture--funny" : ""} ${ritualActive ? "flare-capture--ritual" : ""}`}
         data-capture-state={stage}
         style={
           orbPosition
@@ -404,6 +438,8 @@ export function Capture() {
                 left: orbPosition.x - orbSize / 2,
                 top: orbPosition.y - orbSize / 2,
                 "--flare-hover-width": `${expandedWidth}px`,
+                "--funny-callout-left": `${orbPosition.x - 140}px`,
+                "--funny-callout-top": `${orbPosition.y > (viewport?.height ?? 800) - 210 ? orbPosition.y - 170 : orbPosition.y + orbSize / 2 + 16}px`,
               } as CSSProperties
             : undefined
         }
@@ -413,27 +449,53 @@ export function Capture() {
         {stage === "idle" || stage === "hover" ? (
           <button
             className="flare-capture-trigger"
-            aria-label={t("Add context")}
-            aria-haspopup="dialog"
+            aria-label={ritualActive ? t("Shake the Magic 8-ball. Drag back and forth, or press Space or Enter four times.") : funnyMode ? t("Magic 8-ball: add context") : t("Add context")}
+            aria-haspopup={ritualActive ? undefined : "dialog"}
+            aria-describedby={ritualActive ? "funny-ball-instructions" : undefined}
             aria-expanded={captureOpen}
+            data-funny-sound={funnyMode ? "off" : undefined}
             onFocus={() => setHovered(true)}
             onBlur={() => setHovered(false)}
             onPointerDown={startOrbDrag}
             onPointerMove={moveOrb}
             onPointerUp={finishOrbDrag}
             onPointerCancel={cancelOrbDrag}
+            onLostPointerCapture={cancelOrbDrag}
+            onKeyDown={(event) => {
+              if (ritualActive && (event.key === " " || event.key === "Enter")) {
+                event.preventDefault();
+                if (!event.repeat) shakeBall();
+              }
+            }}
             onClick={() => {
               if (suppressClick.current) {
                 suppressClick.current = false;
                 return;
               }
-              openCapture();
+              if (!ritualActive) openCapture();
             }}
           >
-            <span className="flare-orb" aria-hidden="true" />
+            <span className={`flare-orb ${funnyMode ? "funny-ball" : ""}`} aria-hidden="true"
+              data-phase={funnyRitual.phase} data-shaking={shakeOffset !== 0}
+              style={funnyMode ? { "--funny-shake-x": `${shakeOffset}px` } as CSSProperties : undefined}>
+              {funnyMode && <><span className="funny-ball-shine" /><span key={ritualActive ? funnyRitual.shakes : 0} className="funny-ball-number">8</span></>}
+            </span>
             <span className="flare-capture-label">{t("Add context")}</span>
           </button>
         ) : <span className="flare-capture-anchor" aria-hidden="true" />}
+        {funnyMode && !captureOpen && !voiceIsland && funnyRitual.phase !== "idle" && (
+          <div className="funny-ball-callout" id="funny-ball-instructions" role="status" aria-live="polite">
+            <strong>{funnyMessage(funnyRitual)}</strong>
+            {funnyRitual.phase === "armed" && <>
+              <span className="funny-ball-hint">{t("Shake instructions")}</span>
+              <span className="funny-ball-progress" aria-label={`${Math.min(funnyRitual.shakes, REQUIRED_SHAKES)} of ${REQUIRED_SHAKES} shakes`}>
+                {Array.from({ length: REQUIRED_SHAKES }, (_, index) => <i key={index} data-complete={index < funnyRitual.shakes} />)}
+              </span>
+            </>}
+            {["complete", "empty", "error"].includes(funnyRitual.phase) && <button className="text-button"
+              onClick={() => setFunnyRitual((value) => ({ ...value, phase: "idle", shakes: 0 }))}>{t("Got it")}</button>}
+          </div>
+        )}
         {voiceIsland ? (
           <div
             ref={panel as React.RefObject<HTMLDivElement>}
@@ -586,9 +648,11 @@ export function Capture() {
                 className="icon-button"
                 aria-label={t("Record a voice memo")}
                 title={t("Record a voice memo (English transcription)")}
+                data-funny-sound="off"
                 disabled={busy || voiceIsland || !!voice.recording || !!file || !!draft.trim()}
                 onClick={() => {
                   setError("");
+                  setFunnyAudioPaused(true);
                   void dataProvider.trackEvent({ eventType: "capture_voice_started", targetType: "capture" });
                   void voice.start();
                 }}

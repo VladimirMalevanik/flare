@@ -21,6 +21,7 @@ function load(relative, mocks = {}) {
       if (name in mocks) return mocks[name];
       if (name === "@/i18n/provider") return require("./i18n-utils.cjs").i18nMock();
       if (name === "@/components/language-selector") return { LanguageSelector: "language-selector" };
+      if (name === "@/features/funny/funny-sounds") return { playFunnySound() {} };
       throw Error(`Unexpected import ${name}`);
     },
   });
@@ -59,6 +60,10 @@ function renderSettings(supportEmail) {
         setCompact() {},
         captureOrbSize: "medium",
         setCaptureOrbSize() {},
+        funnyMode: false,
+        funnySounds: true,
+        setFunnyMode() {},
+        setFunnySounds() {},
         profile: {
           name: "Flare User",
           email: "user@example.com",

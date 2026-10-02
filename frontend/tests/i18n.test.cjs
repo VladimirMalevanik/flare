@@ -23,6 +23,9 @@ function load(relative, mocks = {}, globals = {}) {
     if (name === '@/components/brand-mark') return { BrandMark: 'brand-mark' };
     if (name === '@/components/icons') return { Icon: 'icon', itemIcon: { note: 'note' } };
     if (name === '@/components/dialog') return { Dialog: 'dialog' };
+    if (name === '@/features/funny/funny-state') return loadPure('../src/features/funny/funny-state.ts');
+    if (name === '@/features/funny/funny-sounds') return { playFunnySound() {}, speakFunnyLine() {}, stopFunnySounds() {} };
+    if (name === '@/features/funny/funny-effects') return { FunnyEffects: 'funny-effects' };
     if (name === '@/lib/support') return { DEFAULT_SUPPORT_EMAIL: 'support@flare4u.tech', supportMailto: () => 'mailto:support@flare4u.tech' };
     throw Error(`Unexpected import ${name}`);
   } });
@@ -150,7 +153,7 @@ test('landing selectors and translated demo retain tab, filter, and evidence sta
 });
 
 const profile = { name: 'José Founder', role: 'Founder', email: 'user@example.test', timezone: 'UTC' };
-const workspace = { useWorkspace: () => ({ profile, captureOrbSize: 'medium', theme: 'light', revision: 0, draft: 'User content — keep unchanged', captureOpen: true, openCapture() {}, closeCapture() {}, setDraft() {}, refresh() {}, setTheme() {}, setCompact() {}, setCaptureOrbSize() {}, updateProfile() {} }) };
+const workspace = { useWorkspace: () => ({ profile, captureOrbSize: 'medium', theme: 'light', revision: 0, draft: 'User content — keep unchanged', captureOpen: true, funnyMode: false, funnySounds: true, funnyRitual: { phase: 'idle', requestId: 0, shakes: 0 }, funnyAudioPaused: false, setFunnyMode() {}, setFunnySounds() {}, setFunnyRitual() {}, setFunnyAudioPaused() {}, openCapture() {}, closeCapture() {}, setDraft() {}, refresh() {}, setTheme() {}, setCompact() {}, setCaptureOrbSize() {}, updateProfile() {} }) };
 function screenMocks(h, locale) {
   return { react: h.react, '@/i18n/provider': i18nMock(locale), '@/components/workspace-context': workspace,
     '@/components/auth-session': { useSession: () => null },

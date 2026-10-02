@@ -12,6 +12,7 @@ import {
 import { readLocal, writeLocal } from "@/lib/storage/preferences";
 import { LanguageSelector } from "@/components/language-selector";
 import { useI18n } from "@/i18n/provider";
+import { playFunnySound } from "@/features/funny/funny-sounds";
 import {
   dataErrorMessage,
   dataProvider,
@@ -44,6 +45,11 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
     setCompact,
     captureOrbSize,
     setCaptureOrbSize,
+    funnyMode,
+    setFunnyMode,
+    funnySounds,
+    setFunnySounds,
+    funnyAudioPaused,
     profile,
     updateProfile,
   } = useWorkspace();
@@ -267,6 +273,39 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
         </div>
         <SettingRow title={t("language")} description={t("languageDescription")}>
           <LanguageSelector compact={false} />
+        </SettingRow>
+        <SettingRow
+          title={t("Funny mode")}
+          description={t("More color. A Magic 8-ball. Same real Flares. Shake the ball to start a new analysis. Saved in this browser.")}
+        >
+          <input
+            className="switch"
+            type="checkbox"
+            aria-label={t("Funny mode")}
+            checked={funnyMode}
+            data-funny-sound="off"
+            onChange={(event) => {
+              setFunnyMode(event.target.checked);
+              playFunnySound("enable", event.target.checked && funnySounds && !funnyAudioPaused);
+            }}
+          />
+        </SettingRow>
+        <SettingRow
+          title={t("Funny sounds")}
+          description={t("Tiny button boops and an English voice nudge. Always quiet while recording voice.")}
+        >
+          <input
+            className="switch"
+            type="checkbox"
+            aria-label={t("Funny sounds")}
+            checked={funnySounds}
+            disabled={!funnyMode}
+            data-funny-sound="off"
+            onChange={(event) => {
+              setFunnySounds(event.target.checked);
+              playFunnySound("enable", event.target.checked && funnyMode && !funnyAudioPaused);
+            }}
+          />
         </SettingRow>
         <SettingRow
           title={t("Compact interface density")}

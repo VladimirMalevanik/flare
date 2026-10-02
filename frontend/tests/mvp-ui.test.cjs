@@ -14,6 +14,8 @@ function load(relative, mocks) {
   vm.runInNewContext(code, { exports, require: (name) => {
     if (name in mocks) return mocks[name];
     if (name === '@/i18n/provider') return require('./i18n-utils.cjs').i18nMock();
+    if (name === '@/features/funny/funny-state') return load('../src/features/funny/funny-state.ts', {});
+    if (name === '@/features/funny/funny-sounds') return { playFunnySound() {} };
     throw Error(`Unexpected import ${name}`);
   } });
   return exports;
@@ -37,7 +39,7 @@ function capture(draft) {
     react: { useState: (initial) => [initial, (value) => messages.push(value)], useRef: () => ({ current: null }), useEffect: () => {}, useLayoutEffect: () => {}, useCallback: (fn) => fn },
     'next/link': { default: 'a' },
     '@/components/icons': { Icon: 'icon' },
-    '@/components/workspace-context': { useWorkspace: () => ({ captureOpen: true, draft, captureOrbSize: 'medium', openCapture() {}, closeCapture() {}, setDraft() {}, refresh() {} }) },
+    '@/components/workspace-context': { useWorkspace: () => ({ captureOpen: true, draft, captureOrbSize: 'medium', funnyMode: false, funnySounds: true, funnyRitual: { phase: 'idle', requestId: 0, shakes: 0 }, funnyAudioPaused: false, setFunnyRitual() {}, setFunnyAudioPaused() {}, openCapture() {}, closeCapture() {}, setDraft() {}, refresh() {} }) },
     '@/lib/data': { dataProvider: { async createItem(input) { requests.push(input); return { id: 'saved' }; }, async importTextFile() { return { item: { id: 'imported' } }; }, async trackEvent() {} }, dataErrorMessage: () => 'error' },
     '@/lib/storage/preferences': {},
     '@/lib/voice': { async transcribeVoice() { return { id: 'voice-saved' }; } },

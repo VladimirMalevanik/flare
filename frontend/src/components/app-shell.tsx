@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Icon } from "./icons";
 import { WorkspaceProvider, useWorkspace } from "./workspace-context";
 import { Capture } from "@/features/capture/capture";
+import { FunnyEffects } from "@/features/funny/funny-effects";
 import { dataProvider } from "@/lib/data";
 import { Dialog } from "./dialog";
 import { BrandMark } from "./brand-mark";
@@ -141,6 +142,7 @@ function Shell({ children }: { children: ReactNode }) {
         </Dialog>
       )}
       <Capture />
+      <FunnyEffects />
       <main id="main-content" className="workspace">
         {children}
       </main>
