@@ -2,9 +2,9 @@
 
 > Этот файл генерирует `task-sync`; вручную его не редактируют.
 
-Сформировано: `2026-10-02T13:05:55Z`
-Последнее обновление работы: `2026-10-02T13:05:55Z`
-Снимок состояния: `sha256:4f11e3d52a7a57d8aa854b48985ad3d45cbc23af045b4e6ceb2e82f70fe35d09`
+Сформировано: `2026-10-02T13:31:02Z`
+Последнее обновление работы: `2026-10-02T13:31:02Z`
+Снимок состояния: `sha256:dde0aca0fce63889cca02c55db6b8f79fccc857588db086f88c7950a622768d6`
 
 ## Ближайшая цель
 
@@ -14,7 +14,7 @@
 
 ## Ближайшие шаги (не более пяти)
 
-1. `WEB-002` (в работе) — Add a Subscription section to Settings with Free, Pro and Team descriptions; grey Current for the current Free tier and blue Buy actions. Connect Pro Buy to official Paddle.js Sandbox overlay using public env placeholders and price pri_01m3y1nvmgw2avt60bz87161c2, quantity 1, authenticated email and customData.userId. Enforce sandbox-only tokens, single initialization and checkout locking, localized recoverable errors, existing design/auth preservation and frontend checks. Team stays explicitly unconfigured until a separate Sandbox price exists. No Live, server API key, webhooks, entitlement/DB changes, portal, cancellation or deployment.. Сейчас: Build isolated Subscription UI and Sandbox-only Paddle client; preserve review-stage Funny mode files through minimal Settings mounting
+1. `WEB-002` (в работе) — Add a Subscription section to Settings with Free, Pro and Team descriptions; grey Current for the current Free tier and blue Buy actions. Connect Pro Buy to official Paddle.js Sandbox overlay using public env placeholders and price pri_01m3y1nvmgw2avt60bz87161c2, quantity 1, authenticated email and customData.userId. Enforce sandbox-only tokens, single initialization and checkout locking, localized recoverable errors, existing design/auth preservation and frontend checks. Team stays explicitly unconfigured until a separate Sandbox price exists. No Live, server API key, webhooks, entitlement/DB changes, portal, cancellation or deployment.. Сейчас: Implementation published; create review PR and hand off missing public Sandbox token for actual checkout verification
 2. `WEB-001` (на проверке) — Implement opt-in Funny mode: persisted settings toggle, colorful light/dark theme, Magic 8-ball replacing capture orb, English shake instructions, single real Analyze request after deliberate shaking, progress/result animation and bounded muteable funny sounds. Preserve daily allowance, auth, capture/voice, true empty/error results and reduced-motion accessibility. No backend, schema or production dependency changes.. Условие: Review opt-in Funny mode, Magic 8-ball interaction and saved mute/theme preferences in PR #31. Owner acceptance, merge and deployment pending.
 3. `DATA-002` (на проверке) — Implement production-quality asynchronous one-time Notion/Obsidian ZIP onboarding, including package gate, tenant-safe jobs, provenance/idempotency, configurable reservations, local/test staging, recovery/cleanup and Vault integration. Full required contract and acceptance checks: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#data-002. No automatic Analyze or AI provider calls.. Условие: Review the complete asynchronous Notion/Obsidian ZIP onboarding application, linear migration 0019, package-gated publication, tenant-safe worker/recovery/cleanup, configurable local-test staging and EN/ES UI. Owner acceptance and product integration remain pending; production OPS/Vova decisions and browser visual QA remain separate. Do not mark done.; зависит от: DATA-001
 4. `OPS-001` (на проверке) — Resolve production staging service/upload path, API-worker storage reachability, worker isolation/resources, storage identity/network/CORS, physical ZIP deletion/retention and monitoring/load-test environment. Publish dated redacted operator decisions/evidence; no provisioning. Contract: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#ops-001.. Условие: Review redacted runtime/staging decision and evidence record; Vova selection/acceptance and sanitized inventory remain pending. Do not mark done or authorize rollout from public probes.
@@ -22,7 +22,7 @@
 
 ## В работе
 
-- `WEB-002` (в работе) — Add a Subscription section to Settings with Free, Pro and Team descriptions; grey Current for the current Free tier and blue Buy actions. Connect Pro Buy to official Paddle.js Sandbox overlay using public env placeholders and price pri_01m3y1nvmgw2avt60bz87161c2, quantity 1, authenticated email and customData.userId. Enforce sandbox-only tokens, single initialization and checkout locking, localized recoverable errors, existing design/auth preservation and frontend checks. Team stays explicitly unconfigured until a separate Sandbox price exists. No Live, server API key, webhooks, entitlement/DB changes, portal, cancellation or deployment.. Сейчас: Build isolated Subscription UI and Sandbox-only Paddle client; preserve review-stage Funny mode files through minimal Settings mounting; владелец: Vova / Codex / WEB-002
+- `WEB-002` (в работе) — Add a Subscription section to Settings with Free, Pro and Team descriptions; grey Current for the current Free tier and blue Buy actions. Connect Pro Buy to official Paddle.js Sandbox overlay using public env placeholders and price pri_01m3y1nvmgw2avt60bz87161c2, quantity 1, authenticated email and customData.userId. Enforce sandbox-only tokens, single initialization and checkout locking, localized recoverable errors, existing design/auth preservation and frontend checks. Team stays explicitly unconfigured until a separate Sandbox price exists. No Live, server API key, webhooks, entitlement/DB changes, portal, cancellation or deployment.. Сейчас: Implementation published; create review PR and hand off missing public Sandbox token for actual checkout verification; владелец: Vova / Codex / WEB-002
 
 ## На проверке
 
