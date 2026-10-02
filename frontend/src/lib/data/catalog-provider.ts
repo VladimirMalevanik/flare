@@ -34,6 +34,7 @@ export class ProductionCatalogProvider implements FlareDataProvider {
     throw new Error("This operation requires the Flare API.");
   }
 
+  async getImportCapabilities(): Promise<{ available: boolean; maxUploadBytes: number | null }> { return { available: false, maxUploadBytes: null }; }
   async createImportPackage(_input: { sourceKind: ZipSourceKind; fileName: string; fileSize: number; requestKey: string }): Promise<ImportPackage> { throw new Error("ZIP imports require the Flare API."); }
   async uploadImportPackage(_id: string, _file: File, _signal?: AbortSignal): Promise<ImportPackage> { throw new Error("ZIP imports require the Flare API."); }
   async importPackageAction(_id: string, _action: "finalize" | "cancel" | "retry"): Promise<ImportPackage> { throw new Error("ZIP imports require the Flare API."); }

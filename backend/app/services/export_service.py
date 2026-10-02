@@ -25,6 +25,10 @@ SAFE_METADATA_KEYS = (
     "fileSize",
     "fileType",
     "originImportBatchId",
+    "importPackageId",
+    "relativePath",
+    "sourceKind",
+    "fileHash",
 )
 
 

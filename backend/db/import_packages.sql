@@ -11,17 +11,18 @@ CREATE TABLE public.import_packages (
  expires_at timestamptz NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), completed_at timestamptz,
  error_code text, retryable boolean NOT NULL DEFAULT false,
  entry_count int, prepared_count int NOT NULL DEFAULT 0, skipped_count int NOT NULL DEFAULT 0,
- published_count int NOT NULL DEFAULT 0, chunk_count int NOT NULL DEFAULT 0, reserved_bytes bigint NOT NULL DEFAULT 0,
+ failed_count int NOT NULL DEFAULT 0, published_count int NOT NULL DEFAULT 0, chunk_count int NOT NULL DEFAULT 0, reserved_bytes bigint NOT NULL DEFAULT 0,
  UNIQUE(workspace_id,id), UNIQUE(workspace_id,request_key),
  FOREIGN KEY(workspace_id,canonical_id) REFERENCES public.import_packages(workspace_id,id)
 );
 CREATE UNIQUE INDEX import_package_exact ON public.import_packages(workspace_id,source_kind,archive_hash)
  WHERE archive_hash IS NOT NULL AND status IN ('queued','processing','retry_wait','completed','completed_with_skips');
 CREATE INDEX import_queue ON public.import_packages(available_at,created_at) WHERE status IN ('queued','processing','retry_wait');
+CREATE INDEX import_expiry ON public.import_packages(expires_at) WHERE status='uploading';
 CREATE TABLE public.import_package_entries (
  workspace_id uuid NOT NULL, package_id uuid NOT NULL, ordinal int NOT NULL CHECK(ordinal>=0),
  path text NOT NULL, canonical_path text NOT NULL, file_bytes bigint NOT NULL CHECK(file_bytes>=0),
- skip_reason text, status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','prepared','skipped','published')),
+ skip_reason text, status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','prepared','skipped','published','failed')),
  file_hash text, parsed jsonb, document_id uuid, version_id uuid,
  PRIMARY KEY(workspace_id,package_id,ordinal), UNIQUE(workspace_id,package_id,canonical_path),
  FOREIGN KEY(workspace_id,package_id) REFERENCES public.import_packages(workspace_id,id),
@@ -122,7 +123,7 @@ BEGIN
   END IF;
   UPDATE public.import_packages SET status='queued',phase='inspect',job_deadline=clock_timestamp()+make_interval(secs=>(p.policy->>'job_seconds')::int) WHERE id=p.id;
  ELSIF p_action='retry' THEN
-  IF p.status<>'failed' OR NOT p.retryable OR p.attempts>=(p.policy->>'attempts')::int OR p.expires_at<=clock_timestamp() OR NOT EXISTS(SELECT 1 FROM public.import_objects WHERE key=p.object_key AND status='sealed') THEN RETURN jsonb_build_object('error','not_retryable'); END IF;
+  IF p.status NOT IN ('failed','retry_wait') OR NOT p.retryable OR p.attempts>=(p.policy->>'attempts')::int OR p.expires_at<=clock_timestamp() OR NOT EXISTS(SELECT 1 FROM public.import_objects WHERE key=p.object_key AND status='sealed') THEN RETURN jsonb_build_object('error','not_retryable'); END IF;
   UPDATE public.import_packages SET status='retry_wait',available_at=clock_timestamp(),error_code=NULL,job_deadline=clock_timestamp()+make_interval(secs=>(p.policy->>'job_seconds')::int) WHERE id=p.id;
  ELSE RETURN jsonb_build_object('error','invalid_action'); END IF;
  RETURN jsonb_build_object('id',p.id);
@@ -132,12 +133,13 @@ CREATE FUNCTION public.claim_import_package(p_global int) RETURNS jsonb LANGUAGE
  SET search_path=pg_catalog,public,pg_temp AS $$ DECLARE p public.import_packages; BEGIN
  IF p_global<1 THEN RAISE EXCEPTION 'Invalid bounds'; END IF;
  PERFORM pg_advisory_xact_lock(1919001);
- IF (SELECT count(*) FROM public.import_packages WHERE status='processing' AND lease_expires_at>clock_timestamp())>=p_global THEN RETURN NULL; END IF;
  SELECT * INTO p FROM public.import_packages WHERE status IN ('queued','retry_wait','processing') AND available_at<=clock_timestamp()
  AND (lease_expires_at IS NULL OR lease_expires_at<=clock_timestamp()) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1;
  IF NOT FOUND THEN RETURN NULL; END IF;
+ IF (SELECT count(*) FROM public.import_packages WHERE status='processing' AND lease_expires_at>clock_timestamp())>=least(p_global,(p.policy->>'global_concurrency')::int,coalesce((SELECT min((policy->>'global_concurrency')::int) FROM public.import_packages WHERE status='processing' AND lease_expires_at>clock_timestamp()),p_global)) THEN RETURN NULL; END IF;
  IF p.attempts>=(p.policy->>'attempts')::int OR p.expires_at<=clock_timestamp() OR p.job_deadline<=clock_timestamp() THEN
  UPDATE public.import_packages SET status='failed',error_code='attempts_or_deadline',reserved_bytes=0,retryable=false,completed_at=clock_timestamp(),generation=generation+1 WHERE id=p.id;
+ UPDATE public.import_objects SET expires_at=clock_timestamp() WHERE package_id=p.id AND status='sealed';
  RETURN jsonb_build_object('expired',true); END IF;
  UPDATE public.import_packages SET status='processing',attempts=attempts+1,generation=generation+1,lease_token=gen_random_uuid(),lease_expires_at=clock_timestamp()+make_interval(secs=>(p.policy->>'lease_seconds')::int) WHERE id=p.id RETURNING * INTO p;
  RETURN to_jsonb(p);
@@ -148,6 +150,11 @@ CREATE FUNCTION public.import_worker_step(p_id uuid,p_token uuid,p_generation bi
 DECLARE p public.import_packages; e public.import_package_entries; row jsonb; c jsonb; did uuid; vid uuid; meta jsonb;
  n int; b bigint; used bigint; title text;
 BEGIN
+ SELECT * INTO p FROM public.import_packages WHERE id=p_id;
+ IF NOT FOUND THEN RETURN jsonb_build_object('error','lease_lost'); END IF;
+ PERFORM set_config('app.workspace_id',p.workspace_id::text,true);
+ PERFORM set_config('app.user_id',p.requested_by_user_id,true);
+ PERFORM id FROM public.workspaces WHERE id=p.workspace_id FOR UPDATE;
  SELECT * INTO p FROM public.import_packages WHERE id=p_id FOR UPDATE;
  IF NOT FOUND OR p.status<>'processing' OR p.lease_token IS DISTINCT FROM p_token OR p.generation<>p_generation OR p.lease_expires_at<=clock_timestamp() THEN RETURN jsonb_build_object('error','lease_lost'); END IF;
  PERFORM set_config('app.workspace_id',p.workspace_id::text,true); PERFORM set_config('app.user_id',p.requested_by_user_id,true);
@@ -160,8 +167,13 @@ BEGIN
  UPDATE public.import_packages SET lease_expires_at=clock_timestamp()+make_interval(secs=>(p.policy->>'lease_seconds')::int) WHERE id=p.id;
  ELSIF p_action IN ('reject','transient') THEN
  UPDATE public.import_packages SET status=CASE WHEN p_action='transient' AND attempts<(policy->>'attempts')::int THEN 'retry_wait' ELSE 'failed' END,
- error_code=p_data->>'code',retryable=(p_action='transient'),lease_token=NULL,lease_expires_at=NULL,
+ error_code=p_data->>'code',retryable=(p_action='transient' AND attempts<(policy->>'attempts')::int),lease_token=NULL,lease_expires_at=NULL,
  available_at=clock_timestamp()+make_interval(secs=>(p.policy->>'backoff_seconds')::int*p.attempts),completed_at=clock_timestamp(),reserved_bytes=CASE WHEN p_action='reject' THEN 0 ELSE reserved_bytes END WHERE id=p.id;
+ IF p_action='reject' AND p_data->>'ordinal' IS NOT NULL THEN
+  UPDATE public.import_package_entries SET status='failed',skip_reason=p_data->>'code',parsed=NULL WHERE package_id=p.id AND ordinal=(p_data->>'ordinal')::int AND status='pending';
+  IF FOUND THEN UPDATE public.import_packages SET failed_count=failed_count+1 WHERE id=p.id; END IF;
+ END IF;
+ IF p_action='reject' THEN UPDATE public.import_objects SET expires_at=clock_timestamp() WHERE package_id=p.id AND status='sealed'; END IF;
  RETURN jsonb_build_object('error',p_data->>'code');
  ELSIF p_action='manifest' THEN
   IF p.entry_count IS NOT NULL THEN RETURN jsonb_build_object('ok',true); END IF;
@@ -209,9 +221,12 @@ BEGIN
   UPDATE public.import_package_entries SET status='published',document_id=did,version_id=vid,parsed=NULL WHERE package_id=p.id AND ordinal=e.ordinal;
   UPDATE public.import_packages SET phase='publish',published_count=published_count+1,reserved_bytes=reserved_bytes-b WHERE id=p.id;
  ELSIF p_action='gate' THEN
+  PERFORM id FROM public.workspaces WHERE id=p.workspace_id FOR UPDATE;
+  SELECT coalesce(sum(octet_length(content)),0) INTO used FROM public.chunks WHERE workspace_id=p.workspace_id;
+  IF used>(p.policy->>'source_quota_bytes')::bigint THEN RETURN jsonb_build_object('error','source_quota'); END IF;
   IF p.entry_count IS NULL OR p.prepared_count=0 OR p.published_count<>p.prepared_count OR EXISTS(SELECT 1 FROM public.import_package_entries WHERE package_id=p.id AND status NOT IN ('published','skipped')) THEN RETURN jsonb_build_object('error','no_supported_content_or_incomplete'); END IF;
-  UPDATE public.document_versions v SET state='ready' FROM public.import_package_entries e WHERE e.package_id=p.id AND (v.workspace_id,v.id)=(e.workspace_id,e.version_id);
-  UPDATE public.documents d SET current_version_id=e.version_id FROM public.import_package_entries e WHERE e.package_id=p.id AND (d.workspace_id,d.id)=(e.workspace_id,e.document_id);
+  UPDATE public.document_versions v SET state='ready' FROM public.import_package_entries ent WHERE ent.package_id=p.id AND (v.workspace_id,v.id)=(ent.workspace_id,ent.version_id);
+  UPDATE public.documents d SET current_version_id=ent.version_id FROM public.import_package_entries ent WHERE ent.package_id=p.id AND (d.workspace_id,d.id)=(ent.workspace_id,ent.document_id);
   UPDATE public.import_packages SET status=CASE WHEN skipped_count>0 THEN 'completed_with_skips' ELSE 'completed' END,phase='complete',completed_at=clock_timestamp(),lease_token=NULL,lease_expires_at=NULL,retryable=false,reserved_bytes=0 WHERE id=p.id;
   UPDATE public.import_objects SET expires_at=clock_timestamp() WHERE package_id=p.id AND status='sealed';
   INSERT INTO public.import_publications(workspace_id,package_id,requested_by_user_id,source_kind,source_count,chunk_count) VALUES(p.workspace_id,p.id,p.requested_by_user_id,p.source_kind,p.published_count,p.chunk_count) ON CONFLICT(package_id) DO NOTHING;
@@ -223,6 +238,7 @@ CREATE FUNCTION public.import_cleanup(p_key text,p_token uuid,p_action text) RET
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE o public.import_objects; p public.import_packages; BEGIN
  IF p_action='claim' THEN
+  UPDATE public.import_packages SET status='expired',reserved_bytes=0,upload_token=NULL,generation=generation+1 WHERE id IN (SELECT id FROM public.import_packages WHERE status='uploading' AND object_key IS NULL AND expires_at<=clock_timestamp() ORDER BY expires_at FOR UPDATE SKIP LOCKED LIMIT 100);
   SELECT obj.* INTO o FROM public.import_objects obj JOIN public.import_packages pkg ON pkg.id=obj.package_id
    WHERE obj.status<>'deleted' AND obj.available_at<=clock_timestamp()
    AND (obj.cleanup_expires_at IS NULL OR obj.cleanup_expires_at<=clock_timestamp())

@@ -50,6 +50,8 @@ class ApiEnvironment:
         *,
         workspace_id: UUID | None = None,
         user_id: str | None = None,
+        import_storage=None,
+        import_policy=None,
     ) -> Iterator[TestClient]:
         selected_workspace = workspace_id or uuid4()
         selected_user = user_id or f"api-test|{uuid4()}"
@@ -64,7 +66,7 @@ class ApiEnvironment:
             dev_user_id=selected_user,
             dev_workspace_name=f"API Test {selected_workspace}",
         )
-        with TestClient(create_app(configured), headers={"Origin": "http://testserver"}) as client:
+        with TestClient(create_app(configured,import_storage=import_storage,import_policy=import_policy), headers={"Origin": "http://testserver"}) as client:
             yield client
 
     def execute_admin(self, statement: str, parameters: tuple[object, ...]) -> None:
@@ -83,6 +85,8 @@ class ApiEnvironment:
             # Test tenants use ready-snapshot guards. Replica mode is scoped to
             # this cleanup transaction and only rows for generated test UUIDs.
             connection.execute("SET LOCAL session_replication_role = replica")
+            for table in ('import_publications','import_objects','import_package_entries','import_packages'):
+                connection.execute(f'DELETE FROM public.{table} WHERE workspace_id=ANY(%s)', (ids,))
             connection.execute(
                 "DELETE FROM public.insight_sources WHERE workspace_id = ANY(%s)",
                 (ids,),

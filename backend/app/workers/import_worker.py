@@ -45,7 +45,13 @@ class ImportProcessor:
                 child.stdin.write(json.dumps(request).encode())
                 child.stdin.close()
                 started, heartbeat = time.monotonic(),time.monotonic()
+                memory_check = started
                 while child.poll() is None:
+                    if sys.platform == 'darwin' and time.monotonic()-memory_check>=0.25:
+                        usage=subprocess.run(['/bin/ps','-o','rss=','-p',str(child.pid)],capture_output=True,text=True,timeout=1)
+                        if usage.stdout.strip() and int(usage.stdout.strip())*1024>policy.memory_bytes:
+                            raise ImportPackageError('decoder_memory_limit')
+                        memory_check=time.monotonic()
                     if time.monotonic()-started>timeout:
                         raise ImportPackageError('decode_deadline')
                     if time.monotonic()-heartbeat>=max(0.1,policy.lease_seconds/3):
@@ -72,6 +78,7 @@ class ImportProcessor:
         if job.get('expired'):
             return 'expired'
         policy=ImportPolicy(**job['policy'])
+        current_ordinal=None
         started=time.monotonic()
         cpu_start=resource.getrusage(resource.RUSAGE_CHILDREN)
         try:
@@ -97,6 +104,7 @@ class ImportProcessor:
                     if time.monotonic()-started>policy.job_seconds or cpu.ru_utime+cpu.ru_stime-cpu_start.ru_utime-cpu_start.ru_stime>policy.cpu_seconds:
                         raise ImportPackageError('job_resource_limit')
                     next_step=self.jobs.step(job,'next')
+                    current_ordinal=next_step.get('entry',{}).get('ordinal')
                     if next_step.get('entry'):
                         result=self.decode(job,source,'file',next_step['entry']['ordinal'])
                         self.jobs.step(job,'entry',result)
@@ -108,7 +116,7 @@ class ImportProcessor:
         except ImportPackageError as error:
             if error.code=='lease_lost':
                 return 'lease_lost'
-            try: self.jobs.step(job,'reject',{'code':error.code})
+            try: self.jobs.step(job,'reject',{'code':error.code,'ordinal':current_ordinal})
             except ImportPackageError: pass
             return 'failed'
         except (OSError,subprocess.SubprocessError):

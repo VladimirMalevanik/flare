@@ -1,6 +1,7 @@
 """Bounded ZIP validation. Never extract archive paths or invoke content/providers."""
 from __future__ import annotations
 
+from dataclasses import replace
 import hashlib
 import json
 from pathlib import PurePosixPath
@@ -42,6 +43,24 @@ def preflight(stream, policy: ImportPolicy):
     absolute_end = size - len(tail) + offset
     if directory_offset + directory_size != absolute_end:
         raise ZipRejected("malformed_zip")
+    # Count actual central headers before ZipFile constructs its entry objects.
+    # A dishonest EOCD count cannot bypass the allocation/entry bound.
+    cursor=directory_offset
+    actual=0
+    while cursor<absolute_end:
+        if cursor+46>absolute_end:
+            raise ZipRejected('malformed_zip')
+        stream.seek(cursor)
+        header=stream.read(46)
+        if len(header)!=46 or header[:4]!=b'PK\x01\x02':
+            raise ZipRejected('malformed_zip')
+        name_size,extra_size,comment_size=struct.unpack_from('<3H',header,28)
+        cursor+=46+name_size+extra_size+comment_size
+        actual+=1
+        if actual>policy.entries:
+            raise ZipRejected('manifest_bound')
+    if cursor!=absolute_end or actual!=count:
+        raise ZipRejected('malformed_zip')
     stream.seek(0)
     return count, directory_offset
 
@@ -49,10 +68,11 @@ def preflight(stream, policy: ImportPolicy):
 def safe_path(info, policy: ImportPolicy):
     path = info.orig_filename
     if (not path or path.startswith("/") or "\\" in path or re.match(r"^[A-Za-z]:", path)
-            or any(ord(c) < 32 or ord(c) == 127 for c in path)):
+            or any(unicodedata.category(c) in {"Cc","Cf"} for c in path)):
         raise ZipRejected("unsafe_path")
-    parts = path.rstrip("/").split("/")
-    if any(p in {"", ".", ".."} or ":" in p for p in parts):
+    parts = (path[:-1] if info.is_dir() else path).split("/")
+    if any(p in {"", ".", ".."} or any(c in p for c in '<>:"|?*') or p.endswith((".", " "))
+            or re.fullmatch(r"(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?",p,re.I) for p in parts):
         raise ZipRejected("unsafe_path")
     if len(path.encode("utf-8")) > policy.path_bytes or len(parts) > policy.path_depth:
         raise ZipRejected("path_bound")
@@ -129,6 +149,8 @@ def verified_bytes(stream, archive, info, policy: ImportPolicy, remaining: int):
     declared compressed stream instead of trusting ZipExtFile's output-size cap.
     """
     started = time.monotonic()
+    _,directory_offset=preflight(stream,policy)
+    boundary=min([directory_offset]+[entry.header_offset for entry in archive.infolist() if entry.header_offset>info.header_offset])
     with archive.open(info):
         pass
     stream.seek(info.header_offset)
@@ -141,6 +163,8 @@ def verified_bytes(stream, archive, info, policy: ImportPolicy, remaining: int):
     if not flags & 8 and (crc, compressed, expanded) != (info.CRC, info.compress_size, info.file_size):
         raise ZipRejected("dishonest_metadata")
     data_start = info.header_offset + 30 + name_size + extra_size
+    if data_start+info.compress_size>boundary:
+        raise ZipRejected('malformed_zip')
     stream.seek(data_start)
     decoder = zlib.decompressobj(-15) if method == zipfile.ZIP_DEFLATED else None
     count, actual_crc, digest, output = 0, 0, hashlib.sha256(), bytearray()
@@ -165,6 +189,14 @@ def verified_bytes(stream, archive, info, policy: ImportPolicy, remaining: int):
             output.extend(value)
             if decoder and decoder.unused_data:
                 raise ZipRejected("malformed_zip")
+    if flags & 8:
+        descriptor_offset=data_start+info.compress_size
+        stream.seek(descriptor_offset)
+        descriptor=stream.read(min(16,boundary-descriptor_offset))
+        signed=descriptor.startswith(b'PK\x07\x08')
+        needed=16 if signed else 12
+        if len(descriptor)<needed or struct.unpack_from('<3L',descriptor,4 if signed else 0)!=(info.CRC,info.compress_size,info.file_size):
+            raise ZipRejected('integrity_failure')
     if decoder and not decoder.eof:
         raise ZipRejected("malformed_zip")
     if count != info.file_size or actual_crc != info.CRC:
@@ -184,7 +216,27 @@ def parse_entry(raw: bytes, row: dict, policy: ImportPolicy):
                     file_type=None, file_size=len(raw), content=text, limits=policy)
     except (UnicodeError, ImportValidationError) as error:
         raise ZipRejected(error.code if isinstance(error, ImportValidationError) else "invalid_utf8") from None
+    # The immutable source schema forbids whitespace-only chunks. Fold short
+    # whitespace sections into a neighbour without changing a single character.
+    # A gap too large to represent under chunk_bytes is a policy failure.
+    chunks=list(prepared.chunks)
+    index=0
+    while index<len(chunks):
+        chunk=chunks[index]
+        if chunk.content.strip():
+            index+=1
+            continue
+        neighbour=index-1 if index and len((chunks[index-1].content+chunk.content).encode('utf-8'))<=policy.chunk_bytes else index+1
+        if neighbour>=len(chunks) or len((chunks[neighbour].content+chunk.content).encode('utf-8'))>policy.chunk_bytes:
+            raise ZipRejected('chunk_bound')
+        previous=chunks[neighbour]
+        content=previous.content+chunk.content if neighbour<index else chunk.content+previous.content
+        locator={**previous.locator,'lineStart':min(previous.locator.get('lineStart',1),chunk.locator.get('lineStart',1)),
+                 'lineEnd':max(previous.locator.get('lineEnd',1),chunk.locator.get('lineEnd',1))}
+        chunks[neighbour]=replace(previous,content=content,locator=locator)
+        chunks.pop(index)
+        index=max(0,index-1)
     return {"status": "prepared", "format": format, "contentHash": prepared.content_hash,
             "contentBytes": len(prepared.content.encode("utf-8")),
             "chunks": [{"content": c.content, "locator": {**c.locator, "relativePath": row["path"]}}
-                       for c in prepared.chunks]}
+                       for c in chunks]}

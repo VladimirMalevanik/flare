@@ -14,7 +14,9 @@ def main():
     request = json.loads(sys.stdin.buffer.read(16_384))
     policy = ImportPolicy(**request['policy'])
     resource.setrlimit(resource.RLIMIT_CPU, (policy.cpu_seconds, policy.cpu_seconds))
-    resource.setrlimit(resource.RLIMIT_AS, (policy.memory_bytes, policy.memory_bytes))
+    if sys.platform == 'linux':
+        resource.setrlimit(resource.RLIMIT_AS, (policy.memory_bytes, policy.memory_bytes))
+    # macOS does not accept/enforce RLIMIT_AS; the parent monitors resident RAM.
     resource.setrlimit(resource.RLIMIT_FSIZE, (request['outputLimit'], request['outputLimit']))
     csv.field_size_limit(policy.csv_field_bytes)
     try:

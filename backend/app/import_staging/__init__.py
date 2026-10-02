@@ -1,5 +1,6 @@
 """Private immutable staged objects; production adapters are an OPS decision."""
 from contextlib import contextmanager
+import fcntl
 import hashlib
 import os
 from pathlib import Path
@@ -38,24 +39,45 @@ class LocalStagedObjects:
         return key + ".zip"
 
     @contextmanager
+    def _key_lock(self, root, name):
+        # Keep this inode/tombstone for the immutable key's lifetime. Removing
+        # lock files would let a paused old writer race a new lock inode.
+        fd=os.open(name+'.lock',os.O_RDWR|os.O_CREAT|os.O_NOFOLLOW,0o600,dir_fd=root)
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise OSError('Invalid object lock')
+            fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            yield
+        finally:
+            os.close(fd)
+
+    @contextmanager
     def writer(self, key: str) -> Iterator[BinaryIO]:
         name = self._name(key)
         root = self._open_root()
         temp = name + ".part"
         try:
-            fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=root)
-            with os.fdopen(fd, "wb") as stream:
-                yield stream
-                stream.flush()
-                os.fsync(stream.fileno())
-            # link creates the immutable destination exclusively; overwrite is impossible.
-            os.link(temp, name, src_dir_fd=root, dst_dir_fd=root, follow_symlinks=False)
-            os.fsync(root)
+            with self._key_lock(root,name):
+                try:
+                    os.stat(name+'.retired',dir_fd=root,follow_symlinks=False)
+                except FileNotFoundError:
+                    pass
+                else:
+                    raise FileExistsError('Object key was retired')
+                try:
+                    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=root)
+                    with os.fdopen(fd, "wb") as stream:
+                        yield stream
+                        stream.flush()
+                        os.fsync(stream.fileno())
+                    os.link(temp, name, src_dir_fd=root, dst_dir_fd=root, follow_symlinks=False)
+                    os.fsync(root)
+                finally:
+                    try:
+                        os.unlink(temp,dir_fd=root)
+                    except FileNotFoundError:
+                        pass
         finally:
-            try:
-                os.unlink(temp, dir_fd=root)
-            except FileNotFoundError:
-                pass
             os.close(root)
 
     @contextmanager
@@ -78,14 +100,24 @@ class LocalStagedObjects:
     def delete(self, key: str) -> None:
         root = self._open_root()
         try:
-            for name in (self._name(key), self._name(key) + ".part"):
+            name=self._name(key)
+            with self._key_lock(root,name):
                 try:
-                    os.unlink(name, dir_fd=root)
-                except FileNotFoundError:
+                    marker=os.open(name+'.retired',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600,dir_fd=root)
+                except FileExistsError:
                     pass
-            os.fsync(root)
+                else:
+                    os.fsync(marker)
+                    os.close(marker)
+                for target in (name,name+'.part'):
+                    try:
+                        os.unlink(target,dir_fd=root)
+                    except FileNotFoundError:
+                        pass
+                os.fsync(root)
         finally:
             os.close(root)
+
 
 
 def object_digest(objects: StagedObjects, key: str, maximum: int) -> tuple[int, str]:

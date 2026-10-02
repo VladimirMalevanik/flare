@@ -190,10 +190,10 @@ export type ImportPackage = {
   id: string; sourceKind: ZipSourceKind; fileName: string; fileSize: number;
   status: ImportPackageStatus; phase: "upload" | "inspect" | "parse" | "publish" | "complete";
   entryCount: number | null; supportedCount: number; skippedCount: number; importedCount: number; chunkCount: number;
-  errorCode: string | null; retryable: boolean;
+  failedCount: number; errorCode: string | null; retryable: boolean;
 };
 export type ImportPackageEntry = {
   ordinal: number; path: string; fileBytes: number; skipReason: string | null;
-  status: "pending" | "prepared" | "skipped" | "published"; documentId: string | null;
+  status: "pending" | "prepared" | "skipped" | "published" | "failed"; documentId: string | null;
 };
 export type ImportPackageReport = { entries: ImportPackageEntry[]; nextCursor: number | null };

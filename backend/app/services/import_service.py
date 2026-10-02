@@ -367,9 +367,10 @@ def _parse_csv(text: str, *, limits=None) -> tuple[CsvRecord, ...]:
                     line_end=max(1, end_line),
                 )
             )
-            if limits and (len(raw.encode("utf-8")) > limits.csv_row_bytes
-                    or any(len(cell.encode("utf-8")) > limits.csv_field_bytes for cell in row)):
-                raise ImportValidationError("csv_bound", "CSV record exceeds configured bounds")
+            if limits and len(raw.encode("utf-8")) > limits.csv_row_bytes:
+                raise ImportValidationError("csv_row_bound", "CSV record exceeds configured bounds")
+            if limits and any(len(cell.encode("utf-8")) > limits.csv_field_bytes for cell in row):
+                raise ImportValidationError("csv_field_bound", "CSV field exceeds configured bounds")
             rows.append(row)
             pending_prefix = ""
             pending_line_start = None

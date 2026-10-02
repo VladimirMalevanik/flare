@@ -382,6 +382,11 @@ export class ApiDataProvider implements FlareDataProvider {
     return response.json();
   }
 
+  async getImportCapabilities(): Promise<{ available: boolean; maxUploadBytes: number | null }> {
+    const body = asRecord(await this.request("/imports/packages/capabilities"));
+    if (typeof body.available !== "boolean") throw new FlareApiError("Invalid import capability");
+    return { available: body.available, maxUploadBytes: body.maxUploadBytes === null ? null : countField(body, "maxUploadBytes") };
+  }
   async createImportPackage(input: { sourceKind: ZipSourceKind; fileName: string; fileSize: number; requestKey: string }): Promise<ImportPackage> {
     return mapImportPackage(await this.request("/imports/packages", { method: "POST", body: JSON.stringify(input) }));
   }
@@ -407,7 +412,7 @@ export class ApiDataProvider implements FlareDataProvider {
     return { entries: body.entries.map((value) => {
       const row = asRecord(value);
       const status = stringField(row, "status");
-      if (!["pending", "prepared", "skipped", "published"].includes(status)) throw new FlareApiError("Invalid entry status");
+      if (!["pending", "prepared", "skipped", "published", "failed"].includes(status)) throw new FlareApiError("Invalid entry status");
       return { ordinal: countField(row, "ordinal"), path: stringField(row, "path"), fileBytes: countField(row, "file_bytes"),
         skipReason: nullableString(row, "skip_reason"), status: status as ImportPackageReport["entries"][number]["status"], documentId: nullableString(row, "document_id") };
     }), nextCursor: body.nextCursor === null ? null : countField(body, "nextCursor") };
@@ -652,5 +657,5 @@ export function mapImportPackage(value: unknown): ImportPackage {
   return { id: stringField(row, "id"), sourceKind: sourceKind as ZipSourceKind, fileName: stringField(row, "file_name"), fileSize: countField(row, "file_size"),
     status: status as ImportPackage["status"], phase: phase as ImportPackage["phase"], entryCount: row.entry_count === null ? null : countField(row, "entry_count"),
     supportedCount: countField(row, "prepared_count"), skippedCount: countField(row, "skipped_count"), importedCount: countField(row, "published_count"),
-    chunkCount: countField(row, "chunk_count"), errorCode: nullableString(row, "error_code"), retryable: row.retryable };
+    chunkCount: countField(row, "chunk_count"), failedCount: countField(row, "failed_count"), errorCode: nullableString(row, "error_code"), retryable: row.retryable };
 }

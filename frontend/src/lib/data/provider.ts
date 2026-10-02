@@ -32,6 +32,7 @@ export type AnalyticsEventInput =
       metadata: { screen: "sources_from_insights" } };
 
 export interface FlareDataProvider {
+  getImportCapabilities(): Promise<{ available: boolean; maxUploadBytes: number | null }>;
   createImportPackage(input: { sourceKind: ZipSourceKind; fileName: string; fileSize: number; requestKey: string }): Promise<ImportPackage>;
   uploadImportPackage(id: string, file: File, signal?: AbortSignal): Promise<ImportPackage>;
   importPackageAction(id: string, action: "finalize" | "cancel" | "retry"): Promise<ImportPackage>;

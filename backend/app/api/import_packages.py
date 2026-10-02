@@ -52,8 +52,14 @@ def list_packages(svc: Annotated[ImportPackageService,Depends(service)]):
 
 @router.get('/publications')
 def publications(svc: Annotated[ImportPackageService,Depends(service)],after: int=Query(0,ge=0),limit: int=Query(50,ge=1,le=100)):
+    limit=min(limit,svc.policy.report_page)
     rows=svc.repo.publications(after,limit)
     return {'publications':rows,'nextCursor':rows[-1]['id'] if len(rows)==limit else None}
+
+
+@router.get('/capabilities')
+def capabilities(svc: Annotated[ImportPackageService,Depends(service)]):
+    return {'available':svc.storage is not None,'maxUploadBytes':svc.policy.compressed_bytes if svc.storage is not None else None}
 
 
 @router.get('/{package_id}')
@@ -65,6 +71,7 @@ def get(package_id: UUID, svc: Annotated[ImportPackageService,Depends(service)])
 @router.get('/{package_id}/entries')
 def entries(package_id: UUID,svc: Annotated[ImportPackageService,Depends(service)],after: int=Query(-1,ge=-1),limit: int=Query(50,ge=1,le=100)):
     try:
+        limit=min(limit,svc.policy.report_page)
         rows=svc.repo.entries(package_id,after,limit)
         return {'entries':rows,'nextCursor':rows[-1]['ordinal'] if len(rows)==limit else None}
     except ImportPackageError as e: handle(e)

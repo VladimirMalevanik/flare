@@ -48,6 +48,8 @@ def create_app(
     configured = application_settings or settings
     if configured.environment == "production" and configured.import_staging_root:
         raise ValueError("Production ZIP staging requires an OPS-approved adapter")
+    if configured.environment == "production" and isinstance(import_storage, LocalStagedObjects):
+        raise ValueError("Local ZIP staging is restricted to development/test")
     staging = import_storage
     if staging is None and configured.import_staging_root:
         staging = LocalStagedObjects(configured.import_staging_root)

@@ -19,7 +19,7 @@ def checked(result):
 
 
 PUBLIC_COLUMNS = '''id,source_kind,file_name,file_size,status,phase,entry_count,
-prepared_count,skipped_count,published_count,chunk_count,error_code,retryable,attempts,
+prepared_count,skipped_count,published_count,failed_count,chunk_count,error_code,retryable,attempts,
 created_at,completed_at,canonical_id'''
 
 
@@ -75,8 +75,12 @@ class ImportWorkerJobs:
 
     def step(self, job, action, data=None):
         with self.connection() as c:
-            return checked(c.execute('SELECT public.import_worker_step(%s,%s,%s,%s,%s) AS result',
-                (job['id'],job['lease_token'],job['generation'],action,Jsonb(data if data is not None else {}))).fetchone()['result'])
+            c.execute("SELECT set_config('statement_timeout',%s,true),set_config('lock_timeout',%s,true)",
+                (str(job['policy']['file_seconds']*1000),str(job['policy']['lease_seconds']*500)))
+            result=c.execute('SELECT public.import_worker_step(%s,%s,%s,%s,%s) AS result',
+                (job['id'],job['lease_token'],job['generation'],action,Jsonb(data if data is not None else {}))).fetchone()['result']
+        # Reject/revoke transitions must COMMIT before surfacing their error.
+        return checked(result)
 
     def cleanup(self, action='claim', key=None, token=None):
         with self.connection() as c:
