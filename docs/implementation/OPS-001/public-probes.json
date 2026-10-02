@@ -1,0 +1,87 @@
+{
+  "classification": "VERIFIED DEPLOYED FACT",
+  "date": "2026-10-02",
+  "method": "GET",
+  "authenticated": false,
+  "probe_count": 6,
+  "limits": "Bounded unauthenticated public GETs, maximum 15 seconds per request; health bodies read at most 512 bytes then reduced to status/role allowlist. No cookies retained, customer data, response/error bodies, secrets, uploads or load tests recorded.",
+  "results": [
+    {
+      "url": "https://flare4u.tech/login",
+      "observed_at_utc": "2026-10-02T09:19:58.812067+00:00",
+      "http_status": 200,
+      "headers": {
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Security-Policy": "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+        "Cache-Control": "private, no-cache, no-store, max-age=0, must-revalidate",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY"
+      }
+    },
+    {
+      "url": "https://flare4u.tech/api/health",
+      "observed_at_utc": "2026-10-02T09:19:58.812391+00:00",
+      "http_status": 200,
+      "headers": {
+        "Content-Type": "application/json",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY"
+      },
+      "safe_health_fields": {"status": "ok"}
+    },
+    {
+      "url": "https://flare4u.tech/api/ready",
+      "observed_at_utc": "2026-10-02T09:19:58.812469+00:00",
+      "http_status": 200,
+      "headers": {
+        "Content-Type": "application/json",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY"
+      },
+      "safe_health_fields": {"status": "ready"}
+    },
+    {
+      "url": "https://flare-api-vm-260914.azurewebsites.net/health",
+      "observed_at_utc": "2026-10-02T09:20:00.955040+00:00",
+      "http_status": 200,
+      "headers": {
+        "Content-Type": "application/json",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY"
+      },
+      "safe_health_fields": {"status": "ok"}
+    },
+    {
+      "url": "https://flare-api-vm-260914.azurewebsites.net/ready",
+      "observed_at_utc": "2026-10-02T09:20:00.994096+00:00",
+      "http_status": 200,
+      "headers": {
+        "Content-Type": "application/json",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY"
+      },
+      "safe_health_fields": {"status": "ready"}
+    },
+    {
+      "url": "https://flare-worker-vm-260914.azurewebsites.net/ready",
+      "observed_at_utc": "2026-10-02T09:20:02.073902+00:00",
+      "http_status": 200,
+      "headers": {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store"
+      },
+      "safe_health_fields": {"status": "ready", "role": "worker"}
+    }
+  ],
+  "not_established": [
+    "Resource inventory, regions, plan SKU/capacity, replica count or deployed SHA",
+    "Database provider, actual worker queue progress or storage reachability",
+    "Production upload cap/time/buffering or load-test capacity",
+    "Existing Blob resources, managed identity roles, cleanup or retention policy"
+  ]
+}
