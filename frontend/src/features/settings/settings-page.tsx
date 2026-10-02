@@ -24,7 +24,7 @@ const defaults = {
   retention: "30",
   telegram: true,
 };
-export function SettingsPage({ supportEmail }: { supportEmail: string | null }) {
+export function SettingsPage({ supportEmail, subscription }: { supportEmail: string | null; subscription?: ReactNode }) {
   const { locale, t, label, message: localizeMessage } = useI18n();
   const session = useSession();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -226,6 +226,7 @@ export function SettingsPage({ supportEmail }: { supportEmail: string | null }) 
         </div>
         {session && <button className="button" onClick={logout} disabled={loggingOut}>{loggingOut ? t("Signing out…") : t("Sign out")}</button>}
       </SettingsSection>
+      {subscription}
       <SettingsSection
         title={t("Appearance & Theme")}
         subtitle={t("Customize how Flare looks on your display.")}

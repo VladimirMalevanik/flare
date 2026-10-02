@@ -1,0 +1,139 @@
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.badge {
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: var(--inset);
+  color: var(--secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.plans {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.plan {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+  background: var(--surface);
+}
+
+.selected {
+  background: var(--inset);
+}
+
+.plan h3 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.description {
+  margin-top: 5px;
+  min-height: 42px;
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.trial {
+  margin-top: 10px;
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.benefitLabel {
+  margin-top: 18px;
+  color: var(--secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.benefits {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0 20px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.benefits li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.benefits svg {
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  color: var(--accent-text);
+}
+
+.plan button {
+  margin-top: auto;
+  width: 100%;
+  min-height: 36px;
+}
+
+.current:disabled {
+  opacity: 1;
+  background: var(--hover);
+  color: var(--secondary);
+  box-shadow: none;
+}
+
+.note {
+  margin-top: 14px;
+  color: var(--secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.status {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--accent-wash);
+  color: var(--accent-text);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.error {
+  background: color-mix(in srgb, var(--red) 8%, var(--surface));
+  color: var(--red);
+}
+
+@media (max-width: 720px) {
+  .plans {
+    grid-template-columns: 1fr;
+  }
+
+  .description {
+    min-height: 0;
+  }
+
+  .plan {
+    padding: 16px;
+  }
+}
