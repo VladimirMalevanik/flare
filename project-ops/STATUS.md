@@ -2,9 +2,9 @@
 
 > Этот файл генерирует `task-sync`; вручную его не редактируют.
 
-Сформировано: `2026-10-02T10:41:06Z`
-Последнее обновление работы: `2026-10-02T10:41:06Z`
-Снимок состояния: `sha256:82c303206d9020a1b17a3879b70a4820f9141108869b06aba0d1332b73e16294`
+Сформировано: `2026-10-02T10:41:40Z`
+Последнее обновление работы: `2026-10-02T10:41:40Z`
+Снимок состояния: `sha256:cc16f00dd9d7b9d5150fe4fab726537b447a8aebba7a83fb10bd2f63b2491727`
 
 ## Ближайшая цель
 
@@ -14,16 +14,17 @@
 
 ## Ближайшие шаги (не более пяти)
 
-1. `DATA-002` (в работе) — Implement production-quality asynchronous one-time Notion/Obsidian ZIP onboarding, including package gate, tenant-safe jobs, provenance/idempotency, configurable reservations, local/test staging, recovery/cleanup and Vault integration. Full required contract and acceptance checks: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#data-002. No automatic Analyze or AI provider calls.. Сейчас: Full application implementation and validation complete; published for owner review; production infrastructure remains OPS/Vova scope; зависит от: DATA-001
+1. `DATA-002` (на проверке) — Implement production-quality asynchronous one-time Notion/Obsidian ZIP onboarding, including package gate, tenant-safe jobs, provenance/idempotency, configurable reservations, local/test staging, recovery/cleanup and Vault integration. Full required contract and acceptance checks: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#data-002. No automatic Analyze or AI provider calls.. Условие: Review the complete asynchronous Notion/Obsidian ZIP onboarding application, linear migration 0019, package-gated publication, tenant-safe worker/recovery/cleanup, configurable local-test staging and EN/ES UI. Owner acceptance and product integration remain pending; production OPS/Vova decisions and browser visual QA remain separate. Do not mark done.; зависит от: DATA-001
 2. `OPS-001` (на проверке) — Resolve production staging service/upload path, API-worker storage reachability, worker isolation/resources, storage identity/network/CORS, physical ZIP deletion/retention and monitoring/load-test environment. Publish dated redacted operator decisions/evidence; no provisioning. Contract: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#ops-001.. Условие: Review redacted runtime/staging decision and evidence record; Vova selection/acceptance and sanitized inventory remain pending. Do not mark done or authorize rollout from public probes.
 3. `GROWTH-002` (будем брать) — Implement the minimal extensible first-party attribution and milestone foundation: bounded pre-auth first/last non-direct touches frozen at signup, authoritative outcomes/dedupe, separate acquisition persistence, authenticated-event reuse, restricted aggregate reports, privacy and cleanup. Full contract: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#growth-002. No analytics UI, every-click collector, vendor or Azure correctness dependency.. Условие: Unclaimed and blocked on DATA-002 acceptance/integration to main. Fetch and validate that single migration head before claim; start a new clean branch there, never an independent migration head from the old base. Planned scope: acquisition/auth/event/reporting modules, minimal domain-outcome observation, successor migrations/schema/readiness, public/auth/client-event wiring, tests/query/load scripts, docs/implementation/GROWTH-002/. Exact envelope in decision document; no unapproved production retention/lookback durations.; зависит от: GROWTH-001, DATA-002; не завершены: DATA-002
 
 ## В работе
 
-- `DATA-002` (в работе) — Implement production-quality asynchronous one-time Notion/Obsidian ZIP onboarding, including package gate, tenant-safe jobs, provenance/idempotency, configurable reservations, local/test staging, recovery/cleanup and Vault integration. Full required contract and acceptance checks: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#data-002. No automatic Analyze or AI provider calls.. Сейчас: Full application implementation and validation complete; published for owner review; production infrastructure remains OPS/Vova scope; владелец: Fedor / Codex / DATA-002; зависит от: DATA-001
+Нет.
 
 ## На проверке
 
+- `DATA-002` (на проверке) — Implement production-quality asynchronous one-time Notion/Obsidian ZIP onboarding, including package gate, tenant-safe jobs, provenance/idempotency, configurable reservations, local/test staging, recovery/cleanup and Vault integration. Full required contract and acceptance checks: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#data-002. No automatic Analyze or AI provider calls.. Условие: Review the complete asynchronous Notion/Obsidian ZIP onboarding application, linear migration 0019, package-gated publication, tenant-safe worker/recovery/cleanup, configurable local-test staging and EN/ES UI. Owner acceptance and product integration remain pending; production OPS/Vova decisions and browser visual QA remain separate. Do not mark done.; владелец: Fedor / Codex / DATA-002; зависит от: DATA-001
 - `OPS-001` (на проверке) — Resolve production staging service/upload path, API-worker storage reachability, worker isolation/resources, storage identity/network/CORS, physical ZIP deletion/retention and monitoring/load-test environment. Publish dated redacted operator decisions/evidence; no provisioning. Contract: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#ops-001.. Условие: Review redacted runtime/staging decision and evidence record; Vova selection/acceptance and sanitized inventory remain pending. Do not mark done or authorize rollout from public probes.; владелец: Vova / OPS decision owner
 
 ## Блокеры
