@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "project_name": "Flare",
+  "directions": {
+    "ARCH": "Architecture / research / product decisions",
+    "WEB": "Frontend / UX",
+    "API": "Backend / integrations",
+    "DATA": "Persistence / ingestion / Project Memory",
+    "GROWTH": "Acquisition / attribution / analytics",
+    "OPS": "Infrastructure / release / coordination"
+  }
+}
