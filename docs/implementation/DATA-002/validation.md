@@ -225,3 +225,67 @@ audit was static and did not rerun suites. Exact published SHA, CI results and
 final review handoff are recorded separately in task-sync and the pull request.
 Production OPS decisions, owner acceptance, authorized integration and finish
 remain separate gates.
+
+
+## ZIP guide and navigation correction — FLA-16, 2026-10-03
+
+The authorized second bounded QA correction changes only Notion/Obsidian guide
+copy, their Sources guide links, import-guide descriptions in Settings, EN/ES
+strings, and rendered regression tests. Evernote retains its three steps,
+single-file Capture/200 KB copy and `/dashboard` action. No CSS, dependencies,
+backend, SQL/migration, import behavior or billing/profile/schedule change.
+
+Scope publication succeeded at coordination SHA
+`d00c030b25bd34aafcdc7d814345ad6ea6f4549e`: all 58 inherited paths plus the
+three explicitly authorized guide/settings/test paths. Fresh context before edits
+and before publication showed only DATA-002 active, owner
+`Fedor / Paperclip Flare Web / DATA-002`, DATA-001 dependency done.
+
+| Check | Actual result |
+| --- | --- |
+| New rendered guide/link regression tests | 10 passed: EN/ES, both ZIP providers, Sources forms/links, Settings rows and unchanged Evernote directions/destination |
+| Complete `npm test` | 138 passed, 1 failed: existing Paddle public-variable test attempts to read sparse-excluded protected `frontend/.env.example` (ENOENT) |
+| Same suite excluding exactly that environment-file-reading test | 138 passed, 0 failed; no test or sparse rule was modified to bypass protection |
+| ESLint affected components/dictionaries and regression test | Passed |
+| Production `next build --webpack` | Passed, TypeScript and 20 generated routes |
+| `git diff --check` | Passed |
+| Native Playwright MCP, desktop 1440×1100 and narrow 390×844, EN/ES | Sources → both ZIP guides → Open Sources; Settings descriptions; Evernote guide passed; no horizontal overflow |
+| Browser console error collection | 0 errors, 0 warnings |
+
+Initial render checks ran at product commit
+`5965bac273c3566b40f4063be79db5a224aa15e7`. The subsequent validation-only commit
+has identical frontend source/tests. Exact final-SHA MCP confirmation and evidence
+are attached to FLA-16 separately, avoiding a self-referential SHA in this file.
+The browser used standard Turbopack dev with the existing synthetic mock provider
+and disabled API address `http://127.0.0.1:9`; imports were truthfully unavailable.
+No provider, database, payment, Capture submission or Analyze was invoked. This
+validates guide/navigation UI, not real import execution or independent QA.
+
+The first dev startup failed with Watchpack EMFILE/restarts. The owned server was
+restarted with `WATCHPACK_POLLING=true` and then served all checked routes. The
+arbitrary-script MCP tool was denied by approval policy; checks used normal MCP
+navigate/click/select/evaluate/screenshot tools instead. One screenshot request
+outside MCP artifact roots was denied; subsequent screenshots used the tool's
+normal artifact directory. No permission or tooling boundary was changed.
+
+Initial screenshots (under `/Users/fedornikonov/.codex/browser-artifacts/playwright/`):
+- desktop EN guide: `page-2026-10-03T07-47-32-212Z.png`
+- desktop ES guide: `page-2026-10-03T07-48-15-449Z.png`
+- narrow ES guide/Sources: `page-2026-10-03T07-48-52-178Z.png`, `page-2026-10-03T07-48-56-488Z.png`
+- narrow EN guide/Sources: `page-2026-10-03T07-49-00-528Z.png`, `page-2026-10-03T07-49-04-820Z.png`
+
+Dependencies were reused through an isolated APFS clone-copy from the earlier OWN
+web worktree; nothing was installed. Backend checks were not rerun locally because
+backend/SQL/migrations are unchanged; new exact-SHA CI remains required. Local
+protected-env test failure must remain visible in the handoff.
+
+Actual cwd: `/Users/fedornikonov/.paperclip/instances/default/flare/worktrees/web-ux/data-002-publication-20261003`.
+Common Git dir: `/Users/fedornikonov/.paperclip/instances/default/flare/worktrees/web-ux/repository/.git`.
+Git dir: `/Users/fedornikonov/.paperclip/instances/default/flare/worktrees/web-ux/repository/.git/worktrees/data-002-publication-20261003`.
+Selected project workspace: `7fc2b1bf-879c-4e36-9088-6d9c312ba896`.
+
+DATA-002 remains ACTIVE. Coordinator/operator owns exact-SHA CI and independent QA
+handoff, then Vova acceptance and authorized integration. FLA-16 completion is only
+executor reporting; it is not product acceptance, ledger review/finish, merge or
+deployment. This is the second bounded QA round; repeat blockers must be escalated
+with both rounds' evidence, not reopened indefinitely.
