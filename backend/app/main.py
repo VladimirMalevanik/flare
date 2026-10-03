@@ -11,6 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
+from app.api.acquisition import router as acquisition_router
 from app.api.analytics import router as analytics_router
 from app.api.auth import router as auth_router
 from app.api.flares import router as flares_router
@@ -114,7 +115,7 @@ def create_app(
             "/auth", "/items", "/imports", "/flares", "/analyze", "/analysis-runs",
             "/integrations", "/ops", "/analytics", "/voice",
             "/analysis-schedule", "/analysis/daily-status",
-            "/export",
+            "/export", "/acquisition",
         )):
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -170,6 +171,7 @@ def create_app(
     application.include_router(export_router)
     application.include_router(voice_router)
     application.include_router(ops.router)
+    application.include_router(acquisition_router)
     application.include_router(analytics_router)
     application.include_router(router)
     return application

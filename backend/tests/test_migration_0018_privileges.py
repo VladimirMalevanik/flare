@@ -32,7 +32,7 @@ def test_0018_upgrade_does_not_require_executor_create_on_public(admin_url, monk
         try:
             assert connection.execute(
                 "SELECT version_num FROM public.alembic_version"
-            ).fetchone() == ("0019",)
+            ).fetchone() == ("0020",)
 
             admin_role, is_superuser = connection.execute(
                 "SELECT current_user, rolsuper FROM pg_roles WHERE rolname = current_user"

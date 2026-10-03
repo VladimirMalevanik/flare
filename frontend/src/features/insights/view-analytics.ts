@@ -7,15 +7,11 @@ export interface FlareViewState {
 export function nextFlareViewEvent(
   state: FlareViewState,
   flareId: string,
+  interactionId?: string,
 ): AnalyticsEventInput | null {
-  if (state.current === flareId) return null;
+  if (!interactionId || state.current === flareId) return null;
   state.current = flareId;
-  return {
-    eventType: "flare_viewed",
-    targetType: "flare",
-    targetId: flareId,
-    metadata: { source: "insights_feed" },
-  };
+  return { eventType: "voluntary_inspection", interactionId, flareId };
 }
 
 export function resetFlareView(state: FlareViewState): void {

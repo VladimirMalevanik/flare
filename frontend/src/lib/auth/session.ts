@@ -1,3 +1,4 @@
+import { resetAcquisitionConsent } from "./acquisition";
 export interface Session {
   user: {
     id: string;
@@ -35,6 +36,7 @@ export async function authRequest(
   path: string,
   body?: unknown,
 ): Promise<AuthResponse> {
+  if (["register", "login", "logout"].includes(path)) resetAcquisitionConsent();
   const response = await fetch(`${apiBaseUrl}/auth/${path}`, {
     method: "POST",
     credentials: "include",

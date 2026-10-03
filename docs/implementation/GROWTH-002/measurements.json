@@ -1,0 +1,22 @@
+{
+  "nonproduction": true,
+  "requests": 120,
+  "global_hour_cap": 100,
+  "visitor_cap": 50,
+  "accepted": 50,
+  "stored": 50,
+  "touch_median_ms": 0.387,
+  "touch_p95_ms": 0.574,
+  "report_ms": 3.723,
+  "report_fixture_accounts": 20,
+  "report_fixture_deduped_capture_observations": 20,
+  "report_fixture": "synthetic observations, not production outcomes; no provider calls",
+  "cleanup_ms": 1.222,
+  "cleanup": {
+    "facts": 0,
+    "links": 0,
+    "budgets": 0,
+    "visitors": 50
+  },
+  "concurrency": "sequential; DB intake try-lock caps one active transaction"
+}

@@ -36,8 +36,8 @@ class AuthRepository:
             (workspace_id, f"{name}'s workspace"),
         )
         self.connection.execute(
-            """INSERT INTO public.auth_users(id,email,password_hash,name,initial_workspace_id)
-               VALUES (%s,%s,%s,%s,%s)""",
+            """INSERT INTO public.auth_users(id,email,password_hash,name,initial_workspace_id,verification_provenance)
+               VALUES (%s,%s,%s,%s,%s,'pending')""",
             (user_id, email, password_hash, name, workspace_id),
         )
         self.accept_current_legal(user_id)
@@ -142,7 +142,7 @@ class AuthRepository:
                    RETURNING user_id, email
                )
                UPDATE public.auth_users AS users
-               SET email_verified_at=COALESCE(users.email_verified_at, now())
+               SET email_verified_at=COALESCE(users.email_verified_at, now()), verification_provenance='actual'
                FROM consumed
                WHERE users.id=consumed.user_id
                  AND users.email=consumed.email
@@ -153,7 +153,7 @@ class AuthRepository:
 
     def mark_email_verified(self, user_id: str) -> None:
         self.connection.execute(
-            "UPDATE public.auth_users SET email_verified_at=now() "
+            "UPDATE public.auth_users SET email_verified_at=now(), verification_provenance='bypassed' "
             "WHERE id=%s AND email_verified_at IS NULL",
             (user_id,),
         )

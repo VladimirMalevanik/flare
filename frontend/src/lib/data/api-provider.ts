@@ -622,6 +622,12 @@ export class ApiDataProvider implements FlareDataProvider {
 
   async trackEvent(event: AnalyticsEventInput): Promise<void> {
     try {
+      if (event.eventType === "voluntary_inspection") {
+        await this.request("/analytics/inspection", { method: "POST", body: JSON.stringify({
+          interactionId: event.interactionId, flareId: event.flareId, sourceId: event.sourceId,
+        }) });
+        return;
+      }
       await this.request("/analytics/events", {
         method: "POST",
         body: JSON.stringify({

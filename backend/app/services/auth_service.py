@@ -80,7 +80,7 @@ class AuthService:
         self.email_sender = email_sender
         self.app_public_url = app_public_url
 
-    def register(self, email: str, password: str, name: str) -> str:
+    def register(self, email: str, password: str, name: str, *, acquisition_reference: str | None = None) -> str:
         email = email.strip().lower()
         name = name.strip()
         password_hash = _PASSWORDS.hash(password)
@@ -95,6 +95,19 @@ class AuthService:
                 repository.insert_user(
                     user_id, email, password_hash, name, workspace_id
                 )
+                # Savepoint isolates optional attribution failures from durable auth.
+                from app.services.attribution_service import reference_digest
+                try:
+                    with connection.transaction():
+                        previous_timeout=connection.execute("SHOW statement_timeout").fetchone()["statement_timeout"]
+                        connection.execute("""SELECT set_config('statement_timeout',
+                            (CASE WHEN setting::int=0 THEN 500 ELSE least(setting::int,500) END)::text,true)
+                            FROM pg_settings WHERE name='statement_timeout'""")
+                        connection.execute('SELECT public.acquisition_freeze(%s)',
+                            (reference_digest(acquisition_reference),))
+                        connection.execute("SELECT set_config('statement_timeout',%s,true)",(previous_timeout,))
+                except Exception:
+                    pass
                 repository.insert_session(
                     token_digest(session_token),
                     user_id,

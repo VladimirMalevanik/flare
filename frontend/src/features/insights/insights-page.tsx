@@ -32,7 +32,7 @@ export function InsightsPage() {
   const [error, setError] = useState("");
   const viewedFlare = useRef<string | null>(null);
   const recordFlareView = useCallback((flareId: string) => {
-    const event = nextFlareViewEvent(viewedFlare, flareId);
+    const event = nextFlareViewEvent(viewedFlare, flareId, crypto.randomUUID());
     if (event) void dataProvider.trackEvent(event);
   }, []);
   const closePanel = useCallback(() => {
@@ -69,7 +69,6 @@ export function InsightsPage() {
         if (live) {
           setDetail({ id: detailId, value, error: "" });
           setPanelOpen(true);
-          if (value) recordFlareView(detailId);
         }
       })
       .catch(() => {
@@ -317,11 +316,11 @@ export function InsightsPage() {
             {active.evidence.map((e, i) => (
               <article className="quote-card" key={`${e.itemId}-${i}`}>
                 <div className="quote-meta">
-                  <Link href={`/vault?item=${encodeURIComponent(e.itemId)}`}>{e.sourceTitle}</Link>
+                  <Link onClick={() => { void dataProvider.trackEvent({ eventType: "voluntary_inspection", interactionId: crypto.randomUUID(), flareId: active.id, sourceId: e.itemId }); }} href={`/vault?item=${encodeURIComponent(e.itemId)}`}>{e.sourceTitle}</Link>
                   <span className="muted">{label(e.sourceType)}</span>
                 </div>
                 <blockquote>“{e.excerpt}”</blockquote>
-                <Link className="text-button" href={`/vault?item=${encodeURIComponent(e.itemId)}`}>
+                <Link onClick={() => { void dataProvider.trackEvent({ eventType: "voluntary_inspection", interactionId: crypto.randomUUID(), flareId: active.id, sourceId: e.itemId }); }} className="text-button" href={`/vault?item=${encodeURIComponent(e.itemId)}`}>
                   {t("Open source")}{" "}<Icon name="arrow" />
                 </Link>
               </article>
