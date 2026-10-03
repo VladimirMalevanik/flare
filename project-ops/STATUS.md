@@ -2,9 +2,9 @@
 
 > Этот файл генерирует `task-sync`; вручную его не редактируют.
 
-Сформировано: `2026-10-03T19:09:31Z`
-Последнее обновление работы: `2026-10-03T19:09:31Z`
-Снимок состояния: `sha256:48d4c578da4a4368bd6976e433db6bf3218aa47955f4c8ac638c45361e715caa`
+Сформировано: `2026-10-03T19:31:09Z`
+Последнее обновление работы: `2026-10-03T19:31:09Z`
+Снимок состояния: `sha256:fb6adee035c81c4257b9209b91d9ed34379355c19a2cbb263ede324177e1cf07`
 
 ## Ближайшая цель
 
@@ -14,14 +14,14 @@
 
 ## Ближайшие шаги (не более пяти)
 
-1. `WEB-003` (в работе) — Improve existing Flare design: accessible drop/select ZIP dialog for Notion and Obsidian, real package/file progress and compact All/not-added report; consistent language control across public/auth/app pages; reference-grounded same-palette landing with honest product demonstration and restrained accessible motion.. Сейчас: Build import, landing and consistent language controls including legal pages; billing/voice/auth unchanged; зависит от: DATA-002, GROWTH-002
+1. `WEB-003` (в работе) — Improve existing Flare design: accessible drop/select ZIP dialog for Notion and Obsidian, real package/file progress and compact All/not-added report; consistent language control across public/auth/app pages; reference-grounded same-palette landing with honest product demonstration and restrained accessible motion.. Сейчас: Finalize browser QA and production build; update legacy landing tests for removed illustration; зависит от: DATA-002, GROWTH-002
 2. `API-001` (на проверке) — Implement Paddle Sandbox signed webhooks, durable ordered/deduplicated subscription state and authoritative workspace-wide Pro entitlement during trialing/active subscriptions. Add authenticated server-bound checkout intents, tenant-safe persistence, truthful Subscription status refresh and backend/frontend regression/security tests. Preserve auth, design, daily Analyze limits and Sandbox-only checkout. No Live, cancellation portal, new premium quota policy, production secret access or deployment.. Условие: Review PR36 at319a91de9f38ebbfa406fd92ad77c12b1415786c: signed Paddle Sandbox webhooks, durable workspace subscription state and Pro entitlement for all members. Matching0021/API/web rollout and Sandbox endpoint-secret setup plus real delivery smoke remain separate activation; no Live or deployment performed.; зависит от: GROWTH-002
 3. `WEB-002` (на проверке) — Add a Subscription section to Settings with Free, Pro and Team descriptions; grey Current for the current Free tier and blue Buy actions. Connect Pro Buy to official Paddle.js Sandbox overlay using public env placeholders and price pri_01m3y1nvmgw2avt60bz87161c2, quantity 1, authenticated email and customData.userId. Enforce sandbox-only tokens, single initialization and checkout locking, localized recoverable errors, existing design/auth preservation and frontend checks. Team stays explicitly unconfigured until a separate Sandbox price exists. No Live, server API key, webhooks, entitlement/DB changes, portal, cancellation or deployment.. Условие: Owner requested merge and deployment on 2026-10-02. PR32 merged and deployed to https://flare4u.tech/settings; Paddle remains Sandbox. Actual signed-in checkout/trial/payment verification is pending a Flare session; no paid access or plan DB changes.
 4. `OPS-001` (на проверке) — Resolve production staging service/upload path, API-worker storage reachability, worker isolation/resources, storage identity/network/CORS, physical ZIP deletion/retention and monitoring/load-test environment. Publish dated redacted operator decisions/evidence; no provisioning. Contract: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#ops-001.. Условие: Review redacted runtime/staging decision and evidence record; Vova selection/acceptance and sanitized inventory remain pending. Do not mark done or authorize rollout from public probes.
 
 ## В работе
 
-- `WEB-003` (в работе) — Improve existing Flare design: accessible drop/select ZIP dialog for Notion and Obsidian, real package/file progress and compact All/not-added report; consistent language control across public/auth/app pages; reference-grounded same-palette landing with honest product demonstration and restrained accessible motion.. Сейчас: Build import, landing and consistent language controls including legal pages; billing/voice/auth unchanged; владелец: Fedor / Codex Design / WEB-003; зависит от: DATA-002, GROWTH-002
+- `WEB-003` (в работе) — Improve existing Flare design: accessible drop/select ZIP dialog for Notion and Obsidian, real package/file progress and compact All/not-added report; consistent language control across public/auth/app pages; reference-grounded same-palette landing with honest product demonstration and restrained accessible motion.. Сейчас: Finalize browser QA and production build; update legacy landing tests for removed illustration; владелец: Fedor / Codex Design / WEB-003; зависит от: DATA-002, GROWTH-002
 
 ## На проверке
 
