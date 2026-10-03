@@ -63,6 +63,9 @@ def upgrade():
     if owner != 'flare_owner':
         op.execute(f'REVOKE CREATE ON SCHEMA public FROM {owner}')
     op.execute("ALTER FUNCTION public.growth_committed() SET lock_timeout='100ms'")
+    # Bound auxiliary fact sink waits inside its exception subtransaction, also
+    # for terminal Analyze hooks. Source publication must survive collection loss.
+    op.execute("ALTER FUNCTION public.growth_fact(uuid,text,text,uuid,timestamptz,text,integer,integer) SET lock_timeout='100ms'")
     # Reporting principal is provisioned separately, never inherited by app/worker.
     op.execute('''DO $$ BEGIN IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='flare_growth_reporter') THEN
     GRANT EXECUTE ON FUNCTION public.growth_report(timestamptz,timestamptz,text,text) TO flare_growth_reporter;

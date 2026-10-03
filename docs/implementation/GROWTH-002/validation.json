@@ -442,5 +442,220 @@
       "https://www.postgresql.org/docs/17/sql-set-role.html"
     ],
     "pending": "Final exact-head CI, independent QA/Critic round2, Vova acceptance and authorized integration. Production remains OFF; same draft PR35; task-sync active, no finish/merge/deployment."
+  },
+  "source_preservation_correction": {
+    "baseline_sha": "a59f2d90cc6e666b1c5081e9e5b1dad5c091641a",
+    "fresh_context_base_sha": "8fe2194bcf466c8937fc5ce22c46f5cbdaa0d78a",
+    "owner": "Fedor / Paperclip Flare Growth / GROWTH-002",
+    "scope_changed": false,
+    "original_operator_failure": {
+      "file": "/Users/fedornikonov/.paperclip/instances/default/flare/evidence/growth002-implementation-20261003/capture-during-removal.json",
+      "policy_enabled": false,
+      "sqlstate": "55P03",
+      "capture_seconds": 0.11086379102198407,
+      "durable_sources": 0
+    },
+    "prior_exact_head_ci": {
+      "sha": "a59f2d90cc6e666b1c5081e9e5b1dad5c091641a",
+      "source": "operator continuation contract",
+      "jobs_passed": 6,
+      "backend_self_passed": 828,
+      "backend_managed_passed": 827,
+      "backend_managed_skipped": 1,
+      "frontend_passed": 143
+    },
+    "fixes": [
+      "Try shared transaction privacy boundary; writer-first removers still wait/erase, remover-first observations skip without aborting domain sources",
+      "FOR KEY SHARE NOWAIT actor lock with narrow lock_not_available fallback; unchanged NOT VALID/cascade actor FK",
+      "Disabled/absent measurement early gates; ordinary events retain mandatory actor privacy guard",
+      "100ms fact sink budget with observation-only exception rollback; optional commit/terminal hooks isolated",
+      "Explicit report coverage gaps; import reconciliation counts extant facts rather than skipped attempts"
+    ],
+    "migration": {
+      "fresh_databases": [
+        "flare_growth_privacy_source_self_v2",
+        "flare_growth_privacy_source_managed_v2"
+      ],
+      "cluster_port": 51569,
+      "single_head": "0020",
+      "official_sequence": "0005 ->0007 ->email prepare ->0014 ->quota prepare ->head ->email verify ->quota verify ->head ->readiness",
+      "both_topologies_passed": true,
+      "historical_actor_preserved": true,
+      "historical_0019_unchanged": true,
+      "managed_owner": "flare_owner via role option, non-superuser/non-BYPASSRLS",
+      "product_collection_enabled": false
+    },
+    "growth_group": {
+      "self_managed": {
+        "passed": 106,
+        "failed": 0,
+        "seconds": 24.55
+      },
+      "managed": {
+        "passed": 106,
+        "failed": 0,
+        "seconds": 24.85
+      },
+      "new_cases": 18,
+      "base_command": "source-checks.py <self-managed|yandex> final-growth -m pytest backend/tests/test_acquisition.py backend/tests/test_funnel_facts.py backend/tests/test_funnel_reporting.py backend/tests/test_growth_migration.py -q --tb=short -p no:cacheprovider"
+    },
+    "proofs": [
+      "24 original writer/remover schedules retained; writer-first pg_blocking_pids proof and remover-first real commit beyond150ms before release",
+      "4 ordinary-event deletion schedules, enabled and disabled",
+      "9 actual capture/sync/removal journeys including default/configured off and explicit enabled; cross-tenant source success and no prohibited observations/reconciliation",
+      "4 disabled source pg_locks checks show no privacy advisory/fact-table locks",
+      "2 real ZIP gate completions during unrelated workspace removal; retained eligible publication reconciles exactly once",
+      "2 manual Analyze/Flare terminal completions during actual same-workspace removal, positive1Flare with unchanged domain statuses",
+      "100ms fact-table lock timeout preserves durable capture, then healthy capture fact succeeds",
+      "Restricted aggregate-only reporters/policy/CSV/FK/RLS capability checks retained"
+    ],
+    "retained_attempt_failures": [
+      {
+        "logs": [
+          "source-self-managed-focused.log",
+          "source-yandex-focused.log"
+        ],
+        "per_topology": {
+          "passed": 100,
+          "failed": 4
+        },
+        "reason": "same-workspace ZIP domain lock caused synthetic3s harness wait; positive Flare fixture missing grounded goal"
+      },
+      {
+        "log": "source-self-managed-source-regression.log",
+        "passed": 14,
+        "failed": 2,
+        "deselected": 43,
+        "reason": "positive Flare fixture still cited wrong source"
+      },
+      {
+        "log": "source-self-managed-terminal-fixture.log",
+        "passed": 0,
+        "failed": 2,
+        "deselected": 57,
+        "reason": "positive Flare proved but pre-removal snapshot incorrectly counted old capture facts; corrected to new Analyze kind before boundary and all observations after commit"
+      }
+    ],
+    "limits": [
+      "Contended optional observations are dropped with no exact loss counter; capture/Analyze/inspection/signup gaps are not reconstructed",
+      "Eligible retained imports can reconcile after contention, withdrawal/expiry cannot resurrect actor observations",
+      "DATA same-workspace ZIP workspace FOR UPDATE may wait for optout FK lock; unrelated-global-boundary test isolates analytics contention; no DATA/migration0019 changes",
+      "Authoritative domain cancellation remains a failure; no deadline/permissions widened",
+      "Production collection remains OFF; no owner acceptance/integration/finish"
+    ],
+    "tested_source_blobs": {
+      "backend/db/acquisition.sql": "43d1682ed1b46281f6fd7efa1be0fff38111409d",
+      "backend/db/funnel.sql": "8a40db226479ced9599a81fd01e62c5653bf303d",
+      "backend/migrations/versions/0020_acquisition_attribution_funnel.py": "fe644f7bad5fe3141d6beaef90e5c3035139cfe8",
+      "backend/tests/test_funnel_facts.py": "2c1b428309acb47179aacb4b1e12e0a983915a2f"
+    },
+    "unchanged_tree_ids": {
+      "backend/app": "6553e598ea4e995e67ba079296210d8780275b64",
+      "frontend": "bce3764946e37af59836688e7b5ba45b56778905"
+    },
+    "official_docs": [
+      "https://www.postgresql.org/docs/17/functions-admin.html",
+      "https://www.postgresql.org/docs/17/explicit-locking.html",
+      "https://www.postgresql.org/docs/17/xfunc-volatility.html"
+    ],
+    "runtime": "/Users/fedornikonov/.paperclip/instances/default/flare/worktrees/growth-analytics/growth002-test-runtime-20261003",
+    "orchestration": "source-checks.py",
+    "log_sha256": {
+      "source-self-managed-email-prepare.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source-self-managed-email-verify.log": "9ee8712d807ce8af23e55356ee1528b7180731f5dac561ffa9b01c8fd9cce9c7",
+      "source-self-managed-final-growth.log": "fb155bc19d789164b556b6998307b0de9db1cb5cd47d31811f11f939e508cf64",
+      "source-self-managed-focused.log": "ff5107852af7e90daebc21a3cea43aec7a1e5432e00b60607e20fed7405177d8",
+      "source-self-managed-full-backend.log": "ea77b1757c1334a7dbc4f85bcb327bd19b94a42f6965a1fc375d166baf320485",
+      "source-self-managed-quota-prepare.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source-self-managed-quota-verify.log": "568696d928b50822bccead6b9be8bb4fc5407cffe0f804f1309e8ab5acf39ff9",
+      "source-self-managed-readiness.log": "370c663897752c8e1a8f88b11892e36465f5980873776944800b93c1a2ece938",
+      "source-self-managed-source-regression.log": "afab3053f1f899b04f31d9f67c675c2d7b794461bd449322c6defe1d7767d20f",
+      "source-self-managed-terminal-fixture.log": "ad29eca1a1ff454c25a0e4938b390ae581c8717ddc513e781b3622e202268a8f",
+      "source-self-managed-upgrade-0005.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source-self-managed-upgrade-0007.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source-self-managed-upgrade-0014.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source-self-managed-upgrade-head.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source-self-managed-worker.log": "53de5f815cdf2b2984d828314f9351a70c2fb68095d6d46089bab1f0f30c751d",
+      "source-yandex-email-prepare.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source-yandex-email-verify.log": "9ee8712d807ce8af23e55356ee1528b7180731f5dac561ffa9b01c8fd9cce9c7",
+      "source-yandex-final-growth.log": "fffca68e8c7c8c8172c721a5d748c9328858ae262295af796854c42b9608f479",
+      "source-yandex-focused.log": "3f8ea9c0004b5c2a17057d8d9c9f3bfddd61f96eda18f98aacb6e4babcea9c68",
+      "source-yandex-full-backend.log": "17a6ccc9911503218f7499e492dc5209cb1fde57b24aef941e6b71515ce49aee",
+      "source-yandex-quota-prepare.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source-yandex-quota-verify.log": "568696d928b50822bccead6b9be8bb4fc5407cffe0f804f1309e8ab5acf39ff9",
+      "source-yandex-readiness.log": "370c663897752c8e1a8f88b11892e36465f5980873776944800b93c1a2ece938",
+      "source-yandex-upgrade-0005.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source-yandex-upgrade-0007.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source-yandex-upgrade-0014.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source-yandex-upgrade-head.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "pending": "Corrected exact-head CI and independent QA/Critic round2 at new SQL0020; original FLA-18 Vova acceptance/authorized integration remain pending. Existing interaction50976527 operator review path retained, same assignee/draftPR35/active ledger.",
+    "full_backend": {
+      "self_managed": {
+        "passed": 844,
+        "failed": 0,
+        "deselected": 2,
+        "seconds": 69.05
+      },
+      "managed": {
+        "passed": 842,
+        "failed": 0,
+        "skipped": 1,
+        "deselected": 3,
+        "seconds": 66.26
+      },
+      "base_command": "source-checks.py <self-managed|yandex> full-backend -m pytest -q --tb=short -p no:cacheprovider backend/tests",
+      "self_managed_k": "not test_explicit_dotenv_is_authoritative and not (test_direct_smoke_without_editable_install_or_pythonpath and dotenv)",
+      "managed_k": "not test_explicit_dotenv_is_authoritative and not (test_direct_smoke_without_editable_install_or_pythonpath and dotenv) and not test_effective_privileges_include_columns_and_public",
+      "exclusions": "Same mandatory PYTHON_DOTENV_DISABLED=1 two dotenv cases and managed shared-cluster global role-name assertion. Complete isolated exact-head CI still required."
+    },
+    "final_topology": {
+      "flare_growth_privacy_source_self_v2": {
+        "head": "0020",
+        "policy": [
+          false,
+          null,
+          null
+        ],
+        "fact_owner": [
+          "flare_job_executor",
+          [
+            "search_path=pg_catalog, public, pg_temp",
+            "statement_timeout=2s",
+            "lock_timeout=100ms"
+          ]
+        ],
+        "owner_flags": [
+          false,
+          false
+        ]
+      },
+      "flare_growth_privacy_source_managed_v2": {
+        "head": "0020",
+        "policy": [
+          false,
+          null,
+          null
+        ],
+        "fact_owner": [
+          "flare_owner",
+          [
+            "search_path=pg_catalog, public, pg_temp",
+            "statement_timeout=2s",
+            "lock_timeout=100ms"
+          ]
+        ],
+        "owner_flags": [
+          false,
+          false
+        ]
+      }
+    },
+    "evidence_sha256": {
+      "source-checks.py": "2e151529b531c70a99e95744aafcaf4a9ac2f1e0c19dcef59fbe57fba29aa539",
+      "source-final-topology.json": "45153d8e334e538b880db5ba7d8503f7bc0c3e23d1f0dd961b7177da84d604c7",
+      "source-postgres-library.txt": "1a2ea557fa5d38bd81cbc029b29e5d244706aa90d84b407834211fab9fa984bd",
+      "source-postgres-docs.txt": "977b772e48d4593f4ed09288e01ab77f2a90f2735404d8e4fe3c40bc2efbc394"
+    }
   }
 }

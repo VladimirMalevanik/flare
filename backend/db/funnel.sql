@@ -10,22 +10,27 @@ CREATE TABLE public.funnel_facts (
 CREATE INDEX funnel_actor_time ON public.funnel_facts(actor_id,workspace_id,occurred_at,kind);
 -- Writers share this transaction boundary; removers take it exclusively. Keep
 -- lock acquisition in a separate VOLATILE statement so subsequent reads use a
--- fresh READ COMMITTED snapshot after a wait. No tenant permission is changed.
+-- fresh READ COMMITTED snapshot. A competing remover drops optional observation
+-- work, never the authoritative source transaction. No tenant permission changes.
 CREATE FUNCTION public.growth_observation_allowed(p_w uuid,p_actor text) RETURNS boolean
  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 BEGIN
  IF current_setting('transaction_isolation')<>'read committed' THEN RETURN false; END IF;
- PERFORM pg_advisory_xact_lock_shared(2020,2);
+ IF NOT pg_try_advisory_xact_lock_shared(2020,2) THEN RETURN false; END IF;
  -- This also protects legacy events when collection is disabled. Locking a
  -- real account avoids raising an FK error for a delayed delivery after delete.
- PERFORM id FROM public.auth_users WHERE id=p_actor FOR KEY SHARE;
+ PERFORM id FROM public.auth_users WHERE id=p_actor FOR KEY SHARE NOWAIT;
  IF NOT FOUND THEN RETURN false; END IF;
  RETURN NOT EXISTS(SELECT 1 FROM public.signup_attribution WHERE user_id=p_actor AND eligibility='withdrawn')
  AND NOT EXISTS(SELECT 1 FROM public.growth_workspace_optouts WHERE workspace_id=p_w);
+EXCEPTION WHEN lock_not_available THEN RETURN false;
 END $$;
 CREATE FUNCTION public.growth_fact(p_w uuid,p_actor text,p_kind text,p_id uuid,p_at timestamptz,p_mode text,p_sources int,p_results int)
  RETURNS void LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 BEGIN
+ -- Collection off/absent needs no measurement locks or writes. Recheck below
+ -- after the serialization boundary; a precheck alone is not authorization.
+ IF NOT EXISTS(SELECT 1 FROM public.growth_policy WHERE enabled AND fact_seconds>0) THEN RETURN; END IF;
  IF NOT public.growth_observation_allowed(p_w,p_actor) THEN RETURN; END IF;
  INSERT INTO public.funnel_facts(workspace_id,actor_id,kind,logical_id,occurred_at,mode,source_count,result_count)
  SELECT p_w,p_actor,p_kind,p_id,p_at,p_mode,p_sources,p_results
@@ -35,12 +40,17 @@ BEGIN
  AND NOT EXISTS(SELECT 1 FROM public.signup_attribution WHERE user_id=p_actor AND eligibility='withdrawn')
  AND NOT EXISTS(SELECT 1 FROM public.growth_workspace_optouts WHERE workspace_id=p_w)
  ON CONFLICT DO NOTHING;
+EXCEPTION WHEN OTHERS THEN
+ -- Only the auxiliary observation is rolled back. Preserve domain commit and
+ -- expose bounded collection gaps in reporting; never reconstruct captures.
+ RETURN;
 END;
 $$;
--- Domain commit hooks: each fact rolls back with its source transaction.
+-- Domain commit hooks: each recorded fact rolls back with its source transaction.
 CREATE FUNCTION public.growth_committed() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
  SET search_path=pg_catalog,public,pg_temp AS $$
 BEGIN
+ IF NOT EXISTS(SELECT 1 FROM public.growth_policy WHERE enabled AND fact_seconds>0) THEN RETURN NEW; END IF;
  IF TG_TABLE_NAME='documents' THEN
   IF current_setting('app.growth_human_action',true)='capture' AND OLD.current_version_id IS NULL AND NEW.current_version_id IS NOT NULL AND NEW.import_package_id IS NULL
   AND NOT NEW.metadata ? 'originImportBatchId' THEN
@@ -62,6 +72,7 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN NULL; END;
  END IF;
  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN RETURN NEW;
 END $$;
 CREATE TRIGGER growth_capture AFTER UPDATE OF current_version_id ON public.documents FOR EACH ROW EXECUTE FUNCTION public.growth_committed();
 CREATE TRIGGER growth_sync_import AFTER UPDATE OF status ON public.import_batches FOR EACH ROW EXECUTE FUNCTION public.growth_committed();
@@ -77,10 +88,12 @@ CREATE FUNCTION public.growth_analyze_fact(p_job uuid) RETURNS void LANGUAGE sql
 $$;
 CREATE FUNCTION public.growth_terminal() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
  SET search_path=pg_catalog,public,pg_temp AS $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM public.growth_policy WHERE enabled AND fact_seconds>0) THEN RETURN NEW; END IF;
  IF NEW.status='completed' THEN
   IF TG_TABLE_NAME='analysis_jobs' THEN PERFORM public.growth_analyze_fact(NEW.id);
   ELSE PERFORM public.growth_analyze_fact(NEW.analysis_job_id); END IF;
  END IF; RETURN NEW;
+EXCEPTION WHEN OTHERS THEN RETURN NEW;
 END $$;
 CREATE TRIGGER growth_analysis AFTER UPDATE OF status ON public.analysis_jobs FOR EACH ROW EXECUTE FUNCTION public.growth_terminal();
 CREATE TRIGGER growth_generation AFTER UPDATE OF status ON public.flare_generation_runs FOR EACH ROW EXECUTE FUNCTION public.growth_terminal();
@@ -103,7 +116,8 @@ BEGIN
  AND p.occurred_at<clock_timestamp()-make_interval(secs=>policy.fact_seconds))
  AND NOT EXISTS(SELECT 1 FROM public.funnel_facts f WHERE f.workspace_id=p.workspace_id AND f.kind=p.kind AND f.logical_id=p.logical_id)
  ORDER BY p.occurred_at,p.logical_id LIMIT p_limit LOOP
-  PERFORM public.growth_fact(r.workspace_id,r.requested_by_user_id,r.kind,r.logical_id,r.occurred_at,'manual',r.source_count,r.chunk_count); n:=n+1;
+  PERFORM public.growth_fact(r.workspace_id,r.requested_by_user_id,r.kind,r.logical_id,r.occurred_at,'manual',r.source_count,r.chunk_count);
+  IF EXISTS(SELECT 1 FROM public.funnel_facts WHERE workspace_id=r.workspace_id AND kind=r.kind AND logical_id=r.logical_id) THEN n:=n+1; END IF;
  END LOOP;
  RETURN n;
 END $$;
@@ -117,11 +131,12 @@ CREATE UNIQUE INDEX activity_interaction ON public.activity_events(workspace_id,
 -- Withdrawal and deletion also suppress delayed deliveries through legacy writers.
 CREATE FUNCTION public.growth_event_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
  SET search_path=pg_catalog,public,pg_temp AS $$ BEGIN
- IF NOT public.growth_observation_allowed(NEW.workspace_id,NEW.actor_id) THEN RETURN NULL; END IF;
  -- Narrow interaction observations are growth collection. Existing unrelated
  -- authenticated events keep their domain behavior while collection is off.
  IF NEW.interaction_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.growth_policy WHERE enabled AND fact_seconds>0)
  THEN RETURN NULL; END IF;
+ -- Ordinary events still use the actor privacy guard with collection disabled.
+ IF NOT public.growth_observation_allowed(NEW.workspace_id,NEW.actor_id) THEN RETURN NULL; END IF;
  IF NOT EXISTS(SELECT 1 FROM public.auth_users WHERE id=NEW.actor_id)
  OR EXISTS(SELECT 1 FROM public.signup_attribution WHERE user_id=NEW.actor_id AND eligibility='withdrawn')
  OR EXISTS(SELECT 1 FROM public.growth_workspace_optouts WHERE workspace_id=NEW.workspace_id) THEN RETURN NULL; END IF;
@@ -140,6 +155,7 @@ BEGIN
  WHERE s.workspace_id=wid AND s.insight_id=p_flare AND d.id=p_source AND d.deleted_at IS NULL
  AND (d.import_package_id IS NULL OR EXISTS(SELECT 1 FROM public.import_packages p WHERE p.id=d.import_package_id AND p.status IN ('completed','completed_with_skips')))))
  THEN RAISE EXCEPTION 'Unavailable inspection target' USING ERRCODE='42501'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.growth_policy WHERE enabled AND fact_seconds>0) THEN RETURN; END IF;
  IF NOT public.growth_observation_allowed(wid,uid) THEN RETURN; END IF;
  IF NOT EXISTS(SELECT 1 FROM public.growth_policy WHERE enabled AND fact_seconds>0) THEN RETURN; END IF;
  IF EXISTS(SELECT 1 FROM public.signup_attribution WHERE user_id=uid AND eligibility='withdrawn')
@@ -300,8 +316,9 @@ BEGIN
  ELSE NULL END FROM bucket_sample) INTO result,attribution;
  RETURN jsonb_build_object('revision','funnel-v2','policy',p.revision,'unit',p_unit,'basis',p_basis,'calendar','UTC-v1',
  'since',p_since,'until',p_until,'generated_at',clock_timestamp(),'coverage_start','migration-0020',
- 'freshness','capture/Analyze commit hooks; optional import observations require bounded reconciliation before reports','metrics',result,
+ 'freshness','optional commit observations; retained imports require bounded reconciliation before reports; capture/Analyze/inspection collection loss unknown','metrics',result,
  'import_reconciliation_coverage','enabled policy only; retained authoritative imports within fact retention may predate collection enablement; no signup or foreground-action reconstruction',
+ 'observation_coverage','privacy/account-lock contention or observation failure skips optional facts/events; no exact capture/Analyze coverage or gap reconstruction',
  'visitor_denominator','touch snapshots only; no all-traffic or visitor-conversion denominator',
  'attribution',attribution,'attribution_suppressed',attribution IS NULL,'attribution_bucket_limit',100,
  'traffic_qualification','opt-in assertion; human/bot/test status unknown',

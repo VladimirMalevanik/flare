@@ -152,7 +152,7 @@ def facts(e,user):
     with psycopg.connect(e.admin_url) as c:return c.execute('SELECT kind,logical_id FROM public.funnel_facts WHERE workspace_id=%s',(user.workspace_id,)).fetchall()
 
 
-def test_capture_and_sync_commit_not_best_effort(growth):
+def test_capture_and_sync_commit_observations_and_source_rollback(growth):
     db,e,_,account=growth;u,_=account()
     item=ItemService(db,u.identity).create_note(title='synthetic',content='synthetic')
     importer=ImportService(db,u.identity)
@@ -419,8 +419,20 @@ def test_privacy_boundary_serializes_real_writers_and_removers(growth, writer_ki
                 assert writer.pid
             second_future = pool.submit(remove if first == 'writer' else write)
             assert second_db.ready.wait(2)
-            wait_for_privacy_block(e.admin_url, second_db, first_db)
-            assert not second_future.done()
+            if first == 'writer':
+                wait_for_privacy_block(e.admin_url, second_db, first_db)
+                assert not second_future.done()
+            else:
+                # Hold the removal transaction beyond the former 100ms failure
+                # budget. The real writer must commit BEFORE removal is released.
+                sleep(.15)
+                second_future.result(timeout=2)
+                assert not first_future.done()
+                with psycopg.connect(e.admin_url) as c:
+                    assert c.execute('SELECT count(*) FROM public.funnel_facts WHERE actor_id=%s',(user.user_id,)).fetchone() == (0,)
+                    assert c.execute('SELECT count(*) FROM public.activity_events WHERE actor_id=%s',(user.user_id,)).fetchone() == (0,)
+                    if writer_kind == 'capture':
+                        assert c.execute('SELECT current_version_id FROM public.documents WHERE id=%s',(results['item'].id,)).fetchone()[0] is not None
         finally:
             first_db.release.set()
         first_future.result(timeout=5); second_future.result(timeout=5)
@@ -463,7 +475,12 @@ def test_ordinary_event_account_delete_transaction_boundary(growth, enabled, fir
             assert first_db.ready.wait(3)
             b=pool.submit(delete if first == 'writer' else write)
             assert second_db.ready.wait(2)
-            wait_for_privacy_block(e.admin_url,second_db,first_db)
+            if first == 'writer':
+                wait_for_privacy_block(e.admin_url,second_db,first_db)
+            else:
+                sleep(.15)
+                b.result(timeout=2)
+                assert not a.done()
         finally:
             first_db.release.set()
         a.result(timeout=5);b.result(timeout=5)
@@ -519,3 +536,156 @@ def test_pending_capture_cannot_survive_fact_retention_cleanup(growth):
     with psycopg.connect(e.admin_url) as c:
         assert c.execute('SELECT count(*) FROM public.funnel_facts WHERE actor_id=%s',(user.user_id,)).fetchone()==(0,)
         assert c.execute('SELECT current_version_id FROM public.documents WHERE id=%s',(result['item'].id,)).fetchone()[0] is not None
+
+
+@pytest.mark.parametrize('policy', ['default-off', 'configured-off', 'enabled'])
+@pytest.mark.parametrize('removal', ['account', 'workspace', 'expiry'])
+def test_capture_and_sync_sources_commit_during_long_removal(growth, policy, removal):
+    db,e,auth,account=growth
+    if policy != 'enabled': disable_policy(e.admin_url,policy == 'configured-off')
+    user,_=account()
+    control,_=account()
+    if removal == 'expiry':
+        # Explicit test expiry, even when collection is disabled.
+        configure(e.admin_url,enabled=(policy == 'enabled'))
+        with psycopg.connect(e.admin_url) as c:
+            c.execute("UPDATE public.auth_users SET created_at=clock_timestamp()-interval '20 days' WHERE id=%s",(user.user_id,))
+    remover=(PrivacyWorkerDatabase if removal == 'expiry' else PrivacyBoundaryDatabase)(db,paused=True)
+    def remove():
+        if removal == 'expiry':
+            with remover.workspace_transaction() as c: c.execute('SELECT public.growth_cleanup(100)')
+        else: FunnelService(remover,user.identity).withdraw(workspace=(removal == 'workspace'))
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        removal_future=pool.submit(remove)
+        try:
+            assert remover.ready.wait(3)
+            sleep(.15)
+            def publish():
+                item=ItemService(db,user.identity).create_note(title=None,content='synthetic durable original')
+                result=ImportService(db,user.identity).create_import(format='txt',file_name='synthetic.txt',file_type='text/plain',file_size=9,content='synthetic')
+                # Another tenant also retains domain success under the global boundary.
+                other=ItemService(db,control.identity).create_note(title=None,content='synthetic other tenant')
+                AnalyticsService(db,user.identity).track_event(event_type='capture_started',target_type='capture',metadata={})
+                return item,result,other
+            item,result,other=pool.submit(publish).result(timeout=3)
+            assert not removal_future.done()
+            with psycopg.connect(e.admin_url) as c:
+                assert c.execute('SELECT count(*) FROM public.documents WHERE id=ANY(%s) AND current_version_id IS NOT NULL',([item.id,other.id],)).fetchone()==(2,)
+                assert c.execute('SELECT status FROM public.import_batches WHERE id=%s',(result.batch.id,)).fetchone()==('completed',)
+                assert c.execute('SELECT count(*) FROM public.funnel_facts WHERE actor_id=ANY(%s)',([user.user_id,control.user_id],)).fetchone()==(0,)
+                assert c.execute('SELECT count(*) FROM public.activity_events WHERE actor_id=%s',(user.user_id,)).fetchone()==(0,)
+                assert c.execute('SELECT public.growth_reconcile(100)').fetchone()==(0,)
+        finally: remover.release.set()
+        removal_future.result(timeout=3)
+    configure(e.admin_url)
+    with psycopg.connect(e.admin_url) as c:
+        assert c.execute('SELECT public.growth_reconcile(100)').fetchone()==(0,)
+        assert c.execute('SELECT count(*) FROM public.funnel_facts WHERE actor_id=%s',(user.user_id,)).fetchone()==(0,)
+        assert c.execute('SELECT count(*) FROM public.activity_events WHERE actor_id=%s',(user.user_id,)).fetchone()==(0,)
+    # Source edits still succeed after successful erasure, without new observations.
+    ItemService(db,user.identity).create_note(title=None,content='synthetic after removal')
+    assert facts(e,user)==[]
+
+
+@pytest.mark.parametrize('policy', ['default-off', 'configured-off'])
+@pytest.mark.parametrize('source', ['capture', 'sync_import'])
+def test_off_policy_source_takes_no_measurement_boundary(growth, policy, source):
+    db,e,_,account=growth
+    disable_policy(e.admin_url,policy == 'configured-off')
+    user,_=account()
+    writer=PrivacyBoundaryDatabase(db,paused=True)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        if source == 'capture':
+            pending=pool.submit(ItemService(writer,user.identity).create_note,title=None,content='synthetic disabled')
+        else:
+            pending=pool.submit(ImportService(writer,user.identity).create_import,format='txt',file_name='synthetic.txt',file_type='text/plain',file_size=9,content='synthetic')
+        try:
+            assert writer.ready.wait(3)
+            with psycopg.connect(e.admin_url) as c:
+                assert c.execute("SELECT count(*) FROM pg_locks WHERE pid=%s AND locktype='advisory' AND classid=2020 AND objid=2",(writer.pid,)).fetchone()==(0,)
+                assert c.execute("SELECT count(*) FROM pg_locks WHERE pid=%s AND relation='public.funnel_facts'::regclass",(writer.pid,)).fetchone()==(0,)
+        finally: writer.release.set()
+        result=pending.result(timeout=3)
+    assert facts(e,user)==[]
+    with psycopg.connect(e.admin_url) as c:
+        if source == 'capture':
+            assert c.execute('SELECT current_version_id FROM public.documents WHERE id=%s',(result.id,)).fetchone()[0] is not None
+        else:
+            assert c.execute('SELECT status FROM public.import_batches WHERE id=%s',(result.batch.id,)).fetchone()==('completed',)
+
+
+@pytest.mark.parametrize('policy', ['default-off', 'enabled'])
+def test_zip_publication_survives_long_unrelated_removal(growth, env, policy):
+    db,e,_,account=growth
+    if policy == 'default-off': disable_policy(e.admin_url,False)
+    user,_=account(); victim,_=account(); runtime,storage,worker=env
+    with runtime.client(workspace_id=user.workspace_id,user_id=user.user_id,import_storage=storage) as client:
+        pid=enqueue(client,archive_bytes([('synthetic.txt','synthetic original')]))
+        job=worker.claim(2);checkpoint(worker,storage,job)
+        remover=PrivacyBoundaryDatabase(db,paused=True)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            pending=pool.submit(FunnelService(remover,victim.identity).withdraw,workspace=True)
+            try:
+                assert remover.ready.wait(3);sleep(.15)
+                pool.submit(worker.step,job,'gate').result(timeout=3)
+                assert not pending.done()
+                assert client.get('/imports/packages/'+pid).json()['status']=='completed'
+                assert len(client.get('/items').json())==1
+                with psycopg.connect(e.admin_url) as c:
+                    assert c.execute('SELECT count(*) FROM public.import_publications WHERE package_id=%s',(pid,)).fetchone()==(1,)
+                    assert c.execute('SELECT count(*) FROM public.funnel_facts WHERE actor_id=%s',(user.user_id,)).fetchone()==(0,)
+            finally:remover.release.set()
+            pending.result(timeout=3)
+        configure(e.admin_url)
+        with psycopg.connect(e.admin_url) as c:
+            assert c.execute('SELECT public.growth_reconcile(100)').fetchone()==(1,)
+            assert c.execute('SELECT public.growth_reconcile(100)').fetchone()==(0,)
+            assert c.execute('SELECT count(*) FROM public.funnel_facts WHERE actor_id=%s',(victim.user_id,)).fetchone()==(0,)
+        assert [k for k,_ in facts(e,user)]==['zip_import']
+
+
+@pytest.mark.parametrize('policy', ['default-off', 'enabled'])
+def test_terminal_manual_analyze_survives_long_removal(jobs, admin_url, policy):
+    identity=jobs[2][0];db=jobs[0].database
+    from test_flare_runs import TEXT
+    ItemService(db,identity).create_note(title=None,content=TEXT)
+    run=start(jobs)
+    if policy == 'default-off': disable_policy(admin_url,False)
+    # Finish stage1 before contention, then exercise actual terminal publication.
+    assert asyncio.run(AnalysisProcessor(jobs[1],FakeAnalyzer(),AISettings(),WorkerSettings()).process_one())=='completed'
+    remover=PrivacyBoundaryDatabase(db,paused=True)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        pending=pool.submit(FunnelService(remover,identity).withdraw,workspace=True)
+        try:
+            assert remover.ready.wait(3);sleep(.15)
+            class GroundedDetector(Detector):
+                async def detect(self,analysis,evidence):
+                    source=next(e for e in evidence if e.content == TEXT)
+                    return await super().detect(analysis,(source,))
+            def terminal():
+                return asyncio.run(FlareProcessor(__import__('app.models.flare_runs',fromlist=['FlareRuns']).FlareRuns(jobs[1]._database_url),GroundedDetector(),AISettings(),FlareSettings(),WorkerSettings()).process_one())
+            assert pool.submit(terminal).result(timeout=3)=='completed'
+            assert not pending.done()
+            with psycopg.connect(admin_url) as c:
+                assert c.execute('SELECT j.status,g.status,cardinality(g.flare_ids) FROM public.analysis_runs r JOIN public.analysis_jobs j ON j.id=r.analysis_job_id JOIN public.flare_generation_runs g ON g.analysis_job_id=j.id WHERE r.id=%s',(run['id'],)).fetchone()==('completed','completed',1)
+                assert c.execute("SELECT count(*) FROM public.funnel_facts WHERE actor_id=%s AND kind='analyze'",(identity.user_id,)).fetchone()==(0,)
+        finally:remover.release.set()
+        pending.result(timeout=3)
+    with psycopg.connect(admin_url) as c:
+        assert c.execute('SELECT count(*) FROM public.funnel_facts WHERE actor_id=%s',(identity.user_id,)).fetchone()==(0,)
+
+
+def test_capture_sink_timeout_rolls_back_observation_only(growth):
+    db,e,_,account=growth;user,_=account()
+    # Hold the auxiliary table longer than the 100ms observation budget.
+    with psycopg.connect(e.admin_url) as blocker:
+        blocker.execute('LOCK TABLE public.funnel_facts IN ACCESS EXCLUSIVE MODE')
+        started=monotonic()
+        item=ItemService(db,user.identity).create_note(title=None,content='synthetic sink outage')
+        assert monotonic()-started>=.1
+        with psycopg.connect(e.admin_url) as c:
+            assert c.execute('SELECT current_version_id FROM public.documents WHERE id=%s',(item.id,)).fetchone()[0] is not None
+    assert facts(e,user)==[]
+    # No capture reconstruction. Healthy later captures still produce facts.
+    ItemService(db,user.identity).create_note(title=None,content='synthetic healthy')
+    assert [k for k,_ in facts(e,user)]==['capture']
