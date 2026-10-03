@@ -141,15 +141,15 @@ test('landing selectors and translated demo retain tab, filter, and evidence sta
   let locale = 'en';
   const { default: Home } = load('../src/app/page.tsx', { react: h.react, '@/i18n/provider': { useI18n: () => i18nMock(locale).useI18n() } });
   let tree = h.render(Home);
-  assert.ok(text(tree).includes('Your notes go quiet.'));
+  assert.ok(text(tree).includes('Your startup’s knowledge,'));
   const all = nodes(tree);
   all.find(node => node.props?.['aria-label'] === 'Toggle navigation').props.onClick();
   all.find(node => node.type === 'button' && text(node) === 'Risks').props.onClick();
   all.find(node => node.type === 'button' && text(node).includes('Open evidence ↓')).props.onClick();
   locale = 'es';
   tree = h.render(Home);
-  assert.ok(text(tree).includes('Tus notas se quedan en silencio.'));
-  assert.equal(nodes(tree).filter(node => node.type === 'language-selector').length, 2);
+  assert.ok(text(tree).includes('El conocimiento de tu startup,'));
+  assert.equal(nodes(tree).filter(node => node.type === 'language-selector').length, 1);
   assert.ok(nodes(tree).some(node => node.props?.className === 'active' && text(node) === 'Riesgos'));
   assert.ok(text(tree).includes('Ocultar evidencia ↑'));
 });
