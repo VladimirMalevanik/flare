@@ -2,9 +2,9 @@
 
 > Этот файл генерирует `task-sync`; вручную его не редактируют.
 
-Сформировано: `2026-10-03T18:11:17Z`
-Последнее обновление работы: `2026-10-03T18:11:17Z`
-Снимок состояния: `sha256:d2908c0117a45bfe50a143ec9083ecfd22d74ed9877e28c27821cddf4321ea2e`
+Сформировано: `2026-10-03T18:27:05Z`
+Последнее обновление работы: `2026-10-03T18:27:05Z`
+Снимок состояния: `sha256:907a8f263b2257952e8b0d7e863ef21259c64e7af89db940e0964c9ef8033966`
 
 ## Ближайшая цель
 
@@ -14,13 +14,13 @@
 
 ## Ближайшие шаги (не более пяти)
 
-1. `API-001` (в работе) — Implement Paddle Sandbox signed webhooks, durable ordered/deduplicated subscription state and authoritative workspace-wide Pro entitlement during trialing/active subscriptions. Add authenticated server-bound checkout intents, tenant-safe persistence, truthful Subscription status refresh and backend/frontend regression/security tests. Preserve auth, design, daily Analyze limits and Sandbox-only checkout. No Live, cancellation portal, new premium quota policy, production secret access or deployment.. Сейчас: Signed Sandbox billing is published at ee8c854; expand only schema-head regression test to0021, then run complete backend profiles and finalize review evidence. Fresh board has no other active task.; зависит от: GROWTH-002
+1. `API-001` (в работе) — Implement Paddle Sandbox signed webhooks, durable ordered/deduplicated subscription state and authoritative workspace-wide Pro entitlement during trialing/active subscriptions. Add authenticated server-bound checkout intents, tenant-safe persistence, truthful Subscription status refresh and backend/frontend regression/security tests. Preserve auth, design, daily Analyze limits and Sandbox-only checkout. No Live, cancellation portal, new premium quota policy, production secret access or deployment.. Сейчас: Implementation/test delivery complete; create Draft PR and wait exact-head GitHub checks, then hand off for owner review and coordinated Sandbox destination/secret/migration/deployment smoke.; зависит от: GROWTH-002
 2. `WEB-002` (на проверке) — Add a Subscription section to Settings with Free, Pro and Team descriptions; grey Current for the current Free tier and blue Buy actions. Connect Pro Buy to official Paddle.js Sandbox overlay using public env placeholders and price pri_01m3y1nvmgw2avt60bz87161c2, quantity 1, authenticated email and customData.userId. Enforce sandbox-only tokens, single initialization and checkout locking, localized recoverable errors, existing design/auth preservation and frontend checks. Team stays explicitly unconfigured until a separate Sandbox price exists. No Live, server API key, webhooks, entitlement/DB changes, portal, cancellation or deployment.. Условие: Owner requested merge and deployment on 2026-10-02. PR32 merged and deployed to https://flare4u.tech/settings; Paddle remains Sandbox. Actual signed-in checkout/trial/payment verification is pending a Flare session; no paid access or plan DB changes.
 3. `OPS-001` (на проверке) — Resolve production staging service/upload path, API-worker storage reachability, worker isolation/resources, storage identity/network/CORS, physical ZIP deletion/retention and monitoring/load-test environment. Publish dated redacted operator decisions/evidence; no provisioning. Contract: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#ops-001.. Условие: Review redacted runtime/staging decision and evidence record; Vova selection/acceptance and sanitized inventory remain pending. Do not mark done or authorize rollout from public probes.
 
 ## В работе
 
-- `API-001` (в работе) — Implement Paddle Sandbox signed webhooks, durable ordered/deduplicated subscription state and authoritative workspace-wide Pro entitlement during trialing/active subscriptions. Add authenticated server-bound checkout intents, tenant-safe persistence, truthful Subscription status refresh and backend/frontend regression/security tests. Preserve auth, design, daily Analyze limits and Sandbox-only checkout. No Live, cancellation portal, new premium quota policy, production secret access or deployment.. Сейчас: Signed Sandbox billing is published at ee8c854; expand only schema-head regression test to0021, then run complete backend profiles and finalize review evidence. Fresh board has no other active task.; владелец: Vova / Codex / API-001; зависит от: GROWTH-002
+- `API-001` (в работе) — Implement Paddle Sandbox signed webhooks, durable ordered/deduplicated subscription state and authoritative workspace-wide Pro entitlement during trialing/active subscriptions. Add authenticated server-bound checkout intents, tenant-safe persistence, truthful Subscription status refresh and backend/frontend regression/security tests. Preserve auth, design, daily Analyze limits and Sandbox-only checkout. No Live, cancellation portal, new premium quota policy, production secret access or deployment.. Сейчас: Implementation/test delivery complete; create Draft PR and wait exact-head GitHub checks, then hand off for owner review and coordinated Sandbox destination/secret/migration/deployment smoke.; владелец: Vova / Codex / API-001; зависит от: GROWTH-002
 
 ## На проверке
 
