@@ -498,14 +498,14 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
       </SettingsSection>
       <SettingsSection
         title={t("Import guides")}
-        subtitle={t("Prepare exports from other tools for Flare's current file importer.")}
+        subtitle={t("Prepare Notion and Obsidian ZIP snapshots or an Evernote file for import.")}
         icon="file"
       >
         {(["notion", "obsidian", "evernote"] as const).map((source) => (
           <SettingRow
             key={source}
             title={source[0].toUpperCase() + source.slice(1)}
-            description={t("Current imports accept one Markdown, text, or CSV file up to 200 KB.")}
+            description={t(source === "evernote" ? "Current imports accept one Markdown, text, or CSV file up to 200 KB." : "Import a ZIP snapshot with .md, .markdown, .txt, and .csv files from Sources.")}
           >
             <Link className="button" href={`/settings/import-guides/${source}`}>
               {t("View guide")}</Link>

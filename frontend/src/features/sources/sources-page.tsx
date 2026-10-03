@@ -121,7 +121,11 @@ export function SourcesPage() {
                 <p className="muted meta">{source.id === "github" && source.status === "syncing" ? t("authorizedAs", { name: source.accountLogin ?? "GitHub" }) : label(source.updated)}</p>
                 <footer>
                   {source.id === "notion" || source.id === "obsidian" ? (
-                    <ZipImport sourceKind={source.id} />
+                    <>
+                      <ZipImport sourceKind={source.id} />
+                      <Link className="button" href={`/settings/import-guides/${source.id}`}>
+                        {t("View import guide")}</Link>
+                    </>
                   ) : source.status === "manual-import" ? (
                     <Link className="button" href={`/settings/import-guides/${source.id}`}>
                       {t("View import guide")}</Link>

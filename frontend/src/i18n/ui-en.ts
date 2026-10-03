@@ -1,4 +1,17 @@
 export const uiEn = {
+  "zipGuideFormats": "Import .md, .markdown, .txt, and .csv files together from one ZIP snapshot.",
+  "Prepare your ZIP": "Prepare your ZIP",
+  "One-time snapshot import. Changes in the original tool are not synchronized.": "One-time snapshot import. Changes in the original tool are not synchronized.",
+  "Export your Notion pages as Markdown and CSV in one ZIP.": "Export your Notion pages as Markdown and CSV in one ZIP.",
+  "Create one ZIP snapshot of your Obsidian vault or project folder.": "Create one ZIP snapshot of your Obsidian vault or project folder.",
+  "Include .md, .markdown, .txt, and .csv files. Unsupported formats are skipped and listed in the import report; package safety checks still apply.": "Include .md, .markdown, .txt, and .csv files. Unsupported formats are skipped and listed in the import report; package safety checks still apply.",
+  "zipGuideUpload": "Open Sources in Flare, choose the {source} card, select your ZIP, and click Import ZIP.",
+  "Processing runs asynchronously. Follow progress in Sources and open the import report to review imported or skipped files.": "Processing runs asynchronously. Follow progress in Sources and open the import report to review imported or skipped files.",
+  "Imported sources appear together in Vault after the package is published. Import does not start Analyze automatically.": "Imported sources appear together in Vault after the package is published. Import does not start Analyze automatically.",
+  "Open Sources": "Open Sources",
+  "Prepare Notion and Obsidian ZIP snapshots or an Evernote file for import.": "Prepare Notion and Obsidian ZIP snapshots or an Evernote file for import.",
+  "Import a ZIP snapshot with .md, .markdown, .txt, and .csv files from Sources.": "Import a ZIP snapshot with .md, .markdown, .txt, and .csv files from Sources.",
+
   "Funny mode": "Funny mode",
   "More color. A Magic 8-ball. Same real Flares. Shake the ball to start a new analysis. Saved in this browser.": "More color. A Magic 8-ball. Same real Flares. Shake the ball to start a new analysis. Saved in this browser.",
   "Funny sounds": "Funny sounds",

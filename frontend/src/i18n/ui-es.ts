@@ -1,6 +1,19 @@
 import type { uiEn } from "./ui-en";
 
 export const uiEs = {
+  "zipGuideFormats": "Importa archivos .md, .markdown, .txt y .csv juntos desde una instantánea ZIP.",
+  "Prepare your ZIP": "Prepara tu ZIP",
+  "One-time snapshot import. Changes in the original tool are not synchronized.": "Importación única de una instantánea. Los cambios en la herramienta original no se sincronizan.",
+  "Export your Notion pages as Markdown and CSV in one ZIP.": "Exporta tus páginas de Notion como Markdown y CSV en un ZIP.",
+  "Create one ZIP snapshot of your Obsidian vault or project folder.": "Crea una instantánea ZIP de tu bóveda de Obsidian o de la carpeta del proyecto.",
+  "Include .md, .markdown, .txt, and .csv files. Unsupported formats are skipped and listed in the import report; package safety checks still apply.": "Incluye archivos .md, .markdown, .txt y .csv. Los formatos no compatibles se omiten y aparecen en el informe de importación; se mantienen las comprobaciones de seguridad del paquete.",
+  "zipGuideUpload": "Abre Fuentes en Flare, elige la tarjeta de {source}, selecciona tu ZIP y pulsa Importar ZIP.",
+  "Processing runs asynchronously. Follow progress in Sources and open the import report to review imported or skipped files.": "El procesamiento es asíncrono. Sigue el progreso en Fuentes y abre el informe de importación para revisar los archivos importados u omitidos.",
+  "Imported sources appear together in Vault after the package is published. Import does not start Analyze automatically.": "Las fuentes importadas aparecen juntas en la Bóveda cuando se publica el paquete. La importación no inicia el análisis automáticamente.",
+  "Open Sources": "Abrir Fuentes",
+  "Prepare Notion and Obsidian ZIP snapshots or an Evernote file for import.": "Prepara instantáneas ZIP de Notion y Obsidian o un archivo de Evernote para importarlo.",
+  "Import a ZIP snapshot with .md, .markdown, .txt, and .csv files from Sources.": "Importa una instantánea ZIP con archivos .md, .markdown, .txt y .csv desde Fuentes.",
+
   "Funny mode": "Modo divertido",
   "More color. A Magic 8-ball. Same real Flares. Shake the ball to start a new analysis. Saved in this browser.": "Más color. Una bola mágica 8. Los mismos Flares reales. Agita la bola para iniciar un nuevo análisis. Se guarda en este navegador.",
   "Funny sounds": "Sonidos divertidos",
