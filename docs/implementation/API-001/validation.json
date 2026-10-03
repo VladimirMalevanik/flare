@@ -1,0 +1,195 @@
+{
+  "task": "API-001",
+  "recordedAt": "2026-10-03T18:25:33.622058+00:00",
+  "branch": "task/api-001-paddle-webhooks-20261003",
+  "baseRevision": "3bb05329fc5b793097674bf9e64c914e427de248",
+  "schemaRevision": "0021",
+  "environment": "Paddle Sandbox only",
+  "entitlementScope": "entire workspace; checkout management restricted to verified owner",
+  "sourceFilesSha256": "79ca71c5bb508ef7fd6a5f621fd8a3ca971adef00300f7f9b282cdd6c9b7fb69",
+  "sourceFiles": [
+    ".env.example",
+    ".env.yandex.api.example",
+    "backend/app/api/billing.py",
+    "backend/app/config.py",
+    "backend/app/main.py",
+    "backend/app/models/billing.py",
+    "backend/app/models/database.py",
+    "backend/app/services/paddle_billing.py",
+    "backend/db/billing.sql",
+    "backend/migrations/versions/0021_paddle_billing.py",
+    "backend/scripts/check_billing_migration.py",
+    "backend/scripts/check_daily_quota_migration.py",
+    "backend/scripts/check_email_verification_migration.py",
+    "backend/scripts/check_flares_migration.py",
+    "backend/scripts/check_growth_migration.py",
+    "backend/tests/test_billing_api.py",
+    "backend/tests/test_billing_database.py",
+    "backend/tests/test_billing_migration.py",
+    "backend/tests/test_growth_migration.py",
+    "backend/tests/test_migration_0018_privileges.py",
+    "backend/tests/test_paddle_billing.py",
+    "frontend/src/features/subscription/subscription-copy.ts",
+    "frontend/src/features/subscription/subscription-section.tsx",
+    "frontend/src/lib/billing/billing-api.ts",
+    "frontend/src/lib/billing/billing-status-controller.ts",
+    "frontend/src/lib/billing/checkout-controller.ts",
+    "frontend/src/lib/billing/paddle-sandbox.ts",
+    "frontend/tests/billing-status.test.cjs",
+    "frontend/tests/paddle-sandbox.test.cjs"
+  ],
+  "checks": [
+    {
+      "name": "complete backend suite, self-managed PostgreSQL17 + pgvector",
+      "command": "python -m pytest -q backend/tests --tb=short",
+      "result": "passed",
+      "passed": 997,
+      "skipped": 0,
+      "warnings": 2,
+      "seconds": 68.32,
+      "exclusions": []
+    },
+    {
+      "name": "complete backend suite, restricted managed-owner profile",
+      "command": "python -m pytest -q backend/tests --tb=short",
+      "result": "passed",
+      "passed": 996,
+      "skipped": 1,
+      "warnings": 2,
+      "seconds": 64.11,
+      "exclusions": [],
+      "skipReason": "Existing self-managed-only0018 privilege regression"
+    },
+    {
+      "name": "focused billing regression and real HTTP/PostgreSQL integration",
+      "result": "passed",
+      "passed": 120,
+      "providerCalls": 0,
+      "coverage": [
+        "verified cookie registration/session",
+        "server-bound checkout intent",
+        "synthetic signed trial subscription.created",
+        "fresh application/pool persists Pro",
+        "workspace viewer sees Pro but cannot initiate checkout",
+        "unrelated workspace remains Free",
+        "require_pro dependency allows members and denies unrelated workspace",
+        "signed cancellation removes Pro and returns403"
+      ]
+    },
+    {
+      "name": "managed billing database/migration/RLS regressions",
+      "result": "passed",
+      "passed": 63
+    },
+    {
+      "name": "full frontend tests",
+      "command": "node --test tests/*.test.cjs",
+      "result": "passed",
+      "passed": 162
+    },
+    {
+      "name": "focused checkout/status frontend tests",
+      "result": "passed",
+      "passed": 42
+    },
+    {
+      "name": "frontend lint",
+      "command": "npm run lint",
+      "result": "passed"
+    },
+    {
+      "name": "frontend TypeScript",
+      "command": "npx tsc --noEmit",
+      "result": "passed"
+    },
+    {
+      "name": "frontend production build after final controller baseline fix",
+      "command": "npm run build",
+      "result": "passed"
+    },
+    {
+      "name": "installed existing backend dependency consistency",
+      "command": "python -m pip check",
+      "result": "passed"
+    },
+    {
+      "name": "fresh restricted-owner and self-managed migrations through0021 plus repeat head",
+      "result": "passed"
+    },
+    {
+      "name": "email/daily quota/growth/billing migration readiness",
+      "result": "passed"
+    },
+    {
+      "name": "legacy preserved-data migration smoke, both profiles",
+      "command": "python backend/scripts/check_analysis_runs_migration.py --pg-bin <PostgreSQL17/bin> --provider <self-managed|yandex>",
+      "result": "passed",
+      "coverage": [
+        "0005->0006",
+        "0006->0007",
+        "0007->0021",
+        "repeat upgrades",
+        "original content and completed history",
+        "explicit0015 fencing of unfinished unowned legacy generation rows",
+        "RLS/capability/worker isolation"
+      ]
+    },
+    {
+      "name": "preservation helper independent positive/negative fixtures",
+      "result": "passed",
+      "passed": 20
+    },
+    {
+      "name": "independent complete product security review",
+      "result": "no confirmed remaining release blocker"
+    },
+    {
+      "name": "product diff whitespace and credential pattern scan",
+      "result": "passed",
+      "credentialFindings": 0
+    }
+  ],
+  "warnings": [
+    "Existing Starlette/httpx test-client deprecation",
+    "Intentional duplicate ZIP fixture warning"
+  ],
+  "securityCoverage": [
+    "unchanged raw-body HMAC-SHA256, freshness and tamper rejection",
+    "bounded request size/time and strict JSON parsing",
+    "one-time hashed owner/workspace/price-bound intent",
+    "no reliance on client email/userId for entitlement binding",
+    "atomic event ledger and subscription update",
+    "duplicate/stale/equal-watermark ambiguity and cancellation-before-created handling",
+    "customer transfer fails closed without moving workspace binding",
+    "forced RLS and restrictive workspace membership guards",
+    "runtime cannot read intent hash/global event ledger or mutate billing tables directly",
+    "unsupported price/items/quantity/status remove eligibility",
+    "trial/billing/scheduled cancellation deadlines checked per server request",
+    "frontend completion never grants Pro; bounded refresh and access-expiry invalidation",
+    "fixed-enum-only billing logs; no raw payload/token/email/signature logging"
+  ],
+  "premiumFeatureBoundary": "Authoritative plan is persisted/derived and require_pro is available/tested; existing Free functionality and daily Analyze policy are unchanged. Additional premium quotas/features require their own approved policy.",
+  "fixesForExistingChecks": [
+    "Schema-head assertions advanced to0021 without exclusions",
+    "Legacy head preservation checker now verifies all original columns/rows and the explicit accepted0015 generation fence, while permitting additive columns"
+  ],
+  "notPerformed": [
+    "Real Paddle API calls or real notification deliveries",
+    "Live Paddle setup",
+    "Azure deployment or production migration",
+    "Production secret access",
+    "Customer portal or cancellation API"
+  ],
+  "remainingActivation": [
+    "Review and deploy matching API/frontend with migration0021 using administrator migration workflow",
+    "Create Sandbox platform-only notification destination for documented8subscription events",
+    "Save Sandbox endpoint secret as server-only PADDLE_WEBHOOK_SECRET; configure matching Sandbox PADDLE_PRO_PRICE_ID and PADDLE_ENVIRONMENT",
+    "Run real verified-owner Sandbox checkout/delivery/reload/member-isolation/cancellation smoke"
+  ],
+  "knownLimits": [
+    "Legacy client-only and exceptionally delayed first-created checkouts are unlinked and need reviewed reconciliation",
+    "Customer-transfer conflicts intentionally require operator reconciliation",
+    "Event-ledger retention/reconciliation policy needs review before Live or large-scale rollout"
+  ],
+  "remoteCi": "Check the eventual pull request exact head; this local record does not claim unobserved remote CI results."
+}
