@@ -35,5 +35,5 @@ test('Vault suppresses a closed deep link while revisions refresh', () => {
   );
   assert.match(source, /closedLinkedItem\.current === linkedItemId/);
   assert.match(source, /closeSelected\(\);\s*refresh\(\);/);
-  assert.match(source, /onClose=\{\(\) => \{ if \(!saving\) closeSelected\(\); \}\}/);
+  assert.match(source, /onClose=\{\(\) => \{\s*if \(saving \|\| deleting\) return;\s*if \(confirmingDelete\) setConfirmingDelete\(false\);\s*else closeSelected\(\);/);
 });

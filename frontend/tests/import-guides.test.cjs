@@ -42,6 +42,7 @@ function harness(relative, locale) {
     if (name === '@/components/auth-session') return { useSession: () => null };
     if (name === '@/components/icons') return { Icon: () => null };
     if (name === '@/components/language-selector') return { LanguageSelector: () => null };
+    if (name === '@/components/select') return { Select: 'custom-select' };
     if (name === '@/lib/storage/preferences') return { readLocal: (_, fallback) => fallback, writeLocal() {} };
     if (name === '@/features/funny/funny-sounds') return { playFunnySound() {} };
     if (name === '@/lib/auth/session') return { apiBaseUrl: '/api' };

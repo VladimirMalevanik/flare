@@ -49,6 +49,11 @@ export function VaultPage() {
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const deleteLock = useRef(false);
+  const deleteButton = useRef<HTMLButtonElement>(null);
+  const cancelDeleteButton = useRef<HTMLButtonElement>(null);
+  const wasConfirmingDelete = useRef(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editTitle, setEditTitle] = useState("");
@@ -58,6 +63,11 @@ export function VaultPage() {
   const listRequest = useRef(0);
   const closedLinkedItem = useRef<string | null>(null);
   const linkedItemId = params.get("item");
+  useEffect(() => {
+    if (confirmingDelete) cancelDeleteButton.current?.focus();
+    else if (wasConfirmingDelete.current) deleteButton.current?.focus();
+    wasConfirmingDelete.current = confirmingDelete;
+  }, [confirmingDelete]);
   const itemType: ItemType | "all" = filter === "voice"
     ? "audio"
     : filter;
@@ -118,6 +128,7 @@ export function VaultPage() {
       router.replace(withoutLinkedItem(pathname, params.toString()) as Route, { scroll: false });
     }
     setEditing(false);
+    setConfirmingDelete(false);
     setSelected(null);
   }, [linkedItemId, params, pathname, router]);
   const loadMore = async () => {
@@ -158,6 +169,7 @@ export function VaultPage() {
       },
     });
     setEditing(false);
+    setConfirmingDelete(false);
     setSelected(item);
   };
   const beginEdit = () => {
@@ -204,8 +216,8 @@ export function VaultPage() {
     }
   };
   const deleteSelected = async () => {
-    if (!selected || deleting) return;
-    if (!window.confirm(t("deleteItemConfirmation", { title: selected.title }))) return;
+    if (!selected || deleting || deleteLock.current || !confirmingDelete) return;
+    deleteLock.current = true;
     setDeleting(true);
     setError("");
     try {
@@ -216,6 +228,7 @@ export function VaultPage() {
     } catch (caught) {
       setError(dataErrorMessage(caught, "The item could not be deleted."));
     } finally {
+      deleteLock.current = false;
       setDeleting(false);
     }
   };
@@ -350,29 +363,57 @@ export function VaultPage() {
       )}
       {selected && (
         <Dialog
-          title={selected.title}
-          onClose={() => { if (!saving) closeSelected(); }}
-          className="item-sheet"
+          title={confirmingDelete ? t("deleteItemConfirmation", { title: selected.title }) : selected.title}
+          onClose={() => {
+            if (saving || deleting) return;
+            if (confirmingDelete) setConfirmingDelete(false);
+            else closeSelected();
+          }}
+          className={`item-sheet ${confirmingDelete ? "item-delete-sheet" : ""}`}
         >
           <header className="sheet-header">
             <div>
               <span className="eyebrow muted">
                 {selected.sourceLabel ?? label(selected.type)} · {label(selected.status)}
               </span>
-              <h2>{selected.title}</h2>
+              <h2>{confirmingDelete ? t("deleteItemConfirmation", { title: selected.title }) : selected.title}</h2>
             </div>
             <button
               className="icon-button"
-              aria-label={t("Close item")}
-              disabled={saving}
+              aria-label={confirmingDelete ? t("Cancel") : t("Close item")}
+              disabled={saving || deleting}
               onClick={() => {
-                closeSelected();
+                if (confirmingDelete) setConfirmingDelete(false);
+                else closeSelected();
               }}
             >
               <Icon name="close" />
             </button>
           </header>
-          {editing ? (
+          {confirmingDelete ? (
+            <div className="item-delete-confirmation">
+              {error && <p className="error-text meta" role="alert">{message(error)}</p>}
+              <footer className="form-actions item-sheet-actions">
+                <button
+                  ref={cancelDeleteButton}
+                  type="button"
+                  className="button"
+                  disabled={deleting}
+                  onClick={() => setConfirmingDelete(false)}
+                >
+                  {t("Cancel")}
+                </button>
+                <button
+                  type="button"
+                  className="button danger-button"
+                  disabled={deleting || session?.workspace.role === "viewer"}
+                  onClick={() => void deleteSelected()}
+                >
+                  {deleting ? t("Deleting…") : t("Delete item")}
+                </button>
+              </footer>
+            </div>
+          ) : editing ? (
             <form
               className="item-edit-form"
               onSubmit={(event) => {
@@ -503,10 +544,11 @@ export function VaultPage() {
               {selected.type === "note" ? t("Edit note") : t("Edit source")}
             </button>
             <button
+              ref={deleteButton}
               type="button"
               className="button danger-button"
               disabled={deleting || session?.workspace.role === "viewer"}
-              onClick={() => void deleteSelected()}
+              onClick={() => setConfirmingDelete(true)}
             >
               {deleting ? t("Deleting…") : t("Delete item")}
             </button>

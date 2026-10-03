@@ -109,7 +109,7 @@ export const uiEn = {
   "Export your Notion pages as Markdown and CSV in one ZIP.": "Export your Notion pages as Markdown and CSV in one ZIP.",
   "Create one ZIP snapshot of your Obsidian vault or project folder.": "Create one ZIP snapshot of your Obsidian vault or project folder.",
   "Include .md, .markdown, .txt, and .csv files. Unsupported formats are skipped and listed in the import report; package safety checks still apply.": "Include .md, .markdown, .txt, and .csv files. Unsupported formats are skipped and listed in the import report; package safety checks still apply.",
-  "zipGuideUpload": "Open Sources in Flare, choose the {source} card, select your ZIP, and click Import ZIP.",
+  "zipGuideUpload": "Open Sources in Flare, choose the {source} card, click Import ZIP, and choose or drop your ZIP. Import starts as soon as you choose the file.",
   "Processing runs asynchronously. Follow progress in Sources and open the import report to review imported or skipped files.": "Processing runs asynchronously. Follow progress in Sources and open the import report to review imported or skipped files.",
   "Imported sources appear together in Vault after the package is published. Import does not start Analyze automatically.": "Imported sources appear together in Vault after the package is published. Import does not start Analyze automatically.",
   "Open Sources": "Open Sources",

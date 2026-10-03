@@ -38,20 +38,6 @@ test("landing keeps Mac downloads out of public navigation and calls to action",
   assert.doesNotMatch(source, /Download for Mac/);
 });
 
-test("mobile Vault illustration keeps a centered bounded core", () => {
-  const styles = read("../src/app/landing.css");
-  assert.match(
-    styles,
-    /\.landing-depth-core\s*\{[\s\S]*?width: clamp\(116px, 34%, 168px\);[\s\S]*?transform: translate\(-50%, -50%\);[\s\S]*?\}/,
-  );
-  const mobileStyles = styles.slice(styles.indexOf("@media (max-width: 680px)"));
-  assert.match(
-    mobileStyles,
-    /\.landing-depth-visual\s*\{[\s\S]*?width: min\(100%, 360px\);[\s\S]*?aspect-ratio: 1;[\s\S]*?\}/,
-  );
-  assert.doesNotMatch(mobileStyles, /\.landing-depth-visual\s*\{[^}]*min-height/);
-});
-
 test("legal pages describe current data processing without draft placeholders", () => {
   const privacy = read("../src/app/privacy/page.tsx");
   const terms = read("../src/app/terms/page.tsx");

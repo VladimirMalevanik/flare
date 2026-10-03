@@ -111,7 +111,7 @@ export const uiEs = {
   "Export your Notion pages as Markdown and CSV in one ZIP.": "Exporta tus páginas de Notion como Markdown y CSV en un ZIP.",
   "Create one ZIP snapshot of your Obsidian vault or project folder.": "Crea una instantánea ZIP de tu bóveda de Obsidian o de la carpeta del proyecto.",
   "Include .md, .markdown, .txt, and .csv files. Unsupported formats are skipped and listed in the import report; package safety checks still apply.": "Incluye archivos .md, .markdown, .txt y .csv. Los formatos no compatibles se omiten y aparecen en el informe de importación; se mantienen las comprobaciones de seguridad del paquete.",
-  "zipGuideUpload": "Abre Fuentes en Flare, elige la tarjeta de {source}, selecciona tu ZIP y pulsa Importar ZIP.",
+  "zipGuideUpload": "Abre Fuentes en Flare, elige la tarjeta de {source}, pulsa Importar ZIP y elige o arrastra tu ZIP. La importación empieza al elegir el archivo.",
   "Processing runs asynchronously. Follow progress in Sources and open the import report to review imported or skipped files.": "El procesamiento es asíncrono. Sigue el progreso en Fuentes y abre el informe de importación para revisar los archivos importados u omitidos.",
   "Imported sources appear together in Vault after the package is published. Import does not start Analyze automatically.": "Las fuentes importadas aparecen juntas en la Bóveda cuando se publica el paquete. La importación no inicia el análisis automáticamente.",
   "Open Sources": "Abrir Fuentes",

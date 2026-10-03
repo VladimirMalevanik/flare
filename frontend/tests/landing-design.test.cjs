@@ -24,7 +24,8 @@ function fixture() {
     if (name === 'next/link') return { default: 'a' };
     if (name === '@/components/brand-mark') return { BrandMark: 'brand-mark' };
     if (name === '@/components/language-selector') return { LanguageSelector: 'language-selector' };
-    if (name === '@/i18n/provider') return { useI18n: () => ({ t: key => key }) };
+    if (name === '@/i18n/provider') return { useI18n: () => ({ t: key => key, label: key => key }) };
+    if (name === '@/components/icons') return { Icon: 'icon' };
     // Any network/data dependency would turn an example into a live product action.
     throw new Error(`Unexpected landing dependency: ${name}`);
   } });
@@ -77,7 +78,7 @@ test('capture, Vault, and Analyze sample actions form a working local preview', 
   nodes(tree).find(node => node.props?.id === 'landing-tab-capture').props.onClick();
   tree = app.render();
   assert.equal(panel(tree).props['aria-labelledby'], 'landing-tab-capture');
-  button(tree, 'Preview in Vault→').props.onClick();
+  button(tree, 'Save to Vault').props.onClick();
   tree = app.render();
   assert.equal(panel(tree).props['aria-labelledby'], 'landing-tab-vault');
   assert.ok(text(panel(tree)).includes('Saving context does not start an analysis.'));
@@ -117,10 +118,12 @@ test('preview tabs support roving keyboard focus and the mobile menu returns foc
 test('landing labels its sample and every rendered action has a real local handler or route', () => {
   const app = fixture();
   const tree = app.render();
-  assert.ok(text(tree).includes('Sample data'));
-  assert.ok(text(tree).includes('When you run Analyze'));
+  assert.ok(text(tree).includes('Sample workspace'));
+  assert.ok(text(tree).includes('when you choose to analyze it'));
   assert.ok(text(tree).includes('ZIP imports are one-time copies.'));
-  assert.doesNotMatch(text(tree), /HttpOnly|PostgreSQL|High confidence|Just now|148 records/);
+  assert.doesNotMatch(text(tree), /HttpOnly|PostgreSQL|High confidence|Just now|148 records|01 \/|THE WORKFLOW/);
+  assert.ok(text(tree).includes('Your notes go quiet.'));
+  assert.ok(text(tree).includes("Flare doesn't."));
   for (const node of nodes(tree)) {
     if (node.type === 'button') assert.equal(typeof node.props.onClick, 'function');
     if (node.type === 'a') assert.ok(node.props.href?.startsWith('/') || node.props.href?.startsWith('#'));

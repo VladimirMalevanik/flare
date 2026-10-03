@@ -11,6 +11,7 @@ import {
 } from "@/components/workspace-context";
 import { readLocal, writeLocal } from "@/lib/storage/preferences";
 import { LanguageSelector } from "@/components/language-selector";
+import { Select } from "@/components/select";
 import { useI18n } from "@/i18n/provider";
 import { playFunnySound } from "@/features/funny/funny-sounds";
 import {
@@ -212,15 +213,12 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
               />
             </label>
             <label>
-              {t("Timezone")}{" "}<select
+              {t("Timezone")}{" "}<Select
+                aria-label={t("Timezone")}
                 value={profile.timezone}
-                onChange={(e) => updateProfile({ timezone: e.target.value })}
-              >
-                <option>Europe/Moscow</option>
-                <option>America/Los_Angeles</option>
-                <option>Europe/London</option>
-                <option>Asia/Singapore</option>
-              </select>
+                onValueChange={(timezone) => updateProfile({ timezone })}
+                options={[...new Set([profile.timezone, "Europe/Moscow", "America/Los_Angeles", "Europe/London", "Asia/Singapore"])].map((value) => ({ value, label: value }))}
+              />
             </label>
           </div>
         </div>
@@ -400,16 +398,13 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
               title={t("Workspace timezone")}
               description={t("The daily limit and schedule follow this timezone.")}
             >
-              <select
+              <Select
                 aria-label={t("Daily insight timezone")}
                 value={scheduleTimezone}
                 disabled={scheduleSaving || !scheduleEnabled || session?.workspace.role === "viewer"}
-                onChange={(event) => setScheduleTimezone(event.target.value)}
-              >
-                {timezoneOptions.map((timezone) => (
-                  <option value={timezone} key={timezone}>{timezone}</option>
-                ))}
-              </select>
+                onValueChange={setScheduleTimezone}
+                options={timezoneOptions.map((value) => ({ value, label: value }))}
+              />
             </SettingRow>
             <SettingRow
               title={t("Email new scheduled Flares")}
@@ -474,15 +469,12 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
           title={t("Workspace data retention")}
           description={t("Saved preference; automatic deletion is not enabled.")}
         >
-          <select
+          <Select
             aria-label={t("Data retention")}
             value={settings.retention}
-            onChange={(e) => update("retention", e.target.value)}
-          >
-            <option value="30">{t("30 days rolling memory")}</option>
-            <option value="90">{t("90 days rolling memory")}</option>
-            <option value="365">{t("1 year")}</option>
-          </select>
+            onValueChange={(value) => update("retention", value)}
+            options={[{ value: "30", label: t("30 days rolling memory") }, { value: "90", label: t("90 days rolling memory") }, { value: "365", label: t("1 year") }]}
+          />
         </SettingRow>
         <SettingRow
           title={t("Export workspace data")}
