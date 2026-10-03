@@ -4,7 +4,7 @@ import os
 import psycopg
 import pytest
 from app.services.funnel_service import aggregate_csv
-from test_acquisition import growth,configure,touch
+from test_acquisition import growth,configure,touch,enabled_growth_policy
 
 
 def test_reporting_denied_to_runtime_worker_and_small_cohorts(growth):

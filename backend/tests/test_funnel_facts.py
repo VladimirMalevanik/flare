@@ -1,12 +1,13 @@
 """Committed facts, domain rollback, terminal completeness and privacy replay."""
 from uuid import UUID, uuid4
+import os
 import psycopg
 import pytest
 from app.services.item_service import ItemService
 from app.services.import_service import ImportService
 from app.services.funnel_service import FunnelService
 from app.services.analytics_service import AnalyticsService
-from test_acquisition import growth
+from test_acquisition import growth, configure, enabled_growth_policy
 from test_analysis_runs import jobs, admin_url, executor_role, start, service
 from test_analysis_jobs import FakeAnalyzer
 from test_flare_runs import Detector, stage
@@ -16,6 +17,135 @@ from app.config import AISettings
 from app.workers.config import WorkerSettings
 from app.ai_engine.flare_config import FlareSettings
 import asyncio
+
+pytestmark = pytest.mark.usefixtures('enabled_growth_policy')
+
+
+def disable_policy(admin, configured):
+    # Exercise both the migration default (NULL lifetimes) and stopping collection
+    # after configuration. Neither state authorizes new measurement persistence.
+    changes = {} if configured else {
+        'revision': None, 'notice_id': None, 'eligibility': None, 'cleanup_owner': None,
+        'lookback_seconds': None, 'cookie_seconds': None, 'raw_seconds': None,
+        'linked_seconds': None, 'fact_seconds': None, 'tokens': {},
+    }
+    configure(admin, enabled=False, **changes)
+
+
+@pytest.mark.parametrize('configured', [False, True], ids=['default-null-policy', 'configured-off'])
+def test_disabled_policy_keeps_auth_capture_sync_and_legacy_events_without_growth(growth, configured):
+    import re
+    from app.services.auth_service import AuthService
+    db, e, auth, account = growth
+    disable_policy(e.admin_url, configured)
+    user, _ = account()
+    item = ItemService(db, user.identity).create_note(title=None, content='synthetic off-policy capture')
+    result = ImportService(db, user.identity).create_import(
+        format='txt', file_name='synthetic.txt', file_type='text/plain',
+        file_size=9, content='synthetic')
+    assert result.batch.status == 'completed'
+    AnalyticsService(db, user.identity).track_event(
+        event_type='capture_started', target_type='capture', metadata={})
+
+    class Mail:
+        def send(self, **kwargs): self.text = kwargs['text']
+    mail = Mail()
+    verification = AuthService(db, email_verification_required=True, email_sender=mail,
+                               app_public_url='http://localhost')
+    token = verification.register(uuid4().hex+'@growth.invalid', 'synthetic-long-password', 'Synthetic')
+    verified = verification.current(token)
+    e.user_ids.add(verified.user_id); e.workspace_ids.add(verified.workspace_id)
+    verification.verify_email(re.search(r'token=([A-Za-z0-9_-]+)', mail.text).group(1))
+    with psycopg.connect(e.admin_url) as c:
+        assert c.execute('SELECT verification_provenance FROM public.auth_users WHERE id=%s',
+                         (verified.user_id,)).fetchone() == ('actual',)
+        assert c.execute('SELECT count(*) FROM public.signup_attribution WHERE user_id=ANY(%s)',
+                         ([user.user_id, verified.user_id],)).fetchone() == (0,)
+        assert c.execute('SELECT current_version_id FROM public.documents WHERE id=%s',
+                         (item.id,)).fetchone()[0] is not None
+        assert c.execute("SELECT count(*) FROM public.activity_events WHERE actor_id=%s AND event_type='capture_started'",
+                         (user.user_id,)).fetchone() == (1,)
+    with psycopg.connect(os.environ['WORKER_DATABASE_URL']) as c:
+        assert c.execute('SELECT public.growth_reconcile(100)').fetchone() == (0,)
+    assert facts(e, user) == []
+
+    # An enabled policy permits bounded historical import reconciliation, never
+    # reconstruction of signup linkage or unrecorded capture/inspection actions.
+    configure(e.admin_url)
+    auth.login(user.email, 'synthetic-long-password')
+    with db.workspace_transaction(user.identity) as c:
+        c.execute('SELECT public.acquisition_freeze(NULL)')
+    with psycopg.connect(e.admin_url) as c:
+        assert c.execute('SELECT count(*) FROM public.signup_attribution WHERE user_id=%s',
+                         (user.user_id,)).fetchone() == (0,)
+        assert c.execute('SELECT public.growth_reconcile(100)').fetchone() == (1,)
+        assert c.execute('SELECT public.growth_reconcile(100)').fetchone() == (0,)
+    assert [kind for kind, _ in facts(e, user)] == ['sync_import']
+    disable_policy(e.admin_url, configured)
+    FunnelService(db, user.identity).withdraw()
+    configure(e.admin_url)
+    with psycopg.connect(e.admin_url) as c:
+        assert c.execute('SELECT public.growth_reconcile(100)').fetchone() == (0,)
+    assert facts(e, user) == []
+
+
+@pytest.mark.parametrize('configured', [False, True], ids=['default-null-policy', 'configured-off'])
+def test_disabled_policy_keeps_terminal_zip_and_inspection_without_growth(stage, jobs, env, admin_url, configured):
+    from app.models.flare_runs import FlareRuns
+    with psycopg.connect(admin_url) as c:
+        # The shared jobs fixture created captures under its explicit test policy.
+        # Isolate this off-policy journey from those earlier setup observations.
+        c.execute('DELETE FROM public.funnel_facts WHERE actor_id=ANY(%s)',
+                  ([identity.user_id for identity in jobs[2]],))
+    disable_policy(admin_url, configured)
+    assert asyncio.run(FlareProcessor(stage[0], Detector(), AISettings(),
+                                     FlareSettings(), WorkerSettings()).process_one()) == 'completed'
+    run = start(jobs)
+    identity = jobs[2][0]; db = jobs[0].database
+    asyncio.run(AnalysisProcessor(jobs[1], FakeAnalyzer(), AISettings(), WorkerSettings()).process_one())
+    assert asyncio.run(FlareProcessor(FlareRuns(jobs[1]._database_url), Detector(),
+                                     AISettings(), FlareSettings(), WorkerSettings()).process_one()) == 'completed'
+    with psycopg.connect(admin_url) as c:
+        flare = c.execute('SELECT id FROM public.insights WHERE source_analysis_job_id=%s',
+                          (stage[1],)).fetchone()[0]
+        assert c.execute('SELECT status FROM public.analysis_jobs WHERE id=(SELECT analysis_job_id FROM public.analysis_runs WHERE id=%s)',
+                         (run['id'],)).fetchone() == ('completed',)
+    inspection = FunnelService(db, identity)
+    inspection.inspect(uuid4(), flare)
+    with psycopg.connect(admin_url) as c:
+        assert c.execute('SELECT count(*) FROM public.activity_events WHERE actor_id=%s AND interaction_id IS NOT NULL',
+                         (identity.user_id,)).fetchone() == (0,)
+        assert c.execute('SELECT count(*) FROM public.funnel_facts WHERE actor_id=%s',
+                         (identity.user_id,)).fetchone() == (0,)
+
+    e, storage, worker = env; workspace = uuid4(); actor = 'synthetic-off|'+uuid4().hex
+    with e.client(workspace_id=workspace, user_id=actor, import_storage=storage) as client:
+        pid = enqueue(client, archive_bytes([('synthetic.txt', 'synthetic')]))
+        job = worker.claim(2); checkpoint(worker, storage, job); worker.step(job, 'gate')
+        assert client.get('/imports/packages/'+pid).json()['status'] == 'completed'
+        assert len(client.get('/items').json()) == 1
+        with psycopg.connect(os.environ['WORKER_DATABASE_URL']) as c:
+            assert c.execute('SELECT public.growth_reconcile(100)').fetchone() == (0,)
+        with psycopg.connect(admin_url) as c:
+            assert c.execute('SELECT count(*) FROM public.import_publications WHERE package_id=%s', (pid,)).fetchone() == (1,)
+            assert c.execute('SELECT count(*) FROM public.funnel_facts WHERE workspace_id=%s', (workspace,)).fetchone() == (0,)
+        configure(admin_url)
+        with psycopg.connect(admin_url) as c:
+            assert c.execute('SELECT public.growth_reconcile(100)').fetchone() == (1,)
+            assert c.execute('SELECT public.growth_reconcile(100)').fetchone() == (0,)
+        key = uuid4(); inspection.inspect(key, flare); inspection.inspect(key, flare)
+        with psycopg.connect(admin_url) as c:
+            assert c.execute('SELECT count(*) FROM public.activity_events WHERE actor_id=%s AND interaction_id IS NOT NULL',
+                             (identity.user_id,)).fetchone() == (1,)
+            assert c.execute('SELECT kind FROM public.funnel_facts WHERE actor_id=%s',
+                             (identity.user_id,)).fetchall() == [('inspection',)]
+        disable_policy(admin_url, configured)
+        inspection.withdraw(workspace=True)
+        configure(admin_url)
+        inspection.inspect(uuid4(), flare)
+        with psycopg.connect(admin_url) as c:
+            assert c.execute('SELECT count(*) FROM public.funnel_facts WHERE actor_id=%s',
+                             (identity.user_id,)).fetchone() == (0,)
 
 
 def facts(e,user):

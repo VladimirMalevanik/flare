@@ -1,5 +1,5 @@
 {
-  "result": "executor implementation complete; independent exact-SHA CI/QA/Critic/Vova acceptance/integration pending",
+  "result": "bounded operator correction verified; existing PR35 exact-SHA CI, independent QA/Critic, Vova acceptance and integration pending",
   "retained_checkpoint": "97c2d23014514956134f35c6d7dd6f79cd123e34",
   "migration": {
     "accepted_base": "0019",
@@ -76,5 +76,112 @@
   ],
   "production_gates": "Acquisition off/fail-closed unless Vova approves explicit eligibility/notice/vocabulary/lifetimes/resource/disclosure/calendar/cleanup/access policy. No rollout, production mutation, new dependencies, provider calls or migrations in production.",
   "artifacts": "Committed report/validation/measurements; no artifact upload retried. Runtime logs retained locally outside repository.",
-  "runtime_evidence_path": "/Users/fedornikonov/.paperclip/instances/default/flare/worktrees/growth-analytics/growth002-test-runtime-20261003"
+  "runtime_evidence_path": "/Users/fedornikonov/.paperclip/instances/default/flare/worktrees/growth-analytics/growth002-test-runtime-20261003",
+  "bounded_correction": {
+    "base_candidate": "9488f721b74443a45406df86e9a714d6ecf22e33",
+    "scope_expansion_ledger": "873cb23246cfd3ad8900bee8a10e1031bed9d005",
+    "scope_expansion": [
+      "backend/scripts/check_email_verification_migration.py",
+      "backend/scripts/check_daily_quota_migration.py"
+    ],
+    "policy_gate": "No new signup snapshot/funnel fact/inspection event/reconciliation with disabled policy, including NULL retention. Explicit privacy withdrawal/cleanup suppression remains permitted; authoritative auth/domain and unrelated authenticated events remain operational.",
+    "regressions": "Four real-database journeys covering default-null/configured-off states, registration and actual token verification, committed capture/sync import, terminal Analyze+Flare, canonical ZIP publication, voluntary inspection, disabled worker reconciliation, enabled bounded backfill/dedupe, immutable missing signup linkage and withdrawal while off.",
+    "historical_reconciliation": "Enabled approved policy only; retained authoritative ZIP/sync imports within fact_seconds may predate enablement. No reconstructed signup snapshots, unobserved captures or foreground actions. Coverage labeled in growth_report.",
+    "official_migration_sequence": {
+      "topologies": [
+        "self-managed",
+        "yandex managed-owner emulation"
+      ],
+      "databases": [
+        "flare_growth_correction_self_v1",
+        "flare_growth_correction_managed_v1"
+      ],
+      "steps": [
+        "upgrade 0005",
+        "upgrade 0007",
+        "check_email_verification_migration.py prepare",
+        "upgrade 0014",
+        "check_daily_quota_migration.py prepare",
+        "upgrade head",
+        "check_email_verification_migration.py verify",
+        "check_daily_quota_migration.py verify",
+        "upgrade head again",
+        "runtime readiness and private capability checks"
+      ],
+      "result": "passed both; 0008 legacy verification backfill and 0015 UTC daily-slot backfill preserved at actual single head 0020; disabled singleton and NULL link/fact retention confirmed",
+      "fixture_reuse": "Existing operator cluster shared synthetic roles reused through the previously authorized continuation-migrate.py prerequisite adapter for self-managed CREATE ROLE statements. Fresh per-topology databases, actual unmodified product migration bodies/schema/grants, actual official prepare/verify scripts; managed migrations execute as non-superuser flare_owner. Independent official CI uses separate matrix clusters and must still run."
+    },
+    "checks": {
+      "growth_self_managed": {
+        "passed": 44,
+        "failed": 0,
+        "log": "correction-self-managed-focused-final.log"
+      },
+      "growth_managed": {
+        "passed": 44,
+        "failed": 0,
+        "log": "correction-yandex-focused-final.log"
+      },
+      "full_self_managed": {
+        "passed": 782,
+        "failed": 0,
+        "deselected": 2,
+        "seconds": 53.67,
+        "log": "correction-self-managed-full-backend.log"
+      },
+      "full_managed": {
+        "passed": 780,
+        "failed": 0,
+        "skipped": 1,
+        "deselected": 3,
+        "seconds": 54.48,
+        "log": "correction-yandex-full-backend.log"
+      },
+      "frontend": "No frontend source/dependency changes in correction; retained earlier frontend/lint/build evidence, no unnecessary repeat",
+      "whitespace": "git diff --check passed"
+    },
+    "test_fixture_policy": "Explicit nonproduction enabled_growth_policy fixture saves/restores complete prior singleton; ordinary backend fixtures never implicitly enable collection. Default disabled/NULL retention preserved.",
+    "tested_source_blobs": {
+      "backend/db/acquisition.sql": "8c7e95992a8735e8f9f80caf8602a454e99dadbf",
+      "backend/db/funnel.sql": "bff16e7f16f01e40eb37ac78b108260caf475f92",
+      "backend/scripts/check_daily_quota_migration.py": "89e8649c3f3421bd219ac1b26f73adc35dbbfe02",
+      "backend/scripts/check_email_verification_migration.py": "dfab33b2d5916cb02111cfaa4dd843cac2a1f174",
+      "backend/tests/test_acquisition.py": "ddf958b11eda2346eb3b87029b90bfb7cd284e25",
+      "backend/tests/test_funnel_facts.py": "31c57111322b4d20985f162434d4f82fc64683bb",
+      "backend/tests/test_funnel_reporting.py": "6ba8c1fc50ef31e06dc3f9deb5c9a04ffe5e8ebf"
+    },
+    "log_sha256": {
+      "correction-prefixed-policy-regression.log": "75ade9e98f7173f34d2277d533735e05c4d9c7014d4a843f730aeb552e8930b9",
+      "correction-self-managed-email-prepare.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "correction-self-managed-email-verify.log": "9ee8712d807ce8af23e55356ee1528b7180731f5dac561ffa9b01c8fd9cce9c7",
+      "correction-self-managed-focused-final.log": "0c0b8c9228f48ca0f8f239279343dedd8639c093abca4cee456905e19158f267",
+      "correction-self-managed-focused.log": "1853de865d7edace7cee4bc3a166f2f2015cf17fcbb1a4ac475b5202dec262c1",
+      "correction-self-managed-full-backend.log": "c413e2e06590232483609e9fcae6e0bd1c8876ec83864ef2e0a3db2afc3cd0d4",
+      "correction-self-managed-quota-prepare.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "correction-self-managed-quota-verify.log": "568696d928b50822bccead6b9be8bb4fc5407cffe0f804f1309e8ab5acf39ff9",
+      "correction-self-managed-readiness.log": "370c663897752c8e1a8f88b11892e36465f5980873776944800b93c1a2ece938",
+      "correction-self-managed-upgrade-0005.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "correction-self-managed-upgrade-0007.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "correction-self-managed-upgrade-0014.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "correction-self-managed-upgrade-head.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "correction-self-managed-worker.log": "53de5f815cdf2b2984d828314f9351a70c2fb68095d6d46089bab1f0f30c751d",
+      "correction-yandex-email-prepare.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "correction-yandex-email-verify.log": "9ee8712d807ce8af23e55356ee1528b7180731f5dac561ffa9b01c8fd9cce9c7",
+      "correction-yandex-focused-final.log": "52ff6482b3c5559a4a89d49c06d4102c47ef5056247a96b2736f8a5bbb5d90f0",
+      "correction-yandex-full-backend.log": "26093d7c48c487c547c8fdb95131ccf26654782fc820844b38783e111dadbabc",
+      "correction-yandex-quota-prepare.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "correction-yandex-quota-verify.log": "568696d928b50822bccead6b9be8bb4fc5407cffe0f804f1309e8ab5acf39ff9",
+      "correction-yandex-readiness.log": "370c663897752c8e1a8f88b11892e36465f5980873776944800b93c1a2ece938",
+      "correction-yandex-upgrade-0005.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "correction-yandex-upgrade-0007.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "correction-yandex-upgrade-0014.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "correction-yandex-upgrade-head.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "retained_correction_failures": [
+      "Initial new-test attempt: 4 failures due to test setup (ImportResult.batch.status accessor and selecting a real generated Flare fixture). Corrected before purposeful reproduction; pytest cache denied, subsequently disabled via -p no:cacheprovider without changing permissions.",
+      "Purposeful pre-fix reproduction on old 9488 database: 4 failed, 9 deselected; new signup snapshots and inspection observations found with disabled/default-null and configured-off policy (correction-prefixed-policy-regression.log).",
+      "First corrected-source focused run: 33 passed, 11 setup errors from missing imported policy fixture in reporting module; import corrected and all 44 cases passed in both topologies."
+    ],
+    "publication": "Same existing branch/PR35; ordinary push and exact HEAD task-sync update required; ledger remains active. Issue handed to Board/operator in_review, not product acceptance."
+  }
 }

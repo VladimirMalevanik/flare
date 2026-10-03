@@ -12,11 +12,11 @@ CREATE FUNCTION public.growth_fact(p_w uuid,p_actor text,p_kind text,p_id uuid,p
  RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
  INSERT INTO public.funnel_facts(workspace_id,actor_id,kind,logical_id,occurred_at,mode,source_count,result_count)
  SELECT p_w,p_actor,p_kind,p_id,p_at,p_mode,p_sources,p_results
- WHERE EXISTS(SELECT 1 FROM public.auth_users WHERE id=p_actor)
+ WHERE EXISTS(SELECT 1 FROM public.growth_policy p WHERE p.enabled AND p.fact_seconds>0
+ AND p_at>=clock_timestamp()-make_interval(secs=>p.fact_seconds))
+ AND EXISTS(SELECT 1 FROM public.auth_users WHERE id=p_actor)
  AND NOT EXISTS(SELECT 1 FROM public.signup_attribution WHERE user_id=p_actor AND eligibility='withdrawn')
  AND NOT EXISTS(SELECT 1 FROM public.growth_workspace_optouts WHERE workspace_id=p_w)
- AND NOT EXISTS(SELECT 1 FROM public.growth_policy p WHERE p.fact_seconds IS NOT NULL
- AND p_at<clock_timestamp()-make_interval(secs=>p.fact_seconds))
  ON CONFLICT DO NOTHING;
 $$;
 -- Domain commit hooks: each fact rolls back with its source transaction.
@@ -72,6 +72,7 @@ CREATE FUNCTION public.growth_reconcile(p_limit int) RETURNS int LANGUAGE plpgsq
 DECLARE r record; n int:=0;
 BEGIN
  IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 1000 THEN RAISE EXCEPTION 'Invalid batch'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.growth_policy WHERE enabled AND fact_seconds>0) THEN RETURN 0; END IF;
  FOR r IN SELECT p.* FROM (
  SELECT workspace_id,package_id AS logical_id,requested_by_user_id,published_at AS occurred_at,
  'zip_import'::text AS kind,source_count,chunk_count FROM public.import_publications
@@ -93,6 +94,10 @@ CREATE UNIQUE INDEX activity_interaction ON public.activity_events(workspace_id,
 -- Withdrawal and deletion also suppress delayed deliveries through legacy writers.
 CREATE FUNCTION public.growth_event_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
  SET search_path=pg_catalog,public,pg_temp AS $$ BEGIN
+ -- Narrow interaction observations are growth collection. Existing unrelated
+ -- authenticated events keep their domain behavior while collection is off.
+ IF NEW.interaction_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.growth_policy WHERE enabled AND fact_seconds>0)
+ THEN RETURN NULL; END IF;
  IF NOT EXISTS(SELECT 1 FROM public.auth_users WHERE id=NEW.actor_id)
  OR EXISTS(SELECT 1 FROM public.signup_attribution WHERE user_id=NEW.actor_id AND eligibility='withdrawn')
  OR EXISTS(SELECT 1 FROM public.growth_workspace_optouts WHERE workspace_id=NEW.workspace_id) THEN RETURN NULL; END IF;
@@ -111,6 +116,7 @@ BEGIN
  WHERE s.workspace_id=wid AND s.insight_id=p_flare AND d.id=p_source AND d.deleted_at IS NULL
  AND (d.import_package_id IS NULL OR EXISTS(SELECT 1 FROM public.import_packages p WHERE p.id=d.import_package_id AND p.status IN ('completed','completed_with_skips')))))
  THEN RAISE EXCEPTION 'Unavailable inspection target' USING ERRCODE='42501'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.growth_policy WHERE enabled AND fact_seconds>0) THEN RETURN; END IF;
  IF EXISTS(SELECT 1 FROM public.signup_attribution WHERE user_id=uid AND eligibility='withdrawn')
  OR EXISTS(SELECT 1 FROM public.growth_workspace_optouts WHERE workspace_id=wid) THEN RETURN; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(wid::text||uid||'-growth-inspection',0));
@@ -249,6 +255,7 @@ BEGIN
  RETURN jsonb_build_object('revision','funnel-v2','policy',p.revision,'unit',p_unit,'basis',p_basis,'calendar','UTC-v1',
  'since',p_since,'until',p_until,'generated_at',clock_timestamp(),'coverage_start','migration-0020',
  'freshness','capture/Analyze commit hooks; optional import observations require bounded reconciliation before reports','metrics',result,
+ 'import_reconciliation_coverage','enabled policy only; retained authoritative imports within fact retention may predate collection enablement; no signup or foreground-action reconstruction',
  'visitor_denominator','touch snapshots only; no all-traffic or visitor-conversion denominator',
  'attribution',attribution,'attribution_suppressed',attribution IS NULL,'attribution_bucket_limit',100,
  'traffic_qualification','opt-in assertion; human/bot/test status unknown',

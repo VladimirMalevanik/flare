@@ -32,12 +32,30 @@ def configure(admin, **changes):
 
 
 @pytest.fixture
-def growth():
+def enabled_growth_policy():
+    """Enable only an explicit nonproduction policy, restoring the prior row."""
+    admin = os.getenv('TEST_DATABASE_URL')
+    if not admin:
+        pytest.skip('Disposable migrated PostgreSQL required')
+    with psycopg.connect(admin, row_factory=dict_row) as c:
+        previous = c.execute('SELECT * FROM public.growth_policy').fetchone()
+    configure(admin)
+    try:
+        yield
+    finally:
+        with psycopg.connect(admin) as c:
+            c.execute('UPDATE public.growth_policy SET '+','.join(k+'=%s' for k in previous),
+                      tuple(Jsonb(v) if isinstance(v,dict) else v for v in previous.values()))
+            c.execute('DELETE FROM public.acquisition_visitors')
+            c.execute('DELETE FROM public.acquisition_budgets')
+
+
+@pytest.fixture
+def growth(enabled_growth_policy):
     if not os.getenv('TEST_DATABASE_URL') or not os.getenv('DATABASE_URL'):
         pytest.skip('Disposable migrated PostgreSQL required')
     db=Database(os.environ['DATABASE_URL']);db.open()
     e=ApiEnvironment(os.environ['DATABASE_URL'],os.environ['TEST_DATABASE_URL'])
-    configure(e.admin_url)
     service=AuthService(db)
     def account(reference=None):
         token=service.register(uuid4().hex+'@growth.invalid','synthetic-long-password','Synthetic',acquisition_reference=reference)
@@ -45,7 +63,6 @@ def growth():
         return user,token
     yield db,e,service,account
     with psycopg.connect(e.admin_url) as c:
-        c.execute('UPDATE public.growth_policy SET enabled=false')
         c.execute('DELETE FROM public.acquisition_visitors');c.execute('DELETE FROM public.acquisition_budgets')
     db.close();e.cleanup()
 

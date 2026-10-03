@@ -89,6 +89,8 @@ CREATE FUNCTION public.acquisition_freeze(p_ref text) RETURNS void LANGUAGE plpg
  SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE a public.signup_attribution; v public.acquisition_visitors; p public.growth_policy;
 BEGIN
+ SELECT * INTO p FROM public.growth_policy;
+ IF NOT COALESCE(p.enabled,false) THEN RETURN; END IF;
  -- Only the original account transaction can create the optional snapshot. A failed
  -- savepoint leaves a visible gap, never something rebuilt from later login/touch.
  INSERT INTO public.signup_attribution(user_id,workspace_id,created_at,finalized)
@@ -97,8 +99,7 @@ BEGIN
  AND verification_provenance='pending'
  ON CONFLICT DO NOTHING RETURNING * INTO a;
  IF a.user_id IS NULL THEN RETURN; END IF;
- SELECT * INTO p FROM public.growth_policy;
- IF p.enabled AND p_ref ~ '^[a-f0-9]{64}$' THEN
+ IF p_ref ~ '^[a-f0-9]{64}$' THEN
   DELETE FROM public.acquisition_visitors WHERE reference_hash=p_ref AND expires_at>clock_timestamp()
   AND revision=p.revision RETURNING * INTO v;
  END IF;
