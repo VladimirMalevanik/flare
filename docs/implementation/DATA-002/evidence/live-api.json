@@ -1,0 +1,13 @@
+{
+  "packageId": "4514bf2f-7d7d-4b76-a134-9b5e02eb1f96",
+  "sourceKind": "notion",
+  "queued": "queued",
+  "beforeGateVisibleSources": 0,
+  "archiveBytes": 488,
+  "browser": "Blocked: admin-enforced browser policy check unavailable",
+  "terminalStatus": "completed_with_skips",
+  "afterGateVisibleSources": 2,
+  "skippedFiles": 1,
+  "reportEntries": 3,
+  "originalZipDeleted": true
+}

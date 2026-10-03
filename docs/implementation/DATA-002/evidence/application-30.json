@@ -1,0 +1,13 @@
+{
+  "purpose": "Synthetic local/test application evidence; not production quota tuning",
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "databaseMode": "self-managed",
+  "entries": 30,
+  "compressedBytes": 70442,
+  "expandedBytes": 117000,
+  "publishedSources": 30,
+  "queuedSeconds": 0.0153,
+  "workerThroughGateSeconds": 4.9067,
+  "cleanupAndReadSeconds": 0.0311,
+  "limitations": "Single synthetic workspace, local staging, local PostgreSQL17; excludes Azure/network/concurrent load."
+}

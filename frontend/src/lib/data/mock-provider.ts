@@ -1,3 +1,4 @@
+import type { ImportPackage, ImportPackageReport, ZipSourceKind } from "./types";
 "use client";
 import {
   contextInsights as seedInsights,
@@ -278,6 +279,14 @@ export class MockDataProvider implements FlareDataProvider {
       },
     };
   }
+
+  async getImportCapabilities(): Promise<{ available: boolean; maxUploadBytes: number | null }> { return { available: false, maxUploadBytes: null }; }
+  async createImportPackage(_input: { sourceKind: ZipSourceKind; fileName: string; fileSize: number; requestKey: string }): Promise<ImportPackage> { throw new Error("ZIP imports require the Flare API."); }
+  async uploadImportPackage(_id: string, _file: File, _signal?: AbortSignal): Promise<ImportPackage> { throw new Error("ZIP imports require the Flare API."); }
+  async importPackageAction(_id: string, _action: "finalize" | "cancel" | "retry"): Promise<ImportPackage> { throw new Error("ZIP imports require the Flare API."); }
+  async getImportPackage(_id: string, _signal?: AbortSignal): Promise<ImportPackage> { throw new Error("ZIP imports require the Flare API."); }
+  async listImportPackages(): Promise<ImportPackage[]> { return []; }
+  async getImportPackageReport(_id: string, _after?: number): Promise<ImportPackageReport> { throw new Error("ZIP imports require the Flare API."); }
 
   async listSources(): Promise<Source[]> {
     const saved = readLocal<Source[] | null>("flare-sources-v1", null);

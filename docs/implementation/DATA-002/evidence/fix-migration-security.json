@@ -1,0 +1,73 @@
+{
+  "heads": [
+    "0019"
+  ],
+  "revision": "0019",
+  "parent": "0018",
+  "databaseRevision": "0019",
+  "migrationSnapshotChecks": {
+    "backend/migrations/versions/0019_zip_import_packages.py": {
+      "originalSha256": "d1c12b2b08ca57a9f3d4b733b7aa1bc33964ebab55d63dc344b35420c452598d",
+      "currentSha256": "d1c12b2b08ca57a9f3d4b733b7aa1bc33964ebab55d63dc344b35420c452598d"
+    },
+    "backend/db/import_packages.sql": {
+      "originalSha256": "4f0a42e2e91413b2ce7b73c9917f42b8bc7422d12b40c0e3ab8b7842e2c498f8",
+      "currentSha256": "4f0a42e2e91413b2ce7b73c9917f42b8bc7422d12b40c0e3ab8b7842e2c498f8"
+    }
+  },
+  "rlsForced": [
+    [
+      "import_objects",
+      true,
+      true
+    ],
+    [
+      "import_package_entries",
+      true,
+      true
+    ],
+    [
+      "import_packages",
+      true,
+      true
+    ],
+    [
+      "import_publications",
+      true,
+      true
+    ]
+  ],
+  "finalBrowserWorkspaceCounts": {
+    "documents": 2,
+    "import_publications": 1,
+    "analysis_jobs": 0,
+    "analysis_runs": 0,
+    "analysis_daily_quotas": 0
+  },
+  "topology": "disposable local PostgreSQL17, self-managed CI roles, real migrated RLS/gate tests with no skips",
+  "migrationSequence": [
+    "0005",
+    "0007",
+    "legacy email prepare",
+    "0014",
+    "legacy daily quota prepare",
+    "0019",
+    "legacy email verify",
+    "legacy daily quota verify",
+    "0019 repeat"
+  ],
+  "finalIsolatedBackendSuite": {
+    "passed": 740,
+    "skipped": 0,
+    "warnings": 2,
+    "seconds": 36.4,
+    "setup": "second fresh disposable cluster, same CI upgrade sequence, no API/import-worker runtime sharing queues"
+  },
+  "intermediateContaminatedRun": {
+    "passed": 735,
+    "failed": 5,
+    "seconds": 39.61,
+    "validPass": false,
+    "environment": "browser DB shared with active worker and residual manual-smoke queue rows"
+  }
+}
