@@ -65,3 +65,35 @@ def summarize_events(
         return AnalyticsSummary(**analytics.summary(window_hours=window_hours))
     except MembershipRequiredError:
         raise HTTPException(status_code=403, detail="Workspace membership is required") from None
+
+
+from pydantic import BaseModel, ConfigDict
+from uuid import UUID
+from app.services.funnel_service import FunnelService
+
+
+class InspectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    interactionId: UUID
+    flareId: UUID
+    sourceId: UUID | None = None
+
+
+@router.post("/inspection", status_code=202)
+def inspect_value(payload: InspectionRequest,
+    user: Annotated[AuthenticatedUser, Depends(verified_user)],
+    db: Annotated[Database, Depends(_database)]):
+    try:
+        FunnelService(db,user.identity).inspect(payload.interactionId,payload.flareId,payload.sourceId)
+    except Exception:
+        # Invalid targets and telemetry failures never break the user's action.
+        pass
+
+
+@router.post("/withdraw", status_code=204)
+def withdraw_measurement(user: Annotated[AuthenticatedUser, Depends(verified_user)],
+    db: Annotated[Database, Depends(_database)], workspace: bool = False):
+    try:
+        FunnelService(db,user.identity).withdraw(workspace=workspace)
+    except MembershipRequiredError:
+        raise HTTPException(403,"Membership required") from None

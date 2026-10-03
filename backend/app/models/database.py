@@ -14,7 +14,7 @@ from psycopg_pool import ConnectionPool
 from pwdlib import PasswordHash
 
 
-CURRENT_SCHEMA_REVISION = "0019"
+CURRENT_SCHEMA_REVISION = "0020"
 TENANT_TABLES = (
     "workspaces",
     "workspace_members",
@@ -129,6 +129,18 @@ def _connection_is_ready(connection: Connection) -> bool:
            )"""
     ).fetchone()
     if customer_rows_are_hidden != (True,):
+        return False
+
+    growth_safe = connection.execute("""SELECT
+        NOT has_table_privilege(current_user,'public.signup_attribution','SELECT')
+        AND NOT has_table_privilege(current_user,'public.acquisition_visitors','SELECT')
+        AND NOT has_function_privilege(current_user,'public.growth_report(timestamptz,timestamptz,text,text)','EXECUTE')
+        AND has_function_privilege(current_user,'public.acquisition_touch(text,text,jsonb,text,boolean)','EXECUTE')
+        AND has_function_privilege(current_user,'public.growth_inspection(uuid,uuid,uuid)','EXECUTE')
+        AND (SELECT count(*)=6 FROM pg_class WHERE relnamespace='public'::regnamespace
+          AND relname IN ('growth_policy','acquisition_visitors','acquisition_budgets','signup_attribution','growth_workspace_optouts','funnel_facts')
+          AND relrowsecurity AND relforcerowsecurity)""").fetchone()
+    if growth_safe != (True,):
         return False
 
     extension = connection.execute(

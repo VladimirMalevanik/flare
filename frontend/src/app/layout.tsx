@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { AcquisitionCapture } from "@/features/auth/acquisition-capture";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { parseLocale, LOCALE_COOKIE } from "@/i18n/config";
@@ -14,7 +16,7 @@ export default async function RootLayout({
   const locale = parseLocale((await cookies()).get(LOCALE_COOKIE)?.value);
   return (
     <html lang={locale}>
-      <body><I18nProvider initialLocale={locale}>{children}</I18nProvider></body>
+      <body><Suspense fallback={null}><AcquisitionCapture /></Suspense><I18nProvider initialLocale={locale}>{children}</I18nProvider></body>
     </html>
   );
 }

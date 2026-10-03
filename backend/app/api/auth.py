@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.api.acquisition import COOKIE, clear_acquisition
 from app.models.auth import AuthRepository
 from app.models.database import MembershipRequiredError
 from app.services.auth_service import (
@@ -172,6 +173,7 @@ def set_session(request: Request, response: Response, token: str) -> None:
         path="/",
         max_age=settings.session_lifetime_seconds,
     )
+    clear_acquisition(request, response)
     response.headers["Cache-Control"] = "no-store"
 
 
@@ -179,7 +181,8 @@ def set_session(request: Request, response: Response, token: str) -> None:
 def register(payload: RegisterRequest, request: Request, response: Response):
     try:
         token = auth_service(request).register(
-            payload.email, payload.password, payload.name
+            payload.email, payload.password, payload.name,
+            acquisition_reference=(None if request.cookies.get(request.app.state.settings.session_cookie_name) else request.cookies.get(COOKIE)),
         )
     except RegistrationUnavailable:
         raise auth_error(
@@ -267,6 +270,7 @@ def logout(request: Request):
         httponly=True,
         samesite="lax",
     )
+    clear_acquisition(request, response)
     return response
 
 

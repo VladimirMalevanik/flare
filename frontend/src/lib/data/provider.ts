@@ -17,6 +17,7 @@ import type {
 } from "./types";
 
 export type AnalyticsEventInput =
+  | { eventType: "voluntary_inspection"; interactionId: string; flareId: string; sourceId?: string }
   | { eventType: "capture_started"; targetType: "capture"; targetId?: never; metadata?: never }
   | { eventType: "capture_submitted"; targetType: "item"; targetId: string;
       metadata: { sourceType: ItemType } }
