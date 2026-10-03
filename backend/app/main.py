@@ -14,6 +14,7 @@ from app.api.routes import router
 from app.api.acquisition import router as acquisition_router
 from app.api.analytics import router as analytics_router
 from app.api.auth import router as auth_router
+from app.api.billing import router as billing_router, WEBHOOK_PATH
 from app.api.flares import router as flares_router
 from app.api.analysis import router as analysis_router
 from app.api.analysis_schedule import router as analysis_schedule_router
@@ -107,7 +108,8 @@ def create_app(
     )
     @application.middleware("http")
     async def origin_guard(request: Request, call_next):
-        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+        is_webhook_request = request.method == "POST" and request.url.path == WEBHOOK_PATH
+        if request.method not in {"GET", "HEAD", "OPTIONS"} and not is_webhook_request:
             if request.headers.get("origin") not in configured.cors_origins:
                 return JSONResponse({"detail": "Request origin is not allowed"}, status_code=403)
         response = await call_next(request)
@@ -115,7 +117,7 @@ def create_app(
             "/auth", "/items", "/imports", "/flares", "/analyze", "/analysis-runs",
             "/integrations", "/ops", "/analytics", "/voice",
             "/analysis-schedule", "/analysis/daily-status",
-            "/export", "/acquisition",
+            "/export", "/acquisition", "/billing",
         )):
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -162,6 +164,7 @@ def create_app(
         ]}, status_code=422)
 
     application.include_router(auth_router)
+    application.include_router(billing_router)
     application.include_router(import_packages_router)
     application.include_router(imports_router)
     application.include_router(flares_router)

@@ -14,7 +14,7 @@ from psycopg_pool import ConnectionPool
 from pwdlib import PasswordHash
 
 
-CURRENT_SCHEMA_REVISION = "0020"
+CURRENT_SCHEMA_REVISION = "0021"
 TENANT_TABLES = (
     "workspaces",
     "workspace_members",
@@ -41,6 +41,8 @@ TENANT_TABLES = (
     "analysis_cycle_sources",
     "analysis_chunk_selection_history",
     "scheduled_analysis_notifications",
+    "billing_checkout_intents",
+    "billing_subscriptions",
 )
 
 
@@ -126,6 +128,8 @@ def _connection_is_ready(connection: Connection) -> bool:
                UNION ALL SELECT 1 FROM public.analysis_cycle_sources
                UNION ALL SELECT 1 FROM public.analysis_chunk_selection_history
                UNION ALL SELECT 1 FROM public.scheduled_analysis_notifications
+               UNION ALL SELECT 1 FROM (SELECT workspace_id FROM public.billing_checkout_intents) visible_billing_intents
+               UNION ALL SELECT 1 FROM public.billing_subscriptions
            )"""
     ).fetchone()
     if customer_rows_are_hidden != (True,):
@@ -141,6 +145,28 @@ def _connection_is_ready(connection: Connection) -> bool:
           AND relname IN ('growth_policy','acquisition_visitors','acquisition_budgets','signup_attribution','growth_workspace_optouts','funnel_facts')
           AND relrowsecurity AND relforcerowsecurity)""").fetchone()
     if growth_safe != (True,):
+        return False
+
+    billing_safe = connection.execute("""SELECT
+        NOT has_table_privilege(current_user,'public.billing_webhook_events','SELECT,INSERT,UPDATE,DELETE')
+        AND NOT has_table_privilege(current_user,'public.billing_subscriptions','INSERT,UPDATE,DELETE')
+        AND NOT has_table_privilege(current_user,'public.billing_checkout_intents','INSERT,UPDATE,DELETE')
+        AND NOT has_column_privilege(current_user,'public.billing_checkout_intents','token_hash','SELECT')
+        AND has_function_privilege(current_user,'public.create_billing_checkout_intent(text,text,integer)','EXECUTE')
+        AND has_function_privilege(current_user,'public.apply_paddle_billing_event(jsonb)','EXECUTE')
+        AND NOT has_function_privilege(current_user,'public._apply_paddle_billing_event(jsonb)','EXECUTE')
+        AND NOT has_function_privilege('public','public.apply_paddle_billing_event(jsonb)','EXECUTE')
+        AND (SELECT count(*)=3 FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
+            WHERE p.oid IN ('public.create_billing_checkout_intent(text,text,integer)'::regprocedure,
+                'public.apply_paddle_billing_event(jsonb)'::regprocedure,'public._apply_paddle_billing_event(jsonb)'::regprocedure)
+            AND p.prosecdef AND p.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']
+            AND r.rolname IN ('flare_owner','flare_billing_executor') AND NOT r.rolsuper
+            AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole
+            AND (r.rolname='flare_owner' OR NOT r.rolcanlogin)
+            AND NOT EXISTS(SELECT 1 FROM pg_auth_members WHERE member=r.oid))
+        AND (SELECT relrowsecurity AND relforcerowsecurity FROM pg_class
+            WHERE oid='public.billing_webhook_events'::regclass)""").fetchone()
+    if billing_safe != (True,):
         return False
 
     extension = connection.execute(
@@ -188,9 +214,9 @@ class Database:
         self._pool.close()
 
     @contextmanager
-    def connection(self) -> Iterator[Connection]:
+    def connection(self, *, timeout: float | None = None) -> Iterator[Connection]:
         """Yield a pooled connection without selecting customer context."""
-        with self._pool.connection() as connection:
+        with self._pool.connection(timeout=timeout) as connection:
             yield connection
 
     @contextmanager

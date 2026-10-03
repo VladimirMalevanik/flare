@@ -27,6 +27,7 @@ function load(relative, mocks = {}, globals = {}) {
     process: { env: {} },
     setTimeout,
     clearTimeout,
+    AbortController,
     require(name) {
       if (name in mocks) return mocks[name];
       throw Error(`Unexpected import ${name}`);
@@ -62,7 +63,7 @@ function fakeTimers() {
 
 function setup(overrides = {}) {
   const timers = fakeTimers();
-  const calls = { initialized: [], opened: [], closed: 0 };
+  const calls = { initialized: [], opened: [], closed: 0, intents: [] };
   let eventCallback;
   const paddle = {
     Initialized: true,
@@ -71,13 +72,22 @@ function setup(overrides = {}) {
       close() { calls.closed++; eventCallback?.({ name: "checkout.closed" }); },
     },
   };
-  const { createSandboxCheckoutClient } = load("../src/lib/billing/checkout-controller.ts", {}, timers);
+  const billingApi = load("../src/lib/billing/billing-api.ts");
+  const { createSandboxCheckoutClient } = load("../src/lib/billing/checkout-controller.ts", { "./billing-api": billingApi }, timers);
   const client = createSandboxCheckoutClient({
     token: publicTestToken,
     proPriceId: priceId,
     loadTimeoutMs: 30,
     openTimeoutMs: 40,
     ...overrides,
+    getCheckoutIntent: async (signal) => {
+      calls.intents.push(signal);
+      if (overrides.intentErrorCode) throw new billingApi.BillingRequestError(overrides.intentErrorCode);
+      if (overrides.getCheckoutIntent) return overrides.getCheckoutIntent(signal);
+      return { environment: "sandbox", priceId, quantity: 1, email: user.email,
+        customData: { userId: user.id, checkoutIntent: "server-bound-intent" },
+        expiresAt: new Date(Date.now() + 300_000).toISOString() };
+    },
     initialize: async (options) => {
       calls.initialized.push(options);
       eventCallback = options.eventCallback;
@@ -92,7 +102,7 @@ function setup(overrides = {}) {
 }
 
 async function flushMicrotasks() {
-  for (let count = 0; count < 5; count++) await Promise.resolve();
+  for (let count = 0; count < 15; count++) await Promise.resolve();
 }
 
 test("missing configuration, Live tokens, invalid prices, and missing identity fail before SDK initialization", async () => {
@@ -114,7 +124,7 @@ test("missing configuration, Live tokens, invalid prices, and missing identity f
   for (const [configuration, identity, error] of cases) {
     const f = setup(configuration);
     await f.client.openProCheckout(identity, "en");
-    assert.deepEqual(f.snapshot(), { phase: "idle", error });
+    assert.deepEqual(f.snapshot(), { phase: "idle", error, completionRevision: 0 });
     assert.equal(f.calls.initialized.length, 0);
     assert.equal(f.calls.opened.length, 0);
     assert.equal(f.timers.count(), 0);
@@ -153,11 +163,75 @@ test("checkout sends the exact Sandbox price, quantity, authenticated email, and
   assert.deepEqual(plain(f.calls.opened[0]), {
     items: [{ priceId, quantity: 1 }],
     customer: { email: user.email },
-    customData: { userId: user.id },
+    customData: { userId: user.id, checkoutIntent: "server-bound-intent" },
     settings: { displayMode: "overlay", allowLogout: false, locale: "es", theme: "dark" },
   });
   assert.doesNotMatch(JSON.stringify(f.calls.opened[0]), /must-not-send|password|token|workspace/);
   f.emit("checkout.closed");
+});
+
+test("server intent identity, price, environment, quantity and expiry are checked before loading the SDK", async () => {
+  const valid = { environment: "sandbox", priceId, quantity: 1, email: "server-owner@example.test",
+    customData: { userId: user.id, checkoutIntent: "bound-intent" }, expiresAt: "2099-01-01T00:00:00Z" };
+  for (const [change, error] of [[{ environment: "live" }, "sandbox-only"],
+    [{ priceId: "pri_01m3y1nvmgw2avt60bz87161c9" }, "price"], [{ quantity: 2 }, "backend"],
+    [{ email: "bad" }, "backend"], [{ expiresAt: "2000-01-01T00:00:00Z" }, "backend"],
+    [{ customData: { userId: "someone-else", checkoutIntent: "bound-intent" } }, "auth"],
+    [{ customData: { userId: user.id, checkoutIntent: "" } }, "backend"]]) {
+    const f = setup({ getCheckoutIntent: async () => ({ ...valid, ...change }) });
+    await f.client.openProCheckout(user, "en");
+    assert.equal(f.snapshot().error, error);
+    assert.equal(f.calls.initialized.length, 0);
+    assert.equal(f.calls.opened.length, 0);
+    assert.equal(f.timers.count(), 0);
+  }
+  const f = setup({ getCheckoutIntent: async () => valid });
+  await f.client.openProCheckout(user, "en");
+  assert.equal(f.calls.opened[0].customer.email, valid.email);
+  assert.deepEqual(plain(f.calls.opened[0].customData), valid.customData);
+  f.emit("checkout.closed");
+});
+
+test("server intent timeout, failure and unmount cancellation never fall back to browser-only checkout", async () => {
+  for (const code of ["auth", "permission", "configuration", "backend"]) {
+    const f = setup({ intentErrorCode: code });
+    await f.client.openProCheckout(user, "en");
+    assert.equal(f.snapshot().phase, "idle");
+    assert.equal(f.snapshot().error, code);
+    assert.equal(f.calls.initialized.length, 0);
+    assert.equal(f.calls.opened.length, 0);
+  }
+  let resolve;
+  const f = setup({ getCheckoutIntent: () => new Promise(done => { resolve = done; }) });
+  const first = f.client.openProCheckout(user, "en");
+  await f.client.openProCheckout(user, "en");
+  assert.equal(f.calls.intents.length, 1);
+  f.client.cancelPendingCheckout();
+  await first;
+  assert.equal(f.calls.intents[0].aborted, true);
+  assert.equal(f.timers.count(), 0);
+  resolve({ environment: "sandbox", priceId, quantity: 1, email: user.email,
+    customData: { userId: user.id, checkoutIntent: "late" }, expiresAt: "2099-01-01T00:00:00Z" });
+  await flushMicrotasks();
+  assert.equal(f.calls.opened.length, 0);
+  const timeout = setup({ getCheckoutIntent: () => new Promise(() => {}) });
+  const opening = timeout.client.openProCheckout(user, "en");
+  timeout.timers.fire(15000);
+  await opening;
+  assert.equal(timeout.snapshot().error, "backend");
+  assert.equal(timeout.calls.intents[0].aborted, true);
+  assert.equal(timeout.calls.opened.length, 0);
+  assert.equal(timeout.timers.count(), 0);
+});
+
+test("completion revision survives an immediate completed-to-closed sequence and never reads provider plan claims", async () => {
+  const f = setup();
+  await f.client.openProCheckout(user, "en");
+  f.emit("checkout.completed", { data: { plan: "pro" } });
+  f.emit("checkout.completed", { data: { plan: "pro" } });
+  f.emit("checkout.closed");
+  assert.deepEqual(f.snapshot(), { phase: "idle", error: null, completionRevision: 1 });
+  assert.equal("plan" in f.snapshot(), false);
 });
 
 test("SDK rejection, undefined result, and an uninitialized SDK release the lock without opening checkout", async () => {
@@ -168,7 +242,7 @@ test("SDK rejection, undefined result, and an uninitialized SDK release the lock
   ]) {
     const f = setup({ initialize });
     await f.client.openProCheckout(user, "en");
-    assert.deepEqual(f.snapshot(), { phase: "idle", error: "load" });
+    assert.deepEqual(f.snapshot(), { phase: "idle", error: "load", completionRevision: 0 });
     assert.equal(f.calls.opened.length, 0);
     assert.equal(f.timers.count(), 0);
     await f.client.openProCheckout(user, "en");
@@ -184,7 +258,7 @@ test("load timeout never opens checkout automatically after the SDK eventually r
   await flushMicrotasks();
   f.timers.fire(30);
   await opening;
-  assert.deepEqual(f.snapshot(), { phase: "idle", error: "load" });
+  assert.deepEqual(f.snapshot(), { phase: "idle", error: "load", completionRevision: 0 });
   resolve();
   await flushMicrotasks();
   assert.equal(f.calls.opened.length, 0);
@@ -200,7 +274,7 @@ test("throwing Checkout.open closes a partial overlay and retry reuses the initi
   const originalOpen = f.paddle.Checkout.open;
   f.paddle.Checkout.open = () => { throw Error("private checkout error"); };
   await f.client.openProCheckout(user, "en");
-  assert.deepEqual(f.snapshot(), { phase: "idle", error: "open" });
+  assert.deepEqual(f.snapshot(), { phase: "idle", error: "open", completionRevision: 0 });
   assert.equal(f.calls.closed, 1);
   assert.equal(f.timers.count(), 0);
   f.paddle.Checkout.open = originalOpen;
@@ -216,7 +290,7 @@ test("cancelling pending SDK loading ignores late success and explicit restart s
   const first = f.client.openProCheckout(user, "en");
   await flushMicrotasks();
   f.client.cancelPendingCheckout();
-  assert.deepEqual(f.snapshot(), { phase: "idle", error: null });
+  assert.deepEqual(f.snapshot(), { phase: "idle", error: null, completionRevision: 0 });
   resolve();
   await first;
   assert.equal(f.calls.opened.length, 0);
@@ -238,7 +312,7 @@ test("old load timeout cannot overwrite a newer attempt after cancellation and r
   await flushMicrotasks();
   f.timers.fireNext(30);
   await first;
-  assert.deepEqual(f.snapshot(), { phase: "loading", error: null });
+  assert.deepEqual(f.snapshot(), { phase: "loading", error: null, completionRevision: 0 });
   assert.equal(f.calls.opened.length, 0);
   resolve();
   await second;
@@ -259,7 +333,7 @@ test("cancelling before checkout.loaded closes the pending overlay and ignores i
   f.emit("checkout.error");
   f.emit("checkout.completed");
   f.timers.fire(40);
-  assert.deepEqual(f.snapshot(), { phase: "idle", error: null });
+  assert.deepEqual(f.snapshot(), { phase: "idle", error: null, completionRevision: 0 });
   await f.client.openProCheckout(user, "en");
   assert.equal(f.calls.initialized.length, 1);
   assert.equal(f.calls.opened.length, 2);
@@ -286,7 +360,7 @@ test("overlay opening timeout and checkout error clean up, preserve the error, a
     const f = setup();
     await f.client.openProCheckout(user, "en");
     fail(f);
-    assert.deepEqual(f.snapshot(), { phase: "idle", error: "open" });
+    assert.deepEqual(f.snapshot(), { phase: "idle", error: "open", completionRevision: 0 });
     assert.equal(f.calls.closed, 1);
     assert.equal(f.timers.count(), 0);
     f.emit("checkout.completed");
@@ -302,17 +376,17 @@ test("checkout.loaded cancels the opening deadline and payment errors keep the e
   const f = setup();
   await f.client.openProCheckout(user, "en");
   f.emit("checkout.loaded");
-  assert.deepEqual(f.snapshot(), { phase: "open", error: null });
+  assert.deepEqual(f.snapshot(), { phase: "open", error: null, completionRevision: 0 });
   assert.equal(f.timers.count(), 0);
   for (const name of ["checkout.payment.failed", "checkout.payment.error"]) {
     f.emit(name, { data: { email: "private@example.com", payment: "private" } });
-    assert.deepEqual(f.snapshot(), { phase: "open", error: "payment" });
+    assert.deepEqual(f.snapshot(), { phase: "open", error: "payment", completionRevision: 0 });
     await f.client.openProCheckout(user, "en");
     assert.equal(f.calls.opened.length, 1);
     assert.equal(f.calls.closed, 0);
   }
   f.emit("checkout.closed");
-  assert.deepEqual(f.snapshot(), { phase: "idle", error: null });
+  assert.deepEqual(f.snapshot(), { phase: "idle", error: null, completionRevision: 0 });
 });
 
 test("completed checkout changes no account data and remains locked until the success overlay closes", async () => {
@@ -320,9 +394,9 @@ test("completed checkout changes no account data and remains locked until the su
   const f = setup();
   await f.client.openProCheckout(identity, "en");
   f.emit("checkout.completed", { data: { subscription_id: "sub_external", custom_data: { plan: "pro" } } });
-  assert.deepEqual(f.snapshot(), { phase: "complete", error: null });
+  assert.deepEqual(f.snapshot(), { phase: "complete", error: null, completionRevision: 1 });
   assert.equal(identity.plan, "free");
-  assert.deepEqual(Object.keys(f.client.getSnapshot()).sort(), ["error", "phase"]);
+  assert.deepEqual(Object.keys(f.client.getSnapshot()).sort(), ["completionRevision", "error", "phase"]);
   await f.client.openProCheckout(user, "en");
   assert.equal(f.calls.opened.length, 1);
   assert.equal(f.timers.count(), 0);
@@ -337,7 +411,7 @@ test("external-store subscribers receive changes, unsubscribe cleanly, and serve
   const updates = [];
   const unsubscribe = f.client.subscribe(() => updates.push(f.snapshot()));
   const initialServer = f.client.getServerSnapshot();
-  assert.deepEqual(plain(initialServer), { phase: "idle", error: null });
+  assert.deepEqual(plain(initialServer), { phase: "idle", error: null, completionRevision: 0 });
   await f.client.openProCheckout(user, "en");
   f.emit("checkout.loaded");
   assert.equal(updates.length, 2);
@@ -350,12 +424,20 @@ test("external-store subscribers receive changes, unsubscribe cleanly, and serve
 });
 
 test("public adapter loads the official SDK lazily and shares one controller with the current document theme", async () => {
-  const { createSandboxCheckoutClient } = load("../src/lib/billing/checkout-controller.ts");
+  const apiModule = load("../src/lib/billing/billing-api.ts");
+  const { createSandboxCheckoutClient } = load("../src/lib/billing/checkout-controller.ts", { "./billing-api": apiModule });
   let importCount = 0, options;
   const opened = [];
   const paddle = { Initialized: true, Checkout: { open: (value) => opened.push(value), close() {} } };
   const adapter = load("../src/lib/billing/paddle-sandbox.ts", {
     "./checkout-controller": { createSandboxCheckoutClient },
+    "@/lib/auth/session": { apiBaseUrl: "/api" },
+    "./billing-api": { createBillingApi: () => ({ getStatus() {}, createCheckoutIntent: async () => ({
+      environment: "sandbox", priceId, quantity: 1, email: user.email,
+      customData: { userId: user.id, checkoutIntent: "server-bound-intent" },
+      expiresAt: new Date(Date.now() + 300_000).toISOString(),
+    }) }) },
+    "./billing-status-controller": { createBillingStatusClient: () => ({}) },
     "@paddle/paddle-js": { initializePaddle: async (value) => { importCount++; options = value; return paddle; } },
   }, {
     process: { env: { NEXT_PUBLIC_PADDLE_CLIENT_TOKEN: publicTestToken, NEXT_PUBLIC_PADDLE_PRO_PRICE_ID: priceId, PADDLE_API_KEY: "must-not-use" } },
@@ -387,30 +469,43 @@ function textContent(node) {
   if (Array.isArray(node)) return node.map(textContent).join(" ");
   return node ? textContent(node.props?.children) : "";
 }
-function uiSetup(locale = "en", session = { user }) {
+function uiSetup(locale = "en", session = { user, workspace: { id: "workspace-id" } }) {
   const f = setup();
   let notice = null;
-  let cleanup;
+  const cleanups = [];
+  const windowListeners = new Map();
+  const documentListeners = new Map();
+  let refreshCount = 0;
+  const document = { visibilityState: "visible", addEventListener: (name, fn) => documentListeners.set(name, fn), removeEventListener: (name, fn) => { if (documentListeners.get(name) === fn) documentListeners.delete(name); } };
+  const window = { addEventListener: (name, fn) => windowListeners.set(name, fn), removeEventListener: (name, fn) => { if (windowListeners.get(name) === fn) windowListeners.delete(name); } };
+  let billingSnapshot = { phase: session ? "ready" : "error", status: session ? {
+    workspaceId: "workspace-id", plan: "free", canManageBilling: true, checkoutAvailable: true,
+  } : null, error: session ? null : "auth", pendingConfirmation: false, confirmationTimedOut: false };
+  const status = { subscribe() {}, getSnapshot: () => billingSnapshot, getServerSnapshot: () => billingSnapshot,
+    start() {}, stop() {}, confirmCheckout() {}, checkAgain() {}, refresh() { refreshCount++; } };
   const { subscriptionCopy } = load("../src/features/subscription/subscription-copy.ts");
   const { SubscriptionSection } = load("../src/features/subscription/subscription-section.tsx", {
     "react/jsx-runtime": jsx,
     react: {
       useState: () => [notice, (next) => { notice = next; }],
-      useEffect: (effect) => { cleanup ??= effect(); },
+      useEffect: (effect) => { const cleanup = effect(); if (cleanup) cleanups.push(cleanup); },
       useSyncExternalStore: (_subscribe, snapshot) => snapshot(),
     },
     "@/components/auth-session": { useSession: () => session },
     "@/components/icons": { Icon: "icon" },
     "@/i18n/provider": { useI18n: () => ({ locale }) },
-    "@/lib/billing/paddle-sandbox": { paddleSandboxCheckout: f.client },
+    "@/lib/billing/paddle-sandbox": { paddleSandboxCheckout: f.client, billingStatus: status },
+    "@/lib/billing/billing-status-controller": load("../src/lib/billing/billing-status-controller.ts", { "./billing-api": load("../src/lib/billing/billing-api.ts") }),
     "./subscription-copy": { subscriptionCopy },
     "./subscription-section.module.css": { current: "current", plan: "plan", selected: "selected", error: "error" },
-  });
+  }, { document, window });
   return {
     ...f,
     render: () => SubscriptionSection(),
     buttons: () => nodes(SubscriptionSection()).filter((node) => node.type === "button"),
-    unmount: () => cleanup?.(),
+    unmount: () => cleanups.splice(0).forEach(fn => fn()),
+    setBilling: (next) => { billingSnapshot = { ...billingSnapshot, ...next }; },
+    document, windowListeners, documentListeners, refreshCount: () => refreshCount,
   };
 }
 
@@ -444,13 +539,60 @@ test("Team Buy explains the missing price and never starts a Pro checkout", () =
   assert.equal(textContent(f.buttons()[0]), "Current");
 });
 
+test("only authoritative status selects Pro; owner gating and missing backend never grant or sell a plan", () => {
+  const f = uiSetup();
+  f.setBilling({ status: { workspaceId: "workspace-id", plan: "pro", canManageBilling: true, checkoutAvailable: true, accessUntil: "2099-01-01T00:00:00Z" } });
+  assert.equal(textContent(f.buttons()[1]), "Current");
+  assert.match(f.buttons()[1].props.className, /current/);
+  assert.match(textContent(f.render()), /Planned benefits/);
+  f.buttons()[0].props.onClick();
+  assert.match(textContent(f.render()), /Changing back to Free is not available/);
+  assert.equal(f.calls.intents.length, 0);
+  f.setBilling({ status: { workspaceId: "workspace-id", plan: "free", canManageBilling: false, checkoutAvailable: true } });
+  assert.equal(f.buttons()[1].props.disabled, true);
+  f.buttons()[1].props.onClick();
+  assert.equal(f.calls.intents.length, 0);
+  f.setBilling({ phase: "error", status: null, error: "backend" });
+  assert.equal(f.buttons()[1].props.disabled, true);
+  assert.equal(f.buttons()[0].props.disabled, true);
+  assert.doesNotMatch(textContent(f.buttons()[0]), /Current/);
+});
+
+test("expired cached Pro never renders Current or enables checkout while status is unknown", () => {
+  const f = uiSetup();
+  f.setBilling({ phase: "error", error: "backend", status: {
+    workspaceId: "workspace-id", plan: "pro", canManageBilling: true, checkoutAvailable: true,
+    accessUntil: "2000-01-01T00:00:00Z",
+  } });
+  assert.equal(textContent(f.buttons()[1]), "Buy");
+  assert.equal(f.buttons()[1].props.disabled, true);
+  assert.equal(f.buttons()[0].props.disabled, true);
+  assert.doesNotMatch(textContent(f.render()), /Pro is confirmed/);
+});
+
+test("focus, pageshow and becoming visible refresh subscription status and listeners detach on unmount", () => {
+  const f = uiSetup();
+  f.render();
+  f.windowListeners.get("focus")();
+  f.windowListeners.get("pageshow")();
+  f.documentListeners.get("visibilitychange")();
+  assert.equal(f.refreshCount(), 3);
+  f.document.visibilityState = "hidden";
+  f.windowListeners.get("focus")();
+  f.documentListeners.get("visibilitychange")();
+  assert.equal(f.refreshCount(), 3);
+  f.unmount();
+  assert.equal(f.windowListeners.size, 0);
+  assert.equal(f.documentListeners.size, 0);
+});
+
 test("Subscription effect cleanup prevents checkout appearing after navigating away during SDK loading", async () => {
   const f = uiSetup();
   f.buttons()[1].props.onClick();
   assert.equal(f.snapshot().phase, "loading");
   f.unmount();
   await flushMicrotasks();
-  assert.deepEqual(f.snapshot(), { phase: "idle", error: null });
+  assert.deepEqual(f.snapshot(), { phase: "idle", error: null, completionRevision: 0 });
   assert.equal(f.calls.opened.length, 0);
   assert.equal(f.timers.count(), 0);
 });
@@ -466,7 +608,7 @@ test("UI locks both Buy buttons through loading, open, and completed and always 
   assert.ok(f.buttons().every((button) => button.props.disabled));
   f.emit("checkout.completed");
   assert.equal(textContent(f.buttons()[0]), "Current");
-  assert.match(textContent(f.render()), /Your plan is still Free/);
+  assert.match(textContent(f.render()), /Waiting for server confirmation/);
   assert.ok(f.buttons().every((button) => button.props.disabled));
   f.emit("checkout.closed");
   assert.equal(textContent(f.buttons()[0]), "Current");
@@ -477,7 +619,7 @@ test("missing session shows an accessible error and no local profile can become 
   const f = uiSetup("en", null);
   f.buttons()[1].props.onClick();
   const error = nodes(f.render()).find((node) => node.props?.role === "alert");
-  assert.match(textContent(error), /Please sign in/);
+  assert.match(textContent(error), /Sign in again/);
   assert.equal(f.calls.initialized.length, 0);
 });
 
