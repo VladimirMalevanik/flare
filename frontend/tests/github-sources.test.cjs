@@ -44,6 +44,7 @@ function harness(initialSource, available = []) {
     if (name === '@/lib/data') return { dataProvider: provider, dataErrorMessage: (error, fallback) => error?.message || fallback };
     if (name === '@/components/icons') return { Icon: 'icon' };
     if (name === '@/components/workspace-context') return { useWorkspace: () => ({ openCapture() {} }) };
+    if (name === "./zip-import") return { ZipImport: () => null };
     throw Error(`Unexpected import ${name}`);
   } };
   vm.runInNewContext(code, sandbox);

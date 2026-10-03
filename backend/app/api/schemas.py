@@ -110,6 +110,8 @@ class ItemResponse(BaseModel):
     title: str
     content: str
     source_url: str | None = Field(default=None, serialization_alias="sourceUrl")
+    import_package_id: str | None = Field(default=None, serialization_alias="importPackageId")
+    relative_path: str | None = Field(default=None, serialization_alias="relativePath")
     file_name: str | None = Field(default=None, serialization_alias="fileName")
     file_size: int | None = Field(default=None, serialization_alias="fileSize")
     file_type: str | None = Field(default=None, serialization_alias="fileType")
@@ -144,6 +146,8 @@ class ItemResponse(BaseModel):
             title=record.title,
             content=record.content,
             source_url=record.source_url,
+            import_package_id=metadata.get("importPackageId"),
+            relative_path=metadata.get("relativePath"),
             file_name=metadata.get("fileName"),
             file_size=metadata.get("fileSize"),
             file_type=metadata.get("fileType"),

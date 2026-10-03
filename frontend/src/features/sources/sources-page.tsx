@@ -1,6 +1,7 @@
 "use client";
 import { useI18n } from "@/i18n/provider";
 import Link from "next/link";
+import { ZipImport } from "./zip-import";
 import { useEffect, useState } from "react";
 import { dataErrorMessage, dataProvider, type GitHubRepository, type Source } from "@/lib/data";
 import { Icon } from "@/components/icons";
@@ -119,7 +120,13 @@ export function SourcesPage() {
                 <p className="source-description">{label(source.description)}</p>
                 <p className="muted meta">{source.id === "github" && source.status === "syncing" ? t("authorizedAs", { name: source.accountLogin ?? "GitHub" }) : label(source.updated)}</p>
                 <footer>
-                  {source.status === "manual-import" ? (
+                  {source.id === "notion" || source.id === "obsidian" ? (
+                    <>
+                      <ZipImport sourceKind={source.id} />
+                      <Link className="button" href={`/settings/import-guides/${source.id}`}>
+                        {t("View import guide")}</Link>
+                    </>
+                  ) : source.status === "manual-import" ? (
                     <Link className="button" href={`/settings/import-guides/${source.id}`}>
                       {t("View import guide")}</Link>
                   ) : source.id === "github" && source.status !== "coming-soon" ? (

@@ -16,6 +16,7 @@ function load(relative, mocks) {
     if (name === '@/i18n/provider') return require('./i18n-utils.cjs').i18nMock();
     if (name === '@/features/funny/funny-state') return load('../src/features/funny/funny-state.ts', {});
     if (name === '@/features/funny/funny-sounds') return { playFunnySound() {} };
+    if (name === "./zip-import") return { ZipImport: () => null };
     throw Error(`Unexpected import ${name}`);
   } });
   return exports;
@@ -161,8 +162,8 @@ test('Sources loads through provider with headings outside grids and margin-safe
     { status: obsidian.status, primary: obsidian.channels[0], description: obsidian.description, muted: obsidian.updated },
     {
       status: 'manual-import',
-      primary: 'Manual import available',
-      description: 'Export Markdown from Obsidian and import it into Flare.',
+      primary: 'ZIP snapshot',
+      description: 'Import an Obsidian ZIP snapshot with Markdown, TXT and CSV sources.',
       muted: 'Automatic vault sync is not available yet.',
     },
   );
@@ -170,8 +171,8 @@ test('Sources loads through provider with headings outside grids and margin-safe
     { status: notion.status, primary: notion.channels[0], description: notion.description, muted: notion.updated },
     {
       status: 'manual-import',
-      primary: 'Manual import available',
-      description: 'Export your Notion content and import it into Flare.',
+      primary: 'ZIP snapshot',
+      description: 'Import a Notion ZIP export with Markdown, TXT and CSV sources.',
       muted: 'Automatic workspace sync is not available yet.',
     },
   );
@@ -179,8 +180,8 @@ test('Sources loads through provider with headings outside grids and margin-safe
   const obsidianCard = articles.find(n => textContent(n).includes('Provider: Obsidian import'));
   const notionCard = articles.find(n => textContent(n).includes('Provider: Notion'));
   const githubCard = articles.find(n => textContent(n).includes('Provider: GitHub'));
-  assert.equal(nodes(obsidianCard).find(n => n.type === 'a')?.props.href, '/settings/import-guides/obsidian');
-  assert.equal(nodes(notionCard).find(n => n.type === 'a')?.props.href, '/settings/import-guides/notion');
+  assert.ok(nodes(obsidianCard).some(n => n.props?.sourceKind === 'obsidian'));
+  assert.ok(nodes(notionCard).some(n => n.props?.sourceKind === 'notion'));
   assert.match(textContent(githubCard), /Connected/);
   assert.match(textContent(githubCard), /Repository connection is active\./);
   assert.match(textContent(githubCard), /flare\/example/);

@@ -1,0 +1,62 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "python": "3.12.11",
+  "policyPurpose": "local/test defaults; not production-tuned",
+  "policy": {
+    "compressed_bytes": 16000000,
+    "expanded_bytes": 32000000,
+    "entries": 2000,
+    "directory_bytes": 2000000,
+    "manifest_bytes": 4000000,
+    "file_bytes": 200000,
+    "path_bytes": 1024,
+    "segment_bytes": 255,
+    "path_depth": 32,
+    "expansion_ratio": 500,
+    "csv_rows": 20000,
+    "csv_field_bytes": 100000,
+    "csv_row_bytes": 200000,
+    "chunks_file": 2000,
+    "chunks_package": 10000,
+    "chunk_bytes": 4000,
+    "upload_seconds": 120,
+    "inspect_seconds": 30,
+    "file_seconds": 30,
+    "job_seconds": 300,
+    "cpu_seconds": 120,
+    "memory_bytes": 512000000,
+    "scratch_bytes": 64000000,
+    "staged_quota_bytes": 64000000,
+    "source_quota_bytes": 128000000,
+    "workspace_concurrency": 2,
+    "global_concurrency": 2,
+    "attempts": 3,
+    "lease_seconds": 60,
+    "backoff_seconds": 5,
+    "staging_seconds": 3600,
+    "cleanup_seconds": 3600,
+    "report_page": 100
+  },
+  "entries": 100,
+  "compressedBytes": 124202,
+  "expandedBytes": 200000,
+  "chunks": 100,
+  "inspectSeconds": 0.1157,
+  "parseSeconds": 12.4472,
+  "childPeakRssBytes": 39469056,
+  "security": [
+    {
+      "fixture": "../escape.md",
+      "rejection": "unsafe_path"
+    },
+    {
+      "fixture": "/absolute.md",
+      "rejection": "unsafe_path"
+    },
+    {
+      "fixture": "a\\b.md",
+      "rejection": "unsafe_path"
+    }
+  ],
+  "limitations": "Decoder/local scratch only; excludes upload network, PostgreSQL publication, concurrent tenants and production storage."
+}

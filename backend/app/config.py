@@ -17,6 +17,7 @@ class Settings:
     database_url: str | None
     cors_origins: list[str]
     environment: str = "production"
+    import_staging_root: str | None = None
     session_lifetime_seconds: int = 604800
     session_idle_seconds: int = 86400
     dev_mode: bool = False
@@ -138,6 +139,7 @@ def load_settings() -> Settings:
     origins = os.getenv("CORS_ORIGINS", "http://localhost:3000")
     environment = os.getenv("FLARE_ENV", "production")
     configured = Settings(
+        import_staging_root=os.getenv("FLARE_IMPORT_STAGING_ROOT"),
         database_url=os.getenv("DATABASE_URL"),
         environment=environment,
         session_lifetime_seconds=int(os.getenv("SESSION_LIFETIME_SECONDS", "604800")),
