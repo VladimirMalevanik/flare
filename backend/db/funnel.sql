@@ -8,8 +8,25 @@ CREATE TABLE public.funnel_facts (
  PRIMARY KEY(workspace_id,kind,logical_id)
 );
 CREATE INDEX funnel_actor_time ON public.funnel_facts(actor_id,workspace_id,occurred_at,kind);
+-- Writers share this transaction boundary; removers take it exclusively. Keep
+-- lock acquisition in a separate VOLATILE statement so subsequent reads use a
+-- fresh READ COMMITTED snapshot after a wait. No tenant permission is changed.
+CREATE FUNCTION public.growth_observation_allowed(p_w uuid,p_actor text) RETURNS boolean
+ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ IF current_setting('transaction_isolation')<>'read committed' THEN RETURN false; END IF;
+ PERFORM pg_advisory_xact_lock_shared(2020,2);
+ -- This also protects legacy events when collection is disabled. Locking a
+ -- real account avoids raising an FK error for a delayed delivery after delete.
+ PERFORM id FROM public.auth_users WHERE id=p_actor FOR KEY SHARE;
+ IF NOT FOUND THEN RETURN false; END IF;
+ RETURN NOT EXISTS(SELECT 1 FROM public.signup_attribution WHERE user_id=p_actor AND eligibility='withdrawn')
+ AND NOT EXISTS(SELECT 1 FROM public.growth_workspace_optouts WHERE workspace_id=p_w);
+END $$;
 CREATE FUNCTION public.growth_fact(p_w uuid,p_actor text,p_kind text,p_id uuid,p_at timestamptz,p_mode text,p_sources int,p_results int)
- RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+ RETURNS void LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ IF NOT public.growth_observation_allowed(p_w,p_actor) THEN RETURN; END IF;
  INSERT INTO public.funnel_facts(workspace_id,actor_id,kind,logical_id,occurred_at,mode,source_count,result_count)
  SELECT p_w,p_actor,p_kind,p_id,p_at,p_mode,p_sources,p_results
  WHERE EXISTS(SELECT 1 FROM public.growth_policy p WHERE p.enabled AND p.fact_seconds>0
@@ -18,6 +35,7 @@ CREATE FUNCTION public.growth_fact(p_w uuid,p_actor text,p_kind text,p_id uuid,p
  AND NOT EXISTS(SELECT 1 FROM public.signup_attribution WHERE user_id=p_actor AND eligibility='withdrawn')
  AND NOT EXISTS(SELECT 1 FROM public.growth_workspace_optouts WHERE workspace_id=p_w)
  ON CONFLICT DO NOTHING;
+END;
 $$;
 -- Domain commit hooks: each fact rolls back with its source transaction.
 CREATE FUNCTION public.growth_committed() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
@@ -90,10 +108,16 @@ BEGIN
  RETURN n;
 END $$;
 ALTER TABLE public.activity_events ADD COLUMN interaction_id uuid;
+-- NOT VALID preserves historical legacy actors without an auth row. New events
+-- must reference a real account; FK locking/cascade also covers higher-isolation
+-- account deletion. Do not scan/rewrite old events or historical migrations.
+ALTER TABLE public.activity_events ADD CONSTRAINT growth_activity_actor_fk
+ FOREIGN KEY(actor_id) REFERENCES public.auth_users(id) ON DELETE CASCADE NOT VALID;
 CREATE UNIQUE INDEX activity_interaction ON public.activity_events(workspace_id,actor_id,interaction_id) WHERE interaction_id IS NOT NULL;
 -- Withdrawal and deletion also suppress delayed deliveries through legacy writers.
 CREATE FUNCTION public.growth_event_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
  SET search_path=pg_catalog,public,pg_temp AS $$ BEGIN
+ IF NOT public.growth_observation_allowed(NEW.workspace_id,NEW.actor_id) THEN RETURN NULL; END IF;
  -- Narrow interaction observations are growth collection. Existing unrelated
  -- authenticated events keep their domain behavior while collection is off.
  IF NEW.interaction_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.growth_policy WHERE enabled AND fact_seconds>0)
@@ -116,6 +140,7 @@ BEGIN
  WHERE s.workspace_id=wid AND s.insight_id=p_flare AND d.id=p_source AND d.deleted_at IS NULL
  AND (d.import_package_id IS NULL OR EXISTS(SELECT 1 FROM public.import_packages p WHERE p.id=d.import_package_id AND p.status IN ('completed','completed_with_skips')))))
  THEN RAISE EXCEPTION 'Unavailable inspection target' USING ERRCODE='42501'; END IF;
+ IF NOT public.growth_observation_allowed(wid,uid) THEN RETURN; END IF;
  IF NOT EXISTS(SELECT 1 FROM public.growth_policy WHERE enabled AND fact_seconds>0) THEN RETURN; END IF;
  IF EXISTS(SELECT 1 FROM public.signup_attribution WHERE user_id=uid AND eligibility='withdrawn')
  OR EXISTS(SELECT 1 FROM public.growth_workspace_optouts WHERE workspace_id=wid) THEN RETURN; END IF;
@@ -134,6 +159,12 @@ DECLARE wid uuid:=nullif(current_setting('app.workspace_id',true),'')::uuid;
 BEGIN
  IF uid IS NULL OR NOT EXISTS(SELECT 1 FROM public.workspace_members WHERE workspace_id=wid AND user_id=uid) THEN
  RAISE EXCEPTION 'Membership required' USING ERRCODE='42501'; END IF;
+ IF current_setting('transaction_isolation')<>'read committed' THEN
+  RAISE EXCEPTION 'Privacy removal requires READ COMMITTED'; END IF;
+ PERFORM pg_advisory_xact_lock(2020,2);
+ -- Revalidate authorization after waiting, using a fresh snapshot.
+ IF NOT EXISTS(SELECT 1 FROM public.workspace_members WHERE workspace_id=wid AND user_id=uid) THEN
+  RAISE EXCEPTION 'Membership required' USING ERRCODE='42501'; END IF;
  IF p_workspace THEN
   IF NOT EXISTS(SELECT 1 FROM public.workspace_members WHERE workspace_id=wid AND user_id=uid AND role='owner') THEN
    RAISE EXCEPTION 'Owner required' USING ERRCODE='42501'; END IF;
@@ -158,27 +189,36 @@ END $$;
 CREATE TRIGGER growth_delete_account BEFORE DELETE ON public.auth_users FOR EACH ROW EXECUTE FUNCTION public.growth_account_deleted();
 CREATE FUNCTION public.growth_cleanup(p_limit int) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
  SET search_path=pg_catalog,public,pg_temp AS $$
-DECLARE p public.growth_policy; visitors int; budgets int; links int; facts int;
+DECLARE p public.growth_policy; visitors int; budgets int; links int; facts int; expired text[]; erased int;
 BEGIN
  IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 1000 THEN RAISE EXCEPTION 'Invalid batch'; END IF;
+ IF current_setting('transaction_isolation')<>'read committed' THEN
+  RAISE EXCEPTION 'Privacy removal requires READ COMMITTED'; END IF;
+ PERFORM pg_advisory_xact_lock(2020,2);
  SELECT * INTO p FROM public.growth_policy;
  WITH x AS(SELECT reference_hash FROM public.acquisition_visitors WHERE expires_at<=clock_timestamp() ORDER BY expires_at LIMIT p_limit)
  DELETE FROM public.acquisition_visitors WHERE reference_hash IN(SELECT reference_hash FROM x); GET DIAGNOSTICS visitors=ROW_COUNT;
  WITH x AS(SELECT bucket FROM public.acquisition_budgets WHERE hour<date_trunc('hour',clock_timestamp()) LIMIT p_limit)
  DELETE FROM public.acquisition_budgets WHERE bucket IN(SELECT bucket FROM x); GET DIAGNOSTICS budgets=ROW_COUNT;
  -- Expired measurement stays withdrawn: reconciliation must not resurrect it.
- WITH x AS(SELECT u.id,u.initial_workspace_id,u.created_at FROM public.auth_users u
+ SELECT array_agg(id) INTO expired FROM (SELECT u.id FROM public.auth_users u
  WHERE NOT EXISTS(SELECT 1 FROM public.signup_attribution a WHERE a.user_id=u.id AND a.eligibility='withdrawn')
- AND p.linked_seconds IS NOT NULL AND u.created_at<clock_timestamp()-make_interval(secs=>p.linked_seconds) LIMIT p_limit)
+ AND p.linked_seconds IS NOT NULL AND u.created_at<clock_timestamp()-make_interval(secs=>p.linked_seconds)
+ ORDER BY u.created_at,u.id LIMIT p_limit) x;
  INSERT INTO public.signup_attribution(user_id,workspace_id,created_at,eligibility,finalized)
- SELECT id,initial_workspace_id,created_at,'withdrawn',true FROM x
+ SELECT id,initial_workspace_id,created_at,'withdrawn',true FROM public.auth_users WHERE id=ANY(expired)
  ON CONFLICT(user_id) DO UPDATE SET eligibility='withdrawn',first_touch=NULL,last_touch=NULL,revision=NULL,finalized=true;
  GET DIAGNOSTICS links=ROW_COUNT;
+ -- p_limit bounds expired accounts. Erase each selected account atomically,
+ -- including ordinary events; a successful expiry cannot leave linked rows.
+ DELETE FROM public.funnel_facts WHERE actor_id=ANY(expired); GET DIAGNOSTICS erased=ROW_COUNT;
+ DELETE FROM public.activity_events WHERE actor_id=ANY(expired);
  WITH x AS(SELECT workspace_id,kind,logical_id FROM public.funnel_facts f WHERE
  EXISTS(SELECT 1 FROM public.signup_attribution a WHERE a.user_id=f.actor_id AND a.eligibility='withdrawn')
  OR (p.fact_seconds IS NOT NULL AND occurred_at<clock_timestamp()-make_interval(secs=>p.fact_seconds)) LIMIT p_limit)
  DELETE FROM public.funnel_facts f USING x WHERE (f.workspace_id,f.kind,f.logical_id)=(x.workspace_id,x.kind,x.logical_id);
  GET DIAGNOSTICS facts=ROW_COUNT;
+ facts:=facts+erased;
  WITH x AS(SELECT id FROM public.activity_events e WHERE interaction_id IS NOT NULL AND
  (EXISTS(SELECT 1 FROM public.signup_attribution a WHERE a.user_id=e.actor_id AND a.eligibility='withdrawn')
  OR (p.fact_seconds IS NOT NULL AND created_at<clock_timestamp()-make_interval(secs=>p.fact_seconds))) LIMIT p_limit)
@@ -191,7 +231,13 @@ CREATE FUNCTION public.growth_report(p_since timestamptz,p_until timestamptz,p_u
 DECLARE p public.growth_policy; result jsonb; attribution jsonb;
 BEGIN
  SELECT * INTO p FROM public.growth_policy;
- IF NOT p.enabled OR p_since IS NULL OR p_until IS NULL OR p_since>=p_until OR p_until>clock_timestamp()
+ IF NOT FOUND OR p.enabled IS DISTINCT FROM true
+ OR NOT COALESCE(p.min_cohort BETWEEN 2 AND 1000,false)
+ OR NOT COALESCE(p.report_window_days BETWEEN 1 AND 90,false)
+ OR p.report_calendar IS DISTINCT FROM 'UTC-v1' OR NOT COALESCE(length(p.revision) BETWEEN 1 AND 80,false)
+ OR p.notice_id IS NULL OR p.cleanup_owner IS NULL OR p.eligibility IS DISTINCT FROM 'explicit-opt-in'
+ OR NOT COALESCE(p.linked_seconds>0 AND p.fact_seconds>0,false)
+ OR p_since IS NULL OR p_until IS NULL OR p_since>=p_until OR p_until>clock_timestamp()
  OR p_until-p_since>make_interval(days=>p.report_window_days) OR p_unit IS NULL OR p_unit NOT IN ('account','workspace_creator')
  OR p_basis IS NULL OR p_basis NOT IN ('first','last') THEN RAISE EXCEPTION 'Reporting policy/window required'; END IF;
  WITH cohort AS(

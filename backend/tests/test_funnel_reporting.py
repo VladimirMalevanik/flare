@@ -236,3 +236,44 @@ def test_attribution_output_cardinality_is_bounded_without_partial_disclosure(gr
         report=c.execute("SELECT public.growth_report(%s,clock_timestamp(),'account','first')",(since,)).fetchone()[0]
         assert report['metrics']['accounts']==202 and report['attribution_bucket_limit']==100
         assert report['attribution_suppressed'] and report['attribution'] is None
+
+
+@pytest.mark.parametrize('policy_state', ['enabled','disabled','absent','null-cohort','zero-cohort','null-window','zero-window','invalid-calendar','null-revision','null-notice','null-cleanup','invalid-eligibility','null-retention'])
+def test_same_small_cohort_fails_closed_for_restricted_report_and_csv(growth,policy_state):
+    import csv,io
+    _,e,_,account=growth
+    user,_=account()
+    with psycopg.connect(e.admin_url) as c:
+        since=c.execute('SELECT created_at FROM public.auth_users WHERE id=%s',(user.user_id,)).fetchone()[0]
+        # Changes are rolled back. Simulate damaged configuration only in the
+        # disposable test transaction, without relaxing production constraints.
+        if policy_state == 'disabled': c.execute('UPDATE public.growth_policy SET enabled=false')
+        elif policy_state == 'absent': c.execute('DELETE FROM public.growth_policy')
+        elif policy_state != 'enabled':
+            checks=c.execute("SELECT conname FROM pg_constraint WHERE conrelid='public.growth_policy'::regclass AND contype='c'").fetchall()
+            from psycopg import sql
+            for (name,) in checks:
+                c.execute(sql.SQL('ALTER TABLE public.growth_policy DROP CONSTRAINT {}').format(sql.Identifier(name)))
+            updates={'null-cohort':('min_cohort',None),'zero-cohort':('min_cohort',0),
+                'null-window':('report_window_days',None),'zero-window':('report_window_days',0),
+                'invalid-calendar':('report_calendar','unapproved'),'null-revision':('revision',None),
+                'null-notice':('notice_id',None),'null-cleanup':('cleanup_owner',None),
+                'invalid-eligibility':('eligibility','unapproved'),'null-retention':('fact_seconds',None)}
+            column,value=updates[policy_state]
+            c.execute(sql.SQL('UPDATE public.growth_policy SET {}=%s').format(sql.Identifier(column)),(value,))
+        c.execute('GRANT EXECUTE ON FUNCTION public.growth_report(timestamptz,timestamptz,text,text) TO flare_growth_reporter')
+        c.execute('SET LOCAL ROLE flare_growth_reporter')
+        assert not c.execute("SELECT has_table_privilege(current_user,'public.auth_users','SELECT')").fetchone()[0]
+        with pytest.raises(psycopg.errors.InsufficientPrivilege),c.transaction():
+            c.execute('SELECT id FROM public.auth_users')
+        if policy_state == 'enabled':
+            report=c.execute("SELECT public.growth_report(%s,clock_timestamp(),'account','first')",(since,)).fetchone()[0]
+            assert report['metrics']=={'suppressed':True}
+            assert list(csv.DictReader(io.StringIO(aggregate_csv(report))))==[]
+        else:
+            # The CSV export path first obtains the restricted SQL report. No
+            # report is available to serialize when required policy is missing.
+            with pytest.raises(psycopg.errors.RaiseException,match='Reporting policy/window required'),c.transaction():
+                report=c.execute("SELECT public.growth_report(%s,clock_timestamp(),'account','first')",(since,)).fetchone()[0]
+                aggregate_csv(report)
+        c.rollback()

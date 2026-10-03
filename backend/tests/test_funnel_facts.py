@@ -303,3 +303,219 @@ def test_zip_publication_does_not_depend_on_growth_consumer_and_reconciles(env,o
             c.execute('SELECT public.growth_reconcile(1000)')
             c.execute('SELECT public.growth_reconcile(1000)')
             assert c.execute("SELECT count(*) FROM public.funnel_facts WHERE workspace_id=%s AND kind='zip_import'",(workspace,)).fetchone()==(1,)
+
+
+# Deterministic two-connection schedules: pause a real service after its INSERT,
+# prove the other backend is waiting in PostgreSQL, then allow the first COMMIT.
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from threading import Event
+from time import monotonic, sleep
+
+
+class PrivacyBoundaryDatabase:
+    def __init__(self, database, *, paused=False):
+        self.database = database
+        self.paused = paused
+        self.ready, self.release = Event(), Event()
+        self.pid = None
+
+    @contextmanager
+    def workspace_transaction(self, *args, **kwargs):
+        with self.database.workspace_transaction(*args, **kwargs) as c:
+            self.pid = c.info.backend_pid
+            if not self.paused:
+                self.ready.set()
+            yield c
+            if self.paused:
+                self.ready.set()
+                if not self.release.wait(5):
+                    raise TimeoutError('synthetic transaction release')
+
+
+class PrivacyWorkerDatabase(PrivacyBoundaryDatabase):
+    @contextmanager
+    def workspace_transaction(self, *args, **kwargs):
+        with psycopg.connect(os.environ['WORKER_DATABASE_URL']) as c:
+            self.pid = c.info.backend_pid
+            if not self.paused:
+                self.ready.set()
+            yield c
+            if self.paused:
+                self.ready.set()
+                if not self.release.wait(5):
+                    raise TimeoutError('synthetic worker release')
+
+
+def wait_for_privacy_block(admin, waiter, blocker):
+    deadline = monotonic()+2
+    with psycopg.connect(admin, autocommit=True) as c:
+        while monotonic() < deadline:
+            if waiter.pid and blocker.pid in c.execute('SELECT pg_blocking_pids(%s)', (waiter.pid,)).fetchone()[0]:
+                return
+            sleep(.005)
+    raise AssertionError('Expected PostgreSQL transaction lock wait was not observed')
+
+
+@pytest.mark.parametrize('writer_kind', ['capture', 'event', 'inspection', 'reconcile'])
+@pytest.mark.parametrize('removal', ['account', 'workspace', 'expiry'])
+@pytest.mark.parametrize('first', ['writer', 'remover'])
+def test_privacy_boundary_serializes_real_writers_and_removers(growth, writer_kind, removal, first, request):
+    db, e, _, account = growth
+    user, _ = account()
+    control, _ = account()  # Unrelated tenant must retain its observations.
+    ItemService(db, control.identity).create_note(title=None, content='synthetic control')
+    flare = None
+    if writer_kind == 'inspection':
+        from types import SimpleNamespace
+        prepared = request.getfixturevalue('stage')
+        prepared_jobs = request.getfixturevalue('jobs')
+        assert asyncio.run(FlareProcessor(prepared[0],Detector(),AISettings(),FlareSettings(),WorkerSettings()).process_one()) == 'completed'
+        identity = prepared_jobs[2][0]
+        user = SimpleNamespace(identity=identity,user_id=identity.user_id,workspace_id=identity.workspace_id)
+        with psycopg.connect(e.admin_url) as c:
+            flare = c.execute('SELECT id FROM public.insights WHERE source_analysis_job_id=%s',(prepared[1],)).fetchone()[0]
+            c.execute('DELETE FROM public.funnel_facts WHERE actor_id=%s',(user.user_id,))
+            c.execute('DELETE FROM public.activity_events WHERE actor_id=%s',(user.user_id,))
+    with psycopg.connect(e.admin_url) as c:
+        if removal == 'expiry':
+            c.execute("UPDATE public.auth_users SET created_at=clock_timestamp()-interval '20 days' WHERE id=%s", (user.user_id,))
+    if writer_kind == 'reconcile':
+        result = ImportService(db, user.identity).create_import(format='txt', file_name='synthetic.txt',
+            file_type='text/plain', file_size=9, content='synthetic')
+        with psycopg.connect(e.admin_url) as c:
+            c.execute('DELETE FROM public.funnel_facts WHERE actor_id=%s', (user.user_id,))
+            c.execute('DELETE FROM public.activity_events WHERE actor_id=%s', (user.user_id,))
+    writer_cls = PrivacyWorkerDatabase if writer_kind == 'reconcile' else PrivacyBoundaryDatabase
+    remover_cls = PrivacyWorkerDatabase if removal == 'expiry' else PrivacyBoundaryDatabase
+    writer = writer_cls(db, paused=(first == 'writer'))
+    remover = remover_cls(db, paused=(first == 'remover'))
+    results = {}
+    def write():
+        if writer_kind == 'capture':
+            results['item'] = ItemService(writer,user.identity).create_note(title=None,content='synthetic race capture')
+        elif writer_kind == 'event':
+            AnalyticsService(writer,user.identity).track_event(event_type='capture_started',target_type='capture',metadata={})
+        elif writer_kind == 'inspection':
+            FunnelService(writer,user.identity).inspect(uuid4(),flare)
+        else:
+            with writer.workspace_transaction(user.identity) as c:
+                c.execute('SELECT public.growth_reconcile(100)')
+    def remove():
+        if removal == 'expiry':
+            with remover.workspace_transaction(user.identity) as c:
+                c.execute('SELECT public.growth_cleanup(100)')
+        else:
+            FunnelService(remover,user.identity).withdraw(workspace=(removal == 'workspace'))
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first_db, second_db = (writer,remover) if first == 'writer' else (remover,writer)
+        first_future = pool.submit(write if first == 'writer' else remove)
+        try:
+            assert first_db.ready.wait(3), 'First operation did not reach commit boundary'
+            if first_future.done(): first_future.result()
+            if first == 'writer':
+                # The real service returned within the still-open transaction;
+                # the observed backend has not reached COMMIT.
+                assert writer.pid
+            second_future = pool.submit(remove if first == 'writer' else write)
+            assert second_db.ready.wait(2)
+            wait_for_privacy_block(e.admin_url, second_db, first_db)
+            assert not second_future.done()
+        finally:
+            first_db.release.set()
+        first_future.result(timeout=5); second_future.result(timeout=5)
+    with psycopg.connect(e.admin_url) as c:
+        assert c.execute('SELECT count(*) FROM public.funnel_facts WHERE actor_id=%s',(user.user_id,)).fetchone() == (0,)
+        assert c.execute('SELECT count(*) FROM public.activity_events WHERE actor_id=%s',(user.user_id,)).fetchone() == (0,)
+        assert c.execute('SELECT count(*) FROM public.funnel_facts WHERE actor_id=%s',(control.user_id,)).fetchone() == (1,)
+        assert c.execute('SELECT count(*) FROM public.auth_users WHERE id=%s',(user.user_id,)).fetchone() == (1,)
+        if writer_kind == 'capture':
+            assert c.execute('SELECT current_version_id FROM public.documents WHERE id=%s',(results['item'].id,)).fetchone()[0] is not None
+        if writer_kind == 'reconcile':
+            assert c.execute('SELECT status FROM public.import_batches WHERE id=%s',(result.batch.id,)).fetchone() == ('completed',)
+            assert c.execute('SELECT public.growth_reconcile(100)').fetchone() == (0,)
+
+
+@pytest.mark.parametrize('enabled', [False, True])
+@pytest.mark.parametrize('first', ['writer', 'delete'])
+def test_ordinary_event_account_delete_transaction_boundary(growth, enabled, first):
+    db,e,_,account = growth
+    configure(e.admin_url,enabled=enabled)
+    user,_ = account()
+    writer = PrivacyBoundaryDatabase(db,paused=(first == 'writer'))
+    deletion = PrivacyBoundaryDatabase(db,paused=(first == 'delete'))
+    control,_ = account()
+    AnalyticsService(db,control.identity).track_event(event_type='capture_started',target_type='capture',metadata={})
+    def write():
+        AnalyticsService(writer,user.identity).track_event(event_type='capture_started',target_type='capture',metadata={})
+    def delete():
+        with psycopg.connect(e.admin_url) as c:
+            deletion.pid = c.info.backend_pid
+            if first != 'delete': deletion.ready.set()
+            c.execute('DELETE FROM public.auth_users WHERE id=%s',(user.user_id,))
+            if first == 'delete':
+                deletion.ready.set()
+                assert deletion.release.wait(5)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first_db,second_db = (writer,deletion) if first == 'writer' else (deletion,writer)
+        a=pool.submit(write if first == 'writer' else delete)
+        try:
+            assert first_db.ready.wait(3)
+            b=pool.submit(delete if first == 'writer' else write)
+            assert second_db.ready.wait(2)
+            wait_for_privacy_block(e.admin_url,second_db,first_db)
+        finally:
+            first_db.release.set()
+        a.result(timeout=5);b.result(timeout=5)
+    with psycopg.connect(e.admin_url) as c:
+        assert c.execute('SELECT count(*) FROM public.auth_users WHERE id=%s',(user.user_id,)).fetchone() == (0,)
+        assert c.execute('SELECT count(*) FROM public.activity_events WHERE actor_id=%s',(user.user_id,)).fetchone() == (0,)
+        assert c.execute('SELECT count(*) FROM public.activity_events WHERE actor_id=%s',(control.user_id,)).fetchone() == (1,)
+
+
+def test_privacy_removal_rejects_stale_repeatable_read_snapshot(growth):
+    db,e,_,account = growth
+    user,_ = account()
+    with psycopg.connect(e.admin_url) as c:
+        c.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')
+        c.execute("SELECT set_config('app.workspace_id',%s,true),set_config('app.user_id',%s,true)",(str(user.workspace_id),user.user_id))
+        with pytest.raises(psycopg.errors.RaiseException,match='READ COMMITTED'),c.transaction():
+            c.execute('SELECT public.growth_withdraw(false)')
+        with pytest.raises(psycopg.errors.RaiseException,match='READ COMMITTED'),c.transaction():
+            c.execute('SELECT public.growth_cleanup(100)')
+
+
+
+def test_pending_capture_cannot_survive_fact_retention_cleanup(growth):
+    db,e,_,account=growth
+    user,_=account()
+    configure(e.admin_url,fact_seconds=1)  # Explicit synthetic retention only.
+    writer=PrivacyBoundaryDatabase(db,paused=True)
+    remover=PrivacyWorkerDatabase(db)
+    result={}
+    def capture():
+        result['item']=ItemService(writer,user.identity).create_note(title=None,content='synthetic retained original')
+    def cleanup():
+        with remover.workspace_transaction() as c:
+            c.execute('SELECT public.growth_cleanup(100)')
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        a=pool.submit(capture)
+        try:
+            assert writer.ready.wait(3)
+            # Wait for the actual database retention cutoff while the real
+            # observation is pending. Never alter an immutable domain timestamp.
+            with psycopg.connect(e.admin_url,autocommit=True) as c:
+                cutoff=c.execute("SELECT clock_timestamp()+interval '1 second'").fetchone()[0]
+                deadline=monotonic()+2
+                while c.execute('SELECT clock_timestamp()>=%s',(cutoff,)).fetchone()==(False,):
+                    assert monotonic()<deadline
+                    sleep(.01)
+            b=pool.submit(cleanup)
+            assert remover.ready.wait(2)
+            wait_for_privacy_block(e.admin_url,remover,writer)
+        finally:
+            writer.release.set()
+        a.result(timeout=5);b.result(timeout=5)
+    with psycopg.connect(e.admin_url) as c:
+        assert c.execute('SELECT count(*) FROM public.funnel_facts WHERE actor_id=%s',(user.user_id,)).fetchone()==(0,)
+        assert c.execute('SELECT current_version_id FROM public.documents WHERE id=%s',(result['item'].id,)).fetchone()[0] is not None

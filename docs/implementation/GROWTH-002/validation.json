@@ -1,5 +1,5 @@
 {
-  "result": "bounded operator correction verified; existing PR35 exact-SHA CI, independent QA/Critic, Vova acceptance and integration pending",
+  "result": "executor correction ready; exact-head CI and independent QA/Critic round 2, Vova acceptance and authorized integration remain required",
   "retained_checkpoint": "97c2d23014514956134f35c6d7dd6f79cd123e34",
   "migration": {
     "accepted_base": "0019",
@@ -183,5 +183,158 @@
       "First corrected-source focused run: 33 passed, 11 setup errors from missing imported policy fixture in reporting module; import corrected and all 44 cases passed in both topologies."
     ],
     "publication": "Same existing branch/PR35; ordinary push and exact HEAD task-sync update required; ledger remains active. Issue handed to Board/operator in_review, not product acceptance."
+  },
+  "privacy_correction_round1": {
+    "authorized_candidate": "7be07ca5b2e148b75310174d5b0f2a74f75407ac",
+    "authorization": "FLA-21 operator authorized privacy correction round 1, 2026-10-03; DATA-002/GROWTH-002 human delegation in ownership.json",
+    "owner": "Fedor / Paperclip Flare Growth / GROWTH-002",
+    "scope_paths": [
+      "backend/db/acquisition.sql",
+      "backend/db/funnel.sql",
+      "backend/migrations/versions/0020_acquisition_attribution_funnel.py",
+      "backend/tests/test_funnel_facts.py",
+      "backend/tests/test_funnel_reporting.py",
+      "backend/tests/test_growth_migration.py",
+      "docs/implementation/GROWTH-002/report.md",
+      "docs/implementation/GROWTH-002/validation.json"
+    ],
+    "published_scope_count": 55,
+    "scope_expansion": false,
+    "prepush_ledger_base": "f53a32c7625b3e2984b30fde6de27ade03485ce7",
+    "status": "executor correction ready; exact-head CI and independent QA/Critic round 2, Vova acceptance and authorized integration remain required",
+    "fixes": {
+      "CRITIC-1": "Transaction shared advisory boundary for fact/event/inspection/signup/anonymous writers, exclusive boundary for account/workspace withdrawal and cleanup; volatile READ COMMITTED revalidation after waits. Expired accounts erase all linked facts and ordinary events atomically; originals remain durable.",
+      "CRITIC-2": "Ordinary-event guard locks real auth row FOR KEY SHARE even with growth disabled; unvalidated new auth FK ON DELETE CASCADE enforces new writes without rejecting historical orphan actors. Existing auth column-lock privileges reused; no new raw auth or app/worker growth privilege.",
+      "CRITIC-3": "Report fails closed on missing/disabled policy and invalid required report window, minimum cohort, calendar, revision, notice, cleanup owner, eligibility or retention; restricted one-account report and CSV suppress under valid policy, error when invalid."
+    },
+    "migration": {
+      "head": "0020",
+      "parent": "0019",
+      "historical_migrations_changed": false,
+      "topologies": [
+        "self-managed",
+        "yandex managed-owner emulation"
+      ],
+      "cluster": "operator-owned PostgreSQL 17, 127.0.0.1:51569, public synthetic CI roles only",
+      "databases": [
+        "flare_growth_privacy_self_v3",
+        "flare_growth_privacy_managed_v3"
+      ],
+      "official_sequence": [
+        "upgrade 0005",
+        "upgrade 0007",
+        "email prepare",
+        "upgrade 0014",
+        "quota prepare",
+        "upgrade head",
+        "email verify",
+        "quota verify",
+        "upgrade head",
+        "worker grants self-managed",
+        "runtime/privilege checks"
+      ],
+      "compatibility": "Both migrations preserved a real synthetic pre-0020 ordinary event with an absent auth actor. New FK remains NOT VALID and cascades; independently tested enforcement with privacy guard disabled only in a rolled-back synthetic transaction.",
+      "prerequisites": "Reuse existing operator synthetic roles via continuation-migrate.py, no dependency install/server change/historical migration rewrite; managed migration runs as non-superuser non-BYPASSRLS flare_owner"
+    },
+    "checks": {
+      "self_managed_final_growth": {
+        "passed": 88,
+        "failed": 0,
+        "log": "privacy-self-managed-final-growth.log"
+      },
+      "managed_final_growth": {
+        "passed": 88,
+        "failed": 0,
+        "log": "privacy-yandex-final-growth.log"
+      },
+      "concurrency_per_topology": "24 writer-first/remover-first capture/ordinary-event/real-Flare-inspection/reconciliation versus account/workspace/link-expiry schedules; 4 ordinary-event/account-delete schedules with policy enabled/disabled; 1 actual fact-retention wait; 1 repeatable-read refusal. PostgreSQL pg_blocking_pids proves waits, no timer-only removal assertion. Unrelated tenants and original source/import records retained.",
+      "report_policy_per_topology": "13 restricted reporter cases, no raw auth SELECT; identical one-account cohort, fixed report-to-CSV path",
+      "affected_backend_self": {
+        "passed": 244,
+        "failed": 1,
+        "failure": "Additional test tried changing immutable terminal import timestamp; replaced with real capture/time-based retention test, now passes in final 88-case group. No final product failure.",
+        "log": "privacy-self-managed-final-affected-backend.log"
+      },
+      "affected_backend_managed": {
+        "passed": 243,
+        "failed": 1,
+        "skipped": 1,
+        "failure": "Same test fixture error, corrected in final 88-case group; self-managed-only regression intentionally skipped.",
+        "log": "privacy-yandex-final-affected-backend.log"
+      },
+      "earlier_affected_backend_self": {
+        "passed": 240,
+        "failed": 0,
+        "log": "privacy-self-managed-affected-backend.log"
+      },
+      "full_backend_frontend_browser": "Retain prior unaffected exact-7be CI/QA evidence; not rerun/claimed exact-final-head full suites. Standard CI must run full backend/frontend at the published correction SHA.",
+      "whitespace": "git diff --check passed"
+    },
+    "retained_failures": [
+      "Initial 24 race fixture setup failures: synthetic Flare lacked required title/typed lineage. Replaced by actual FlareProcessor fixture; 29 boundary cases then passed.",
+      "Extra retention fixture tried mutating a terminal import completed_at; existing immutable guard rejected it in each topology. Replaced by actual pending capture and database clock retention cutoff; focused test and final group pass."
+    ],
+    "limitations": [
+      "Exclusive privacy removal is database-wide: writers normally share the lock, but removal/cleanup can delay other tenants until commit. Existing deadlines can abort a removal; only successful committed removal establishes the guarantee.",
+      "Privacy collection and withdrawal/cleanup require READ COMMITTED; observations fail closed and removers error under stronger snapshot isolation. No production isolation setting changed.",
+      "p_limit bounds accounts selected for link expiry; all rows for each selected account are erased atomically. Per-account erasure work can exceed a single observation-row batch and time out safely.",
+      "NOT VALID intentionally leaves unrelated pre-migration orphan actors unchanged; new events are constrained. No historical cleanup/backfill claimed.",
+      "Production collection remains OFF; production retention, permissions, deployment and enablement still require Vova/operator approval."
+    ],
+    "workspace": {
+      "cwd": "/Users/fedornikonov/.paperclip/instances/default/flare/worktrees/growth-analytics/growth-002-attribution-20261003",
+      "workspace_id": "db242b22-d370-4253-898d-d39aa1b02a0e",
+      "git_common_dir": "/Users/fedornikonov/.paperclip/instances/default/flare/worktrees/growth-analytics/repository/.git",
+      "git_dir": "/Users/fedornikonov/.paperclip/instances/default/flare/worktrees/growth-analytics/repository/.git/worktrees/growth-002-attribution-20261003",
+      "sparse_exclusion": "/*; !**/.env* unchanged"
+    },
+    "tested_source_blobs": {
+      "backend/db/acquisition.sql": "08366535ec97b169cd76e35328d68f11d49a0584",
+      "backend/db/funnel.sql": "021bbe9be0f61bef403372da4682286759ae8925",
+      "backend/migrations/versions/0020_acquisition_attribution_funnel.py": "0f0a06103780fa3bbb16e5f6b7252f7130edcc47",
+      "backend/tests/test_funnel_facts.py": "7b7918d35950148eb77820726d9fa5f05daaaf91",
+      "backend/tests/test_funnel_reporting.py": "4492914a6b53d8118929dc18c0b5820a7c4aa944",
+      "backend/tests/test_growth_migration.py": "61cfc7e7cd0154f2527a9569f1389b0b9eddfd39"
+    },
+    "log_sha256": {
+      "privacy-self-managed-affected-backend.log": "ff9c24812c2758570dd0c4aa4d1ffa46f979b775edc1ef7740f2f0f1217d88a5",
+      "privacy-self-managed-email-prepare.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "privacy-self-managed-email-verify.log": "9ee8712d807ce8af23e55356ee1528b7180731f5dac561ffa9b01c8fd9cce9c7",
+      "privacy-self-managed-final-affected-backend.log": "13ad2c895c53d89da6bff7a40ba254617e368970c0bd34a4ad7dc2c2da1a1ecf",
+      "privacy-self-managed-final-growth.log": "249745d7e9cc5ba71bc6592ff65c1a64d0ebcaf06d8da28f334672c435e08373",
+      "privacy-self-managed-final-retention.log": "aafd3030113413f8d8c08d94c640b718db4856e7701fd62cb78fd672aaf1f49a",
+      "privacy-self-managed-focused-final.log": "c4becae1cd2c48945eb75b3ca23412908141c9dcc0b57ec7648bb435bc324f68",
+      "privacy-self-managed-policy-report.log": "475c65b8a3749321124a52848758a41637f26e6b30b3dbd476a0463c01d1dd44",
+      "privacy-self-managed-privacy-races-2.log": "98a20460478a3d10a224e4db293fe1b82d1ef19b20c234185571042e9e4d990f",
+      "privacy-self-managed-privacy-races.log": "28ba4b7934263c0f5eb07aa85b0384a7772a25f8ef0785ce50557f721b12f746",
+      "privacy-self-managed-quota-prepare.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "privacy-self-managed-quota-verify.log": "568696d928b50822bccead6b9be8bb4fc5407cffe0f804f1309e8ab5acf39ff9",
+      "privacy-self-managed-readiness.log": "370c663897752c8e1a8f88b11892e36465f5980873776944800b93c1a2ece938",
+      "privacy-self-managed-upgrade-0005.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "privacy-self-managed-upgrade-0007.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "privacy-self-managed-upgrade-0014.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "privacy-self-managed-upgrade-head.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "privacy-self-managed-worker.log": "53de5f815cdf2b2984d828314f9351a70c2fb68095d6d46089bab1f0f30c751d",
+      "privacy-yandex-email-prepare.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "privacy-yandex-email-verify.log": "9ee8712d807ce8af23e55356ee1528b7180731f5dac561ffa9b01c8fd9cce9c7",
+      "privacy-yandex-final-affected-backend.log": "0046c38a54f6cbef85bbae56e06d2a33b29e0cd81a6ee61a035ee8bd902dc5f0",
+      "privacy-yandex-final-growth.log": "fa52b7338d19e70e3f443cde902fac67dccbca8cdbd4977cffa8e8e55123c797",
+      "privacy-yandex-focused-final.log": "c4becae1cd2c48945eb75b3ca23412908141c9dcc0b57ec7648bb435bc324f68",
+      "privacy-yandex-policy-report.log": "b1a09a3899c19de7f9769695d75837ddfec13498c3342a37ef06882b281bfe09",
+      "privacy-yandex-quota-prepare.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "privacy-yandex-quota-verify.log": "568696d928b50822bccead6b9be8bb4fc5407cffe0f804f1309e8ab5acf39ff9",
+      "privacy-yandex-readiness.log": "370c663897752c8e1a8f88b11892e36465f5980873776944800b93c1a2ece938",
+      "privacy-yandex-upgrade-0005.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "privacy-yandex-upgrade-0007.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "privacy-yandex-upgrade-0014.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "privacy-yandex-upgrade-head.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "documentation": [
+      "https://www.postgresql.org/docs/17/explicit-locking.html",
+      "https://www.postgresql.org/docs/17/xfunc-volatility.html",
+      "https://www.postgresql.org/docs/17/sql-select.html",
+      "https://www.postgresql.org/docs/17/sql-altertable.html"
+    ],
+    "documentation_cache": "Own runtime privacy-postgres-library.txt and privacy-postgres-docs.txt; ctx7 library then docs, public generic query only"
   }
 }

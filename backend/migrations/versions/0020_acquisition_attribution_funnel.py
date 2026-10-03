@@ -14,6 +14,7 @@ FUNCTIONS = {
     'acquisition_touch(text,text,jsonb,text,boolean)': 'flare_app',
     'acquisition_freeze(text)': 'flare_app', 'acquisition_forget(text)': 'flare_app',
     'growth_fact(uuid,text,text,uuid,timestamptz,text,integer,integer)': None,
+    'growth_observation_allowed(uuid,text)': None,
     'growth_committed()': None, 'growth_analyze_fact(uuid)': None, 'growth_terminal()': None,
     'growth_reconcile(integer)': 'flare_worker', 'growth_inspection(uuid,uuid,uuid)': 'flare_app',
     'growth_withdraw(boolean)': 'flare_app', 'growth_account_deleted()': None, 'growth_event_guard()': None,

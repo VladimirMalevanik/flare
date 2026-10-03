@@ -45,8 +45,9 @@ CREATE FUNCTION public.acquisition_touch(p_ref text,p_network text,p_touch jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE p public.growth_policy; k text; v text; n int; t jsonb; direct boolean;
 BEGIN
+ PERFORM pg_advisory_xact_lock_shared(2020,2);
  SELECT * INTO p FROM public.growth_policy;
- IF NOT p.enabled OR p_revision IS DISTINCT FROM p.revision OR p_ref IS NULL OR p_ref !~ '^[a-f0-9]{64}$'
+ IF NOT COALESCE(p.enabled,false) OR p_revision IS DISTINCT FROM p.revision OR p_ref IS NULL OR p_ref !~ '^[a-f0-9]{64}$'
  OR p_network IS NULL OR p_network !~ '^[a-f0-9]{64}$' OR jsonb_typeof(p_touch) IS DISTINCT FROM 'object'
  OR octet_length(p_touch::text)>1024 THEN RETURN false; END IF;
  IF NOT pg_try_advisory_xact_lock(2020,1) THEN RETURN false; END IF;
@@ -89,6 +90,8 @@ CREATE FUNCTION public.acquisition_freeze(p_ref text) RETURNS void LANGUAGE plpg
  SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE a public.signup_attribution; v public.acquisition_visitors; p public.growth_policy;
 BEGIN
+ IF current_setting('transaction_isolation')<>'read committed' THEN RETURN; END IF;
+ PERFORM pg_advisory_xact_lock_shared(2020,2);
  SELECT * INTO p FROM public.growth_policy;
  IF NOT COALESCE(p.enabled,false) THEN RETURN; END IF;
  -- Only the original account transaction can create the optional snapshot. A failed
