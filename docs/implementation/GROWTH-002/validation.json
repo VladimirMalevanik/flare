@@ -336,5 +336,111 @@
       "https://www.postgresql.org/docs/17/sql-altertable.html"
     ],
     "documentation_cache": "Own runtime privacy-postgres-library.txt and privacy-postgres-docs.txt; ctx7 library then docs, public generic query only"
+  },
+  "ci_fixture_correction": {
+    "baseline_sha": "6eb16f399a09aeb9abf8391b57ba1727ba93d8f6",
+    "fresh_context_base_sha": "abd11c9b904dc4def30c56435b6a2805a42cc721",
+    "scope_changed": false,
+    "owner": "Fedor / Paperclip Flare Growth / GROWTH-002",
+    "prior_ci": {
+      "runs": [
+        37122765228,
+        37122761863
+      ],
+      "same_failure": "UndefinedObject flare_growth_reporter role absent for 13 small-cohort policy parameters in every backend job",
+      "self_managed": {
+        "passed": 815,
+        "failed": 13
+      },
+      "managed": {
+        "passed": 814,
+        "skipped": 1,
+        "failed": 13
+      },
+      "frontend": {
+        "passed": 143
+      },
+      "log": "/Users/fedornikonov/.paperclip/instances/default/flare/evidence/growth002-implementation-20261003/ci-6eb16f3-failed.log"
+    },
+    "fix": "Each restricted-report test creates a unique aggregate-only NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION role with no memberships, switches locally, retains raw-auth/policy/CSV assertions and verifies rollback removed the role.",
+    "standalone_global_role_absent": {
+      "self_managed": {
+        "passed": 14,
+        "failed": 0
+      },
+      "managed": {
+        "passed": 14,
+        "failed": 0
+      },
+      "nodeids": [
+        "backend/tests/test_funnel_reporting.py::test_same_small_cohort_fails_closed_for_restricted_report_and_csv",
+        "backend/tests/test_funnel_reporting.py::test_restricted_reporter_has_only_aggregate_capability_and_runtime_is_denied"
+      ],
+      "global_absence_and_role_restoration_evidence": "ci-fixture-absent-role-evidence.json"
+    },
+    "full_backend": {
+      "self_managed": {
+        "passed": 826,
+        "failed": 0,
+        "deselected": 2,
+        "seconds": 59.62
+      },
+      "managed": {
+        "passed": 824,
+        "failed": 0,
+        "skipped": 1,
+        "deselected": 3,
+        "seconds": 58.31
+      },
+      "base_command": "privacy-checks.py <self-managed|yandex> ci-fixture-verified-full-backend -m pytest -q -p no:cacheprovider backend/tests",
+      "self_managed_k": "not test_explicit_dotenv_is_authoritative and not (test_direct_smoke_without_editable_install_or_pythonpath and dotenv)",
+      "managed_k": "not test_explicit_dotenv_is_authoritative and not (test_direct_smoke_without_editable_install_or_pythonpath and dotenv) and not test_effective_privileges_include_columns_and_public",
+      "exclusions": "Same mandatory PYTHON_DOTENV_DISABLED=1 two dotenv cases and managed shared-cluster role-name assertion as prior validation; complete isolated exact-head CI still required"
+    },
+    "retained_local_failures": [
+      {
+        "log": "privacy-self-managed-ci-fixture-full-backend.log",
+        "passed": 826,
+        "failed": 1,
+        "deselected": 1,
+        "reason": "Incorrect smoke-test deselection filename; known mandatory dotenv-disable mismatch only"
+      },
+      {
+        "log": "privacy-self-managed-ci-fixture-final-full-backend.log",
+        "passed": 826,
+        "failed": 2,
+        "reason": "Root-relative nodeid prefixes did not match collected tests/ IDs; both known dotenv failures only; collection inspected before verified -k selection"
+      }
+    ],
+    "tested_test_blob": "e15c1a05b9db09bc67f84debfc42cdb72f44f1dd",
+    "unchanged_product_tree_ids": {
+      "backend/app": "6553e598ea4e995e67ba079296210d8780275b64",
+      "backend/db": "b07ded5acfd517b8b5a86b7bc6c3088c01a47087",
+      "backend/migrations": "8ba5eb451fc5574cdba475dff586930914a1fafb",
+      "frontend": "bce3764946e37af59836688e7b5ba45b56778905"
+    },
+    "migration_frontend_browser": "Byte-identical product/migration/frontend trees; prior evidence retained, no rerun claimed",
+    "runtime": "/Users/fedornikonov/.paperclip/instances/default/flare/worktrees/growth-analytics/growth002-test-runtime-20261003",
+    "databases": [
+      "flare_growth_privacy_self_v3",
+      "flare_growth_privacy_managed_v3"
+    ],
+    "managed_topology": "existing non-superuser non-BYPASSRLS flare_owner owns migrated product objects; test admin provisions only rollback-scoped synthetic reporter roles",
+    "log_sha256": {
+      "privacy-self-managed-ci-fixture-standalone.log": "051d67b15bfb561995bbf68bfc99c9b1b2f25950dedff781cbd5bb2d7d086d08",
+      "privacy-self-managed-ci-fixture-absent-role.log": "e6cf89ab7e387732e287795295f9647e436c02efdfedba3801882c9006eb6096",
+      "privacy-yandex-ci-fixture-absent-role.log": "4fab2555f5c46035bdd881e1dc01d743f46b426dd7f81362a0b72d30a6af1adf",
+      "privacy-self-managed-ci-fixture-full-backend.log": "6081eeabda4c0755b8db0b1d3be91ec666fe22244116d02a1ac57f129cdef0ba",
+      "privacy-self-managed-ci-fixture-final-full-backend.log": "76e28a710cbdd519524cc79532f31cb0c3e1c31656417089ac6a7f518ac6922b",
+      "privacy-self-managed-ci-fixture-verified-full-backend.log": "f81578d91076a198009c416184e157c28bee0434c6d69dc23269c30407aec170",
+      "privacy-yandex-ci-fixture-verified-full-backend.log": "94318fde4dcbe0383b77bc3ada330aa5d779f902cf5327e5851bb803bd0026d3",
+      "privacy-self-managed-ci-fixture-collect.log": "c4ca523a45c1f6c6a334125f29129fe66cd9d43cd5c218548e0d07aad5e03234",
+      "ci-fixture-absent-role-evidence.json": "070c8a73321c553882fa2f276af0596de417de7fe1c8a37459e6df4b947e9b8b"
+    },
+    "official_docs": [
+      "https://www.postgresql.org/docs/17/sql-createrole.html",
+      "https://www.postgresql.org/docs/17/sql-set-role.html"
+    ],
+    "pending": "Final exact-head CI, independent QA/Critic round2, Vova acceptance and authorized integration. Production remains OFF; same draft PR35; task-sync active, no finish/merge/deployment."
   }
 }

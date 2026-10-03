@@ -7,6 +7,29 @@ from app.services.funnel_service import aggregate_csv
 from test_acquisition import growth,configure,touch,enabled_growth_policy
 
 
+def set_restricted_reporter(connection):
+    """Create an isolated aggregate-only role in the caller's rollback transaction."""
+    from psycopg import sql
+    role = 'synthetic_growth_reporter_' + uuid4().hex
+    identifier = sql.Identifier(role)
+    connection.execute(sql.SQL(
+        'CREATE ROLE {} NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS '
+        'NOCREATEDB NOCREATEROLE NOREPLICATION CONNECTION LIMIT 0'
+    ).format(identifier))
+    connection.execute(sql.SQL(
+        'GRANT EXECUTE ON FUNCTION public.growth_report(timestamptz,timestamptz,text,text) TO {}'
+    ).format(identifier))
+    connection.execute(sql.SQL('SET LOCAL ROLE {}').format(identifier))
+    assert connection.execute(
+        'SELECT current_user,rolsuper,rolbypassrls,rolinherit,rolcanlogin,rolcreatedb,rolcreaterole,rolreplication '
+        'FROM pg_roles WHERE rolname=current_user'
+    ).fetchone() == (role,False,False,False,False,False,False,False)
+    assert not connection.execute(
+        'SELECT 1 FROM pg_auth_members WHERE member=(SELECT oid FROM pg_roles WHERE rolname=current_user)'
+    ).fetchone()
+    return role
+
+
 def test_reporting_denied_to_runtime_worker_and_small_cohorts(growth):
     db,e,_,account=growth;user,_=account()
     now=datetime.now(timezone.utc);args=(now-timedelta(days=1),now,'account','first')
@@ -185,10 +208,7 @@ def test_restricted_reporter_has_only_aggregate_capability_and_runtime_is_denied
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             c.execute("SELECT public.growth_report(%s,clock_timestamp(),'account','first')",(since,))
     with psycopg.connect(e.admin_url) as c:
-        if not c.execute("SELECT 1 FROM pg_roles WHERE rolname='flare_growth_reporter'").fetchone():
-            c.execute('CREATE ROLE flare_growth_reporter NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE')
-        c.execute('GRANT EXECUTE ON FUNCTION public.growth_report(timestamptz,timestamptz,text,text) TO flare_growth_reporter')
-        c.execute('SET LOCAL ROLE flare_growth_reporter')
+        role=set_restricted_reporter(c)
         report=c.execute("SELECT public.growth_report(%s,clock_timestamp(),'workspace_creator','last')",(since,)).fetchone()[0]
         assert report['metrics']['accounts']==2
         for table in ('auth_users','signup_attribution','funnel_facts','acquisition_visitors'):
@@ -199,6 +219,7 @@ def test_restricted_reporter_has_only_aggregate_capability_and_runtime_is_denied
         with pytest.raises(psycopg.errors.RaiseException),c.transaction():
             c.execute("SELECT public.growth_report(%s,clock_timestamp(),'account','invented')",(since,))
         c.rollback()
+        assert not c.execute('SELECT 1 FROM pg_roles WHERE rolname=%s',(role,)).fetchone()
 
 
 def test_direct_unlinked_and_missing_snapshot_remain_distinct(growth,monkeypatch):
@@ -261,8 +282,7 @@ def test_same_small_cohort_fails_closed_for_restricted_report_and_csv(growth,pol
                 'invalid-eligibility':('eligibility','unapproved'),'null-retention':('fact_seconds',None)}
             column,value=updates[policy_state]
             c.execute(sql.SQL('UPDATE public.growth_policy SET {}=%s').format(sql.Identifier(column)),(value,))
-        c.execute('GRANT EXECUTE ON FUNCTION public.growth_report(timestamptz,timestamptz,text,text) TO flare_growth_reporter')
-        c.execute('SET LOCAL ROLE flare_growth_reporter')
+        role=set_restricted_reporter(c)
         assert not c.execute("SELECT has_table_privilege(current_user,'public.auth_users','SELECT')").fetchone()[0]
         with pytest.raises(psycopg.errors.InsufficientPrivilege),c.transaction():
             c.execute('SELECT id FROM public.auth_users')
@@ -277,3 +297,4 @@ def test_same_small_cohort_fails_closed_for_restricted_report_and_csv(growth,pol
                 report=c.execute("SELECT public.growth_report(%s,clock_timestamp(),'account','first')",(since,)).fetchone()[0]
                 aggregate_csv(report)
         c.rollback()
+        assert not c.execute('SELECT 1 FROM pg_roles WHERE rolname=%s',(role,)).fetchone()
