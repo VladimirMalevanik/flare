@@ -99,10 +99,13 @@ class AuthService:
                 from app.services.attribution_service import reference_digest
                 try:
                     with connection.transaction():
-                        connection.execute("SET LOCAL statement_timeout='500ms'")
+                        previous_timeout=connection.execute("SHOW statement_timeout").fetchone()["statement_timeout"]
+                        connection.execute("""SELECT set_config('statement_timeout',
+                            (CASE WHEN setting::int=0 THEN 500 ELSE least(setting::int,500) END)::text,true)
+                            FROM pg_settings WHERE name='statement_timeout'""")
                         connection.execute('SELECT public.acquisition_freeze(%s)',
                             (reference_digest(acquisition_reference),))
-                        connection.execute("SET LOCAL statement_timeout=0")
+                        connection.execute("SELECT set_config('statement_timeout',%s,true)",(previous_timeout,))
                 except Exception:
                     pass
                 repository.insert_session(

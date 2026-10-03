@@ -36,8 +36,8 @@ class AuthRepository:
             (workspace_id, f"{name}'s workspace"),
         )
         self.connection.execute(
-            """INSERT INTO public.auth_users(id,email,password_hash,name,initial_workspace_id)
-               VALUES (%s,%s,%s,%s,%s)""",
+            """INSERT INTO public.auth_users(id,email,password_hash,name,initial_workspace_id,verification_provenance)
+               VALUES (%s,%s,%s,%s,%s,'pending')""",
             (user_id, email, password_hash, name, workspace_id),
         )
         self.accept_current_legal(user_id)

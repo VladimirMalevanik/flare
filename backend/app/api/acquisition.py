@@ -8,6 +8,7 @@ from app.services.attribution_service import AttributionService
 
 router = APIRouter(prefix='/acquisition', tags=['acquisition'])
 COOKIE = 'flare_acquisition'
+_INTAKE = asyncio.Semaphore(1)
 
 
 def clear_acquisition(request: Request, response: Response) -> None:
@@ -40,6 +41,9 @@ async def touch(request: Request):
     if request.cookies.get(request.app.state.settings.session_cookie_name):
         clear_acquisition(request, response)
         return response
+    if _INTAKE.locked():
+        return response
+    await _INTAKE.acquire()
     try:
         size = 0
         chunks = []
@@ -66,6 +70,8 @@ async def touch(request: Request):
     except Exception:
         # No payload/error/rejection logs, no durable client retry queue.
         pass
+    finally:
+        _INTAKE.release()
     return response
 
 

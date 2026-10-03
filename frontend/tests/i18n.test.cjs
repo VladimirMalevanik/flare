@@ -112,11 +112,12 @@ test('switching locale persists one long-lived cookie, updates document language
   for (const cookieValue of ['es', undefined, 'invalid']) {
     const { default: RootLayout } = load('../src/app/layout.tsx', {
       'next/headers': { cookies: async () => ({ get: () => ({ value: cookieValue }) }) },
+      'react': { Suspense: 'suspense' }, '@/features/auth/acquisition-capture': { AcquisitionCapture: 'acquisition-capture' },
       '@/i18n/config': config, '@/i18n/provider': { I18nProvider: 'i18n-provider' }, './globals.css': {},
     });
     const root = await RootLayout({ children });
     assert.equal(root.props.lang, cookieValue === 'es' ? 'es' : 'en');
-    assert.equal(root.props.children.props.children.props.initialLocale, root.props.lang);
+    assert.equal(root.props.children.props.children[1].props.initialLocale, root.props.lang);
   }
 });
 

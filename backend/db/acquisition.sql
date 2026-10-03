@@ -3,7 +3,7 @@ CREATE TABLE public.growth_policy (
  singleton boolean PRIMARY KEY DEFAULT true CHECK(singleton), enabled boolean NOT NULL DEFAULT false,
  revision text, notice_id text, eligibility text, cleanup_owner text,
  lookback_seconds int, cookie_seconds int, raw_seconds int, linked_seconds int, fact_seconds int,
- global_hour int, network_hour int, reference_limit int, visitor_limit int, deadline_ms int,
+ global_hour int, network_hour int, reference_limit int, visitor_limit int, budget_limit int, deadline_ms int,
  min_cohort int, report_window_days int, report_calendar text,
  tokens jsonb NOT NULL DEFAULT '{}'::jsonb CHECK(jsonb_typeof(tokens)='object' AND octet_length(tokens::text)<=4096),
  CHECK(NOT enabled OR COALESCE((length(revision) BETWEEN 1 AND 80 AND notice_id IS NOT NULL AND cleanup_owner IS NOT NULL
@@ -11,6 +11,7 @@ CREATE TABLE public.growth_policy (
  AND lookback_seconds>0 AND cookie_seconds>0 AND raw_seconds>0 AND linked_seconds>0 AND fact_seconds>0
  AND global_hour BETWEEN 1 AND 100000 AND network_hour BETWEEN 1 AND global_hour
  AND reference_limit BETWEEN 1 AND 100 AND visitor_limit BETWEEN 1 AND 1000000
+ AND budget_limit BETWEEN 2 AND 1000000
  AND deadline_ms BETWEEN 10 AND 2000 AND min_cohort BETWEEN 2 AND 1000 AND report_window_days BETWEEN 1 AND 90),false))
 );
 INSERT INTO public.growth_policy(singleton) VALUES(true);
@@ -27,9 +28,7 @@ CREATE TABLE public.acquisition_budgets (
 CREATE TABLE public.signup_attribution (
  user_id text PRIMARY KEY REFERENCES public.auth_users(id) ON DELETE CASCADE,
  workspace_id uuid NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
- created_at timestamptz NOT NULL, verification text NOT NULL DEFAULT 'legacy_unknown'
- CHECK(verification IN ('pending','bypassed','actual','legacy_unknown')),
- verified_at timestamptz, eligibility text NOT NULL DEFAULT 'unknown'
+ created_at timestamptz NOT NULL, eligibility text NOT NULL DEFAULT 'unknown'
  CHECK(eligibility IN ('eligible','unknown','withdrawn')), revision text,
  first_touch jsonb, last_touch jsonb, finalized boolean NOT NULL DEFAULT false
 );
@@ -47,12 +46,14 @@ CREATE FUNCTION public.acquisition_touch(p_ref text,p_network text,p_touch jsonb
 DECLARE p public.growth_policy; k text; v text; n int; t jsonb; direct boolean;
 BEGIN
  SELECT * INTO p FROM public.growth_policy;
- IF NOT p.enabled OR p_revision IS DISTINCT FROM p.revision OR p_ref !~ '^[a-f0-9]{64}$'
- OR p_network !~ '^[a-f0-9]{64}$' OR jsonb_typeof(p_touch) IS DISTINCT FROM 'object'
+ IF NOT p.enabled OR p_revision IS DISTINCT FROM p.revision OR p_ref IS NULL OR p_ref !~ '^[a-f0-9]{64}$'
+ OR p_network IS NULL OR p_network !~ '^[a-f0-9]{64}$' OR jsonb_typeof(p_touch) IS DISTINCT FROM 'object'
  OR octet_length(p_touch::text)>1024 THEN RETURN false; END IF;
  IF NOT pg_try_advisory_xact_lock(2020,1) THEN RETURN false; END IF;
  -- Count rejected policy input too. A new cookie cannot reset this budget.
  FOREACH k IN ARRAY ARRAY['global',p_network] LOOP
+  IF NOT EXISTS(SELECT 1 FROM public.acquisition_budgets WHERE bucket=k)
+  AND (SELECT count(*) FROM public.acquisition_budgets)>=p.budget_limit THEN RETURN false; END IF;
   INSERT INTO public.acquisition_budgets(bucket,hour,attempts) VALUES(k,date_trunc('hour',clock_timestamp()),1)
   ON CONFLICT(bucket) DO UPDATE SET hour=excluded.hour,attempts=CASE WHEN acquisition_budgets.hour=excluded.hour
   THEN least(acquisition_budgets.attempts+1,p.global_hour+1) ELSE 1 END RETURNING attempts INTO n;
@@ -80,23 +81,22 @@ BEGIN
  clock_timestamp()+make_interval(secs=>least(p.raw_seconds,p.cookie_seconds,p.lookback_seconds)));
  RETURN true;
 END $$;
-CREATE FUNCTION public.growth_signup() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
- SET search_path=pg_catalog,public,pg_temp AS $$ BEGIN
- IF TG_OP='INSERT' THEN
-  INSERT INTO public.signup_attribution(user_id,workspace_id,created_at,verification)
-  VALUES(NEW.id,NEW.initial_workspace_id,NEW.created_at,'pending');
- ELSE
-  UPDATE public.signup_attribution SET verification=CASE WHEN NEW.verification_provenance='actual' THEN 'actual'
-  WHEN NEW.verification_provenance='bypassed' THEN 'bypassed' ELSE 'legacy_unknown' END,
-  verified_at=CASE WHEN NEW.verification_provenance='actual' THEN NEW.email_verified_at END WHERE user_id=NEW.id;
- END IF; RETURN NEW;
-END $$;
+ALTER TABLE public.auth_users ADD COLUMN verification_provenance text NOT NULL DEFAULT 'legacy_unknown'
+ CHECK(verification_provenance IN ('pending','bypassed','actual','legacy_unknown'));
+CREATE INDEX growth_auth_cohort ON public.auth_users(created_at,id);
+-- Auth owns account/verification truth. No auxiliary trigger runs on signup or verification.
 CREATE FUNCTION public.acquisition_freeze(p_ref text) RETURNS void LANGUAGE plpgsql SECURITY DEFINER
  SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE a public.signup_attribution; v public.acquisition_visitors; p public.growth_policy;
 BEGIN
- SELECT * INTO a FROM public.signup_attribution WHERE user_id=nullif(current_setting('app.user_id',true),'') FOR UPDATE;
- IF a.user_id IS NULL OR a.finalized OR a.created_at<transaction_timestamp() THEN RETURN; END IF;
+ -- Only the original account transaction can create the optional snapshot. A failed
+ -- savepoint leaves a visible gap, never something rebuilt from later login/touch.
+ INSERT INTO public.signup_attribution(user_id,workspace_id,created_at,finalized)
+ SELECT id,initial_workspace_id,created_at,true FROM public.auth_users
+ WHERE id=nullif(current_setting('app.user_id',true),'') AND created_at=transaction_timestamp()
+ AND verification_provenance='pending'
+ ON CONFLICT DO NOTHING RETURNING * INTO a;
+ IF a.user_id IS NULL THEN RETURN; END IF;
  SELECT * INTO p FROM public.growth_policy;
  IF p.enabled AND p_ref ~ '^[a-f0-9]{64}$' THEN
   DELETE FROM public.acquisition_visitors WHERE reference_hash=p_ref AND expires_at>clock_timestamp()
@@ -105,13 +105,6 @@ BEGIN
  UPDATE public.signup_attribution SET finalized=true,eligibility=CASE WHEN v.reference_hash IS NULL THEN 'unknown' ELSE 'eligible' END,
  revision=v.revision,first_touch=v.first_touch,last_touch=v.last_touch WHERE user_id=a.user_id;
 END $$;
-ALTER TABLE public.auth_users ADD COLUMN verification_provenance text NOT NULL DEFAULT 'legacy_unknown'
- CHECK(verification_provenance IN ('pending','bypassed','actual','legacy_unknown'));
-CREATE TRIGGER growth_account_created AFTER INSERT ON public.auth_users FOR EACH ROW EXECUTE FUNCTION public.growth_signup();
-CREATE TRIGGER growth_verified AFTER UPDATE OF email_verified_at,verification_provenance ON public.auth_users FOR EACH ROW EXECUTE FUNCTION public.growth_signup();
--- Preserve coverage of existing accounts without inventing verification or attribution.
-INSERT INTO public.signup_attribution(user_id,workspace_id,created_at,finalized)
- SELECT id,initial_workspace_id,created_at,true FROM public.auth_users;
 
 CREATE FUNCTION public.acquisition_forget(p_ref text) RETURNS void LANGUAGE sql SECURITY DEFINER
  SET search_path=pg_catalog,public,pg_temp AS $$ DELETE FROM public.acquisition_visitors WHERE reference_hash=p_ref; $$;

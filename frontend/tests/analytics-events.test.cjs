@@ -18,21 +18,21 @@ function loadViewAnalytics() {
 test('a card click followed by its detail load records one Flare view', () => {
   const { nextFlareViewEvent } = loadViewAnalytics();
   const state = { current: null };
-  const events = [nextFlareViewEvent(state, 'flare-1'), nextFlareViewEvent(state, 'flare-1')]
+  const events = [nextFlareViewEvent(state, 'flare-1', 'interaction-1'), nextFlareViewEvent(state, 'flare-1')]
     .filter(Boolean);
   assert.equal(events.length, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(events[0])), {
-    eventType: 'flare_viewed', targetType: 'flare', targetId: 'flare-1',
-    metadata: { source: 'insights_feed' },
+    eventType: 'voluntary_inspection', interactionId: 'interaction-1', flareId: 'flare-1',
   });
 });
 
-test('a direct detail link records a view and reopening records a new one', () => {
+test('direct detail hydration is excluded; subsequent voluntary opening can record inspection', () => {
   const { nextFlareViewEvent, resetFlareView } = loadViewAnalytics();
   const state = { current: null };
-  assert.ok(nextFlareViewEvent(state, 'deep-link'));
+  assert.equal(nextFlareViewEvent(state, 'deep-link'), null);
+  assert.ok(nextFlareViewEvent(state, 'deep-link', 'interaction-1'));
   resetFlareView(state);
-  assert.ok(nextFlareViewEvent(state, 'deep-link'));
+  assert.ok(nextFlareViewEvent(state, 'deep-link', 'interaction-2'));
 });
 
 test('capture opening and Sources navigation use their own event names once', () => {

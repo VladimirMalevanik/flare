@@ -1,0 +1,80 @@
+{
+  "result": "executor implementation complete; independent exact-SHA CI/QA/Critic/Vova acceptance/integration pending",
+  "retained_checkpoint": "97c2d23014514956134f35c6d7dd6f79cd123e34",
+  "migration": {
+    "accepted_base": "0019",
+    "head": "0020",
+    "topologies": [
+      "self-managed",
+      "yandex managed-owner emulation"
+    ],
+    "runtime_ready": true,
+    "private_table_rls_and_function_privileges": "passed",
+    "fixture_cluster": "operator-owned PostgreSQL 17 on localhost:51569",
+    "databases": [
+      "flare_growth_continuation_self_v4",
+      "flare_growth_continuation_managed_v4"
+    ],
+    "fixture_prerequisites": "Existing public synthetic roles reused for new disposable DBs; no product/historical migration changed"
+  },
+  "four_review_obligations": {
+    "optional_signup": "auth_users authoritative; no growth signup/verification triggers; snapshot inside bounded savepoint; locked/failing sinks tested; missing snapshots counted; later login cannot fill gap",
+    "human_return": "human-return-v1 explicit foreground inspection only; delayed ZIP/sync/capture/Analyze completions, scheduled runs and logical retries excluded",
+    "attribution_reporting": "first/last approved source/medium/campaign/ref/domain/route buckets with ordered deduped milestones; 100 bucket limit; all buckets suppressed if any cohort is small; formula-safe CSV",
+    "calendar": "UTC-v1 for all date casts; same UTC and Europe/Moscow results near midnight; preexisting shorter auth statement_timeout restored on success/failure"
+  },
+  "checks": {
+    "growth_managed": {
+      "passed": 40,
+      "failed": 0,
+      "log": "continuation-final-focused-managed.log"
+    },
+    "full_self_managed": {
+      "passed": 778,
+      "failed": 0,
+      "deselected": 2,
+      "log": "continuation-final-serial-self.log"
+    },
+    "full_managed": {
+      "passed": 776,
+      "failed": 0,
+      "skipped": 1,
+      "deselected": 3,
+      "log": "continuation-final-full-managed.log"
+    },
+    "serialization_recheck": {
+      "passed": 3,
+      "failed": 0,
+      "log": "continuation-serialization-recheck.log"
+    },
+    "frontend": {
+      "passed": 142,
+      "failed": 0,
+      "protected_test_not_executed": 1,
+      "log": "continuation-frontend-full.log"
+    },
+    "focused_frontend": {
+      "passed": 7,
+      "failed": 0
+    },
+    "scoped_eslint": "passed; continuation-frontend-lint.log",
+    "next_build": "passed on identical tracked-source snapshot in own permitted fresh runtime directory; continuation-frontend-clean-build.log",
+    "whitespace": "git diff --check passed"
+  },
+  "environment_exclusions": [
+    "Two dotenv cases conflict with mandatory PYTHON_DOTENV_DISABLED=1: test_explicit_dotenv_is_authoritative and test_direct_smoke_without_editable_install_or_pythonpath[dotenv]; all remaining tests run",
+    "Managed cluster-global role-name absence assertion in test_effective_privileges_include_columns_and_public excluded locally because this same prepared cluster contains self-managed fixture roles. Its effective table/column/Public/role-safety assertions passed before that assertion; run complete official isolated CI matrix",
+    "One existing frontend test reads protected .env.example and is not executed; no environment path restored/read"
+  ],
+  "retained_failures": [
+    "Prior native 2400-second timeout; retained own source/checkpoint preserved",
+    "Initial new disposable self-managed DB bootstrap attempts failed on already-existing flare_onboarding/flare_worker roles; reusable synthetic prerequisite harness corrected",
+    "First focused run: self-managed 30 pass/7 fail, managed 34 pass/3 fail; fixed narrow reconciliation SELECT/RLS grants and timestamps outside explicit retention fixture",
+    "Initial full continuation run: self-managed 778 pass/2 dotenv failures; managed 776 pass/3 failures/1 skipped (dotenv and existing role-name assertion)",
+    "A repeated concurrent full run self-managed: 777 pass/1 failure/2 deselected. Existing lock monitor counted both database suites; all three serialization cases passed alone and final serial full suite passed",
+    "Direct frontend build denied removal of an old .next cache directory (EPERM). No permission changes or cache deletion; fresh identical source-snapshot build passed"
+  ],
+  "production_gates": "Acquisition off/fail-closed unless Vova approves explicit eligibility/notice/vocabulary/lifetimes/resource/disclosure/calendar/cleanup/access policy. No rollout, production mutation, new dependencies, provider calls or migrations in production.",
+  "artifacts": "Committed report/validation/measurements; no artifact upload retried. Runtime logs retained locally outside repository.",
+  "runtime_evidence_path": "/Users/fedornikonov/.paperclip/instances/default/flare/worktrees/growth-analytics/growth002-test-runtime-20261003"
+}

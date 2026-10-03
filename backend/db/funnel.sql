@@ -12,7 +12,8 @@ CREATE FUNCTION public.growth_fact(p_w uuid,p_actor text,p_kind text,p_id uuid,p
  RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
  INSERT INTO public.funnel_facts(workspace_id,actor_id,kind,logical_id,occurred_at,mode,source_count,result_count)
  SELECT p_w,p_actor,p_kind,p_id,p_at,p_mode,p_sources,p_results
- WHERE EXISTS(SELECT 1 FROM public.signup_attribution WHERE user_id=p_actor AND eligibility<>'withdrawn')
+ WHERE EXISTS(SELECT 1 FROM public.auth_users WHERE id=p_actor)
+ AND NOT EXISTS(SELECT 1 FROM public.signup_attribution WHERE user_id=p_actor AND eligibility='withdrawn')
  AND NOT EXISTS(SELECT 1 FROM public.growth_workspace_optouts WHERE workspace_id=p_w)
  AND NOT EXISTS(SELECT 1 FROM public.growth_policy p WHERE p.fact_seconds IS NOT NULL
  AND p_at<clock_timestamp()-make_interval(secs=>p.fact_seconds))
@@ -23,16 +24,24 @@ CREATE FUNCTION public.growth_committed() RETURNS trigger LANGUAGE plpgsql SECUR
  SET search_path=pg_catalog,public,pg_temp AS $$
 BEGIN
  IF TG_TABLE_NAME='documents' THEN
-  IF OLD.current_version_id IS NULL AND NEW.current_version_id IS NOT NULL AND NEW.import_package_id IS NULL
+  IF current_setting('app.growth_human_action',true)='capture' AND OLD.current_version_id IS NULL AND NEW.current_version_id IS NOT NULL AND NEW.import_package_id IS NULL
   AND NOT NEW.metadata ? 'originImportBatchId' THEN
    PERFORM public.growth_fact(NEW.workspace_id,nullif(current_setting('app.user_id',true),''),'capture',NEW.id,clock_timestamp(),'manual',1,1);
   END IF;
  ELSIF TG_TABLE_NAME='import_batches' THEN
   IF NEW.status='completed' AND OLD.status<>'completed' THEN
-   PERFORM public.growth_fact(NEW.workspace_id,NEW.requested_by_user_id,'sync_import',NEW.id,NEW.completed_at,'manual',1,NEW.chunk_count);
+   BEGIN
+    LOCK TABLE public.funnel_facts IN ROW EXCLUSIVE MODE NOWAIT;
+    PERFORM public.growth_fact(NEW.workspace_id,NEW.requested_by_user_id,'sync_import',NEW.id,NEW.completed_at,'manual',1,NEW.chunk_count);
+   EXCEPTION WHEN OTHERS THEN NULL; END;
   END IF;
  ELSE
-  PERFORM public.growth_fact(NEW.workspace_id,NEW.requested_by_user_id,'zip_import',NEW.package_id,NEW.published_at,'manual',NEW.source_count,NEW.chunk_count);
+  -- Import publication is authoritative and replayable. An analytics consumer
+  -- never becomes a prerequisite for DATA success. Reconcile missing IDs later.
+  BEGIN
+   LOCK TABLE public.funnel_facts IN ROW EXCLUSIVE MODE NOWAIT;
+   PERFORM public.growth_fact(NEW.workspace_id,NEW.requested_by_user_id,'zip_import',NEW.package_id,NEW.published_at,'manual',NEW.source_count,NEW.chunk_count);
+  EXCEPTION WHEN OTHERS THEN NULL; END;
  END IF;
  RETURN NEW;
 END $$;
@@ -62,17 +71,34 @@ CREATE FUNCTION public.growth_reconcile(p_limit int) RETURNS int LANGUAGE plpgsq
  SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE r record; n int:=0;
 BEGIN
- IF p_limit NOT BETWEEN 1 AND 1000 THEN RAISE EXCEPTION 'Invalid batch'; END IF;
- FOR r IN SELECT p.* FROM public.import_publications p JOIN public.signup_attribution a ON a.user_id=p.requested_by_user_id
- WHERE a.eligibility<>'withdrawn' AND NOT EXISTS(SELECT 1 FROM public.growth_workspace_optouts o WHERE o.workspace_id=p.workspace_id)
- AND NOT EXISTS(SELECT 1 FROM public.funnel_facts f WHERE f.workspace_id=p.workspace_id AND f.kind='zip_import' AND f.logical_id=p.package_id)
- ORDER BY p.published_at,p.package_id LIMIT p_limit LOOP
-  PERFORM public.growth_fact(r.workspace_id,r.requested_by_user_id,'zip_import',r.package_id,r.published_at,'manual',r.source_count,r.chunk_count); n:=n+1;
+ IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 1000 THEN RAISE EXCEPTION 'Invalid batch'; END IF;
+ FOR r IN SELECT p.* FROM (
+ SELECT workspace_id,package_id AS logical_id,requested_by_user_id,published_at AS occurred_at,
+ 'zip_import'::text AS kind,source_count,chunk_count FROM public.import_publications
+ UNION ALL
+ SELECT workspace_id,id,requested_by_user_id,completed_at,'sync_import',1,chunk_count
+ FROM public.import_batches WHERE status='completed') p JOIN public.auth_users u ON u.id=p.requested_by_user_id
+ WHERE NOT EXISTS(SELECT 1 FROM public.signup_attribution a WHERE a.user_id=u.id AND a.eligibility='withdrawn')
+ AND NOT EXISTS(SELECT 1 FROM public.growth_workspace_optouts o WHERE o.workspace_id=p.workspace_id)
+ AND NOT EXISTS(SELECT 1 FROM public.growth_policy policy WHERE policy.fact_seconds IS NOT NULL
+ AND p.occurred_at<clock_timestamp()-make_interval(secs=>policy.fact_seconds))
+ AND NOT EXISTS(SELECT 1 FROM public.funnel_facts f WHERE f.workspace_id=p.workspace_id AND f.kind=p.kind AND f.logical_id=p.logical_id)
+ ORDER BY p.occurred_at,p.logical_id LIMIT p_limit LOOP
+  PERFORM public.growth_fact(r.workspace_id,r.requested_by_user_id,r.kind,r.logical_id,r.occurred_at,'manual',r.source_count,r.chunk_count); n:=n+1;
  END LOOP;
  RETURN n;
 END $$;
 ALTER TABLE public.activity_events ADD COLUMN interaction_id uuid;
 CREATE UNIQUE INDEX activity_interaction ON public.activity_events(workspace_id,actor_id,interaction_id) WHERE interaction_id IS NOT NULL;
+-- Withdrawal and deletion also suppress delayed deliveries through legacy writers.
+CREATE FUNCTION public.growth_event_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
+ SET search_path=pg_catalog,public,pg_temp AS $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM public.auth_users WHERE id=NEW.actor_id)
+ OR EXISTS(SELECT 1 FROM public.signup_attribution WHERE user_id=NEW.actor_id AND eligibility='withdrawn')
+ OR EXISTS(SELECT 1 FROM public.growth_workspace_optouts WHERE workspace_id=NEW.workspace_id) THEN RETURN NULL; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER growth_event_privacy BEFORE INSERT ON public.activity_events FOR EACH ROW EXECUTE FUNCTION public.growth_event_guard();
 CREATE FUNCTION public.growth_inspection(p_id uuid,p_flare uuid,p_source uuid) RETURNS void LANGUAGE plpgsql SECURITY DEFINER
  SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE wid uuid:=nullif(current_setting('app.workspace_id',true),'')::uuid;
@@ -106,11 +132,15 @@ BEGIN
   IF NOT EXISTS(SELECT 1 FROM public.workspace_members WHERE workspace_id=wid AND user_id=uid AND role='owner') THEN
    RAISE EXCEPTION 'Owner required' USING ERRCODE='42501'; END IF;
   INSERT INTO public.growth_workspace_optouts VALUES(wid) ON CONFLICT DO NOTHING;
-  UPDATE public.signup_attribution SET eligibility='withdrawn',first_touch=NULL,last_touch=NULL,revision=NULL,finalized=true WHERE workspace_id=wid;
+  INSERT INTO public.signup_attribution(user_id,workspace_id,created_at,eligibility,finalized)
+  SELECT id,initial_workspace_id,created_at,'withdrawn',true FROM public.auth_users WHERE initial_workspace_id=wid
+  ON CONFLICT(user_id) DO UPDATE SET eligibility='withdrawn',first_touch=NULL,last_touch=NULL,revision=NULL,finalized=true;
   DELETE FROM public.funnel_facts WHERE workspace_id=wid;
   DELETE FROM public.activity_events WHERE workspace_id=wid;
  ELSE
-  UPDATE public.signup_attribution SET eligibility='withdrawn',first_touch=NULL,last_touch=NULL,revision=NULL,finalized=true WHERE user_id=uid;
+  INSERT INTO public.signup_attribution(user_id,workspace_id,created_at,eligibility,finalized)
+  SELECT id,initial_workspace_id,created_at,'withdrawn',true FROM public.auth_users WHERE id=uid
+  ON CONFLICT(user_id) DO UPDATE SET eligibility='withdrawn',first_touch=NULL,last_touch=NULL,revision=NULL,finalized=true;
   DELETE FROM public.funnel_facts WHERE actor_id=uid;
   DELETE FROM public.activity_events WHERE actor_id=uid;
  END IF;
@@ -124,16 +154,19 @@ CREATE FUNCTION public.growth_cleanup(p_limit int) RETURNS jsonb LANGUAGE plpgsq
  SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE p public.growth_policy; visitors int; budgets int; links int; facts int;
 BEGIN
- IF p_limit NOT BETWEEN 1 AND 1000 THEN RAISE EXCEPTION 'Invalid batch'; END IF;
+ IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 1000 THEN RAISE EXCEPTION 'Invalid batch'; END IF;
  SELECT * INTO p FROM public.growth_policy;
  WITH x AS(SELECT reference_hash FROM public.acquisition_visitors WHERE expires_at<=clock_timestamp() ORDER BY expires_at LIMIT p_limit)
  DELETE FROM public.acquisition_visitors WHERE reference_hash IN(SELECT reference_hash FROM x); GET DIAGNOSTICS visitors=ROW_COUNT;
  WITH x AS(SELECT bucket FROM public.acquisition_budgets WHERE hour<date_trunc('hour',clock_timestamp()) LIMIT p_limit)
  DELETE FROM public.acquisition_budgets WHERE bucket IN(SELECT bucket FROM x); GET DIAGNOSTICS budgets=ROW_COUNT;
  -- Expired measurement stays withdrawn: reconciliation must not resurrect it.
- WITH x AS(SELECT user_id FROM public.signup_attribution WHERE eligibility<>'withdrawn'
- AND p.linked_seconds IS NOT NULL AND created_at<clock_timestamp()-make_interval(secs=>p.linked_seconds) LIMIT p_limit)
- UPDATE public.signup_attribution SET eligibility='withdrawn',first_touch=NULL,last_touch=NULL,revision=NULL WHERE user_id IN(SELECT user_id FROM x);
+ WITH x AS(SELECT u.id,u.initial_workspace_id,u.created_at FROM public.auth_users u
+ WHERE NOT EXISTS(SELECT 1 FROM public.signup_attribution a WHERE a.user_id=u.id AND a.eligibility='withdrawn')
+ AND p.linked_seconds IS NOT NULL AND u.created_at<clock_timestamp()-make_interval(secs=>p.linked_seconds) LIMIT p_limit)
+ INSERT INTO public.signup_attribution(user_id,workspace_id,created_at,eligibility,finalized)
+ SELECT id,initial_workspace_id,created_at,'withdrawn',true FROM x
+ ON CONFLICT(user_id) DO UPDATE SET eligibility='withdrawn',first_touch=NULL,last_touch=NULL,revision=NULL,finalized=true;
  GET DIAGNOSTICS links=ROW_COUNT;
  WITH x AS(SELECT workspace_id,kind,logical_id FROM public.funnel_facts f WHERE
  EXISTS(SELECT 1 FROM public.signup_attribution a WHERE a.user_id=f.actor_id AND a.eligibility='withdrawn')
@@ -146,20 +179,37 @@ BEGIN
  DELETE FROM public.activity_events WHERE id IN(SELECT id FROM x);
  RETURN jsonb_build_object('visitors',visitors,'budgets',budgets,'links',links,'facts',facts);
 END $$;
--- No identity or raw campaign rows are returned. Caller supplies an explicit unit/basis.
+-- Restricted bounded attribution aggregate. No identities or raw references leave this function.
 CREATE FUNCTION public.growth_report(p_since timestamptz,p_until timestamptz,p_unit text,p_basis text) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
-DECLARE p public.growth_policy; result jsonb; channels jsonb;
+DECLARE p public.growth_policy; result jsonb; attribution jsonb;
 BEGIN
  SELECT * INTO p FROM public.growth_policy;
  IF NOT p.enabled OR p_since IS NULL OR p_until IS NULL OR p_since>=p_until OR p_until>clock_timestamp()
- OR p_until-p_since>make_interval(days=>p.report_window_days) OR p_unit NOT IN ('account','workspace_creator')
- OR p_basis NOT IN ('first','last') THEN RAISE EXCEPTION 'Reporting policy/window required'; END IF;
- WITH cohort AS(SELECT a.*,
- COALESCE((CASE WHEN p_basis='first' THEN first_touch ELSE last_touch END)->>'utm_source','unknown') AS channel
- FROM public.signup_attribution a WHERE a.created_at>=p_since AND a.created_at<p_until AND eligibility<>'withdrawn'),
+ OR p_until-p_since>make_interval(days=>p.report_window_days) OR p_unit IS NULL OR p_unit NOT IN ('account','workspace_creator')
+ OR p_basis IS NULL OR p_basis NOT IN ('first','last') THEN RAISE EXCEPTION 'Reporting policy/window required'; END IF;
+ WITH cohort AS(
+ SELECT u.id AS user_id,u.initial_workspace_id AS workspace_id,u.created_at,
+ u.verification_provenance AS verification,u.email_verified_at AS verified_at,
+ COALESCE(a.eligibility,'unknown') AS eligibility,a.user_id IS NOT NULL AS snapshot_present,
+ CASE WHEN a.eligibility='eligible' THEN CASE WHEN p_basis='first' THEN a.first_touch ELSE a.last_touch END END AS touch
+ FROM public.auth_users u LEFT JOIN public.signup_attribution a ON a.user_id=u.id
+ WHERE u.created_at>=p_since AND u.created_at<p_until AND COALESCE(a.eligibility,'unknown')<>'withdrawn'
+ AND NOT EXISTS(SELECT 1 FROM public.growth_workspace_optouts o WHERE o.workspace_id=u.initial_workspace_id)),
+ dimensions AS(SELECT a.*,
+ CASE WHEN NOT snapshot_present THEN 'missing_snapshot' WHEN eligibility<>'eligible' THEN 'unlinked_unknown'
+ WHEN NOT COALESCE(touch ?| ARRAY['utm_source','utm_medium','utm_campaign','ref','referrer_domain'],false)
+ THEN 'eligible_direct_or_unknown' ELSE 'eligible_non_direct' END AS coverage,
+ -- Only the currently approved vocabulary is exportable; retired labels become other.
+ CASE WHEN touch ? 'utm_source' THEN CASE WHEN (p.tokens->'utm_source') ? (touch->>'utm_source') THEN touch->>'utm_source' ELSE 'other' END ELSE 'unspecified' END AS source,
+ CASE WHEN touch ? 'utm_medium' THEN CASE WHEN (p.tokens->'utm_medium') ? (touch->>'utm_medium') THEN touch->>'utm_medium' ELSE 'other' END ELSE 'unspecified' END AS medium,
+ CASE WHEN touch ? 'utm_campaign' THEN CASE WHEN (p.tokens->'utm_campaign') ? (touch->>'utm_campaign') THEN touch->>'utm_campaign' ELSE 'other' END ELSE 'unspecified' END AS campaign,
+ CASE WHEN touch ? 'ref' THEN CASE WHEN (p.tokens->'ref') ? (touch->>'ref') THEN touch->>'ref' ELSE 'other' END ELSE 'unspecified' END AS ref,
+ CASE WHEN touch ? 'referrer_domain' THEN CASE WHEN (p.tokens->'referrer_domain') ? (touch->>'referrer_domain') THEN touch->>'referrer_domain' ELSE 'other' END ELSE 'unspecified' END AS referrer_domain,
+ COALESCE(touch->>'landing_route','unspecified') AS landing_route
+ FROM cohort a),
  milestones AS(SELECT a.*,outcome.at AS outcome_at,analyzed.at AS analyzed_at,inspected.at AS inspected_at,returned.at AS returned_at
- FROM cohort a
+ FROM dimensions a
  LEFT JOIN LATERAL(SELECT min(occurred_at) AS at FROM public.funnel_facts f WHERE f.actor_id=a.user_id
  AND (p_unit='account' OR f.workspace_id=a.workspace_id) AND kind IN ('capture','sync_import','zip_import') AND mode='manual' AND source_count>0
  AND a.verification IN ('actual','bypassed') AND occurred_at>=COALESCE(a.verified_at,a.created_at) AND occurred_at<p_until) outcome ON true
@@ -168,27 +218,40 @@ BEGIN
  AND occurred_at>=outcome.at AND occurred_at<p_until) analyzed ON true
  LEFT JOIN LATERAL(SELECT min(occurred_at) AS at FROM public.funnel_facts f WHERE f.actor_id=a.user_id
  AND (p_unit='account' OR f.workspace_id=a.workspace_id) AND kind='inspection' AND occurred_at>=analyzed.at AND occurred_at<p_until) inspected ON true
+ -- human-return-v1: only explicit foreground inspection observations qualify.
+ -- Completion timestamps, including manual-requested ZIP/Analyze, are asynchronous.
  LEFT JOIN LATERAL(SELECT min(occurred_at) AS at FROM public.funnel_facts f WHERE f.actor_id=a.user_id
- AND (p_unit='account' OR f.workspace_id=a.workspace_id) AND kind IN ('capture','sync_import','zip_import','inspection') AND mode='manual'
+ AND (p_unit='account' OR f.workspace_id=a.workspace_id) AND kind='inspection' AND mode='manual'
  AND (occurred_at AT TIME ZONE 'UTC')::date>(inspected.at AT TIME ZONE 'UTC')::date AND occurred_at<p_until) returned ON true),
- totals AS(SELECT count(*) n,count(*) FILTER(WHERE eligibility='eligible') eligible,
- count(*) FILTER(WHERE verification='actual') verified,count(*) FILTER(WHERE verification='bypassed') bypassed,
- count(*) FILTER(WHERE verification IN ('pending','legacy_unknown')) verification_unknown,
+ totals AS(SELECT grouping(coverage) AS total,coverage,source,medium,campaign,ref,referrer_domain,landing_route,
+ count(*) n,count(*) FILTER(WHERE eligibility='eligible') eligible,
+ count(*) FILTER(WHERE snapshot_present) snapshot_present,count(*) FILTER(WHERE NOT snapshot_present) snapshot_missing,
+ count(*) FILTER(WHERE verification='actual' AND verified_at<p_until) verified,count(*) FILTER(WHERE verification='bypassed') bypassed,
+ count(*) FILTER(WHERE verification IN ('pending','legacy_unknown') OR (verification='actual' AND (verified_at IS NULL OR verified_at>=p_until))) verification_unknown,
  count(*) FILTER(WHERE outcome_at IS NOT NULL) outcomes,count(*) FILTER(WHERE analyzed_at IS NOT NULL) analyzed,
  count(*) FILTER(WHERE inspected_at IS NOT NULL) inspected,count(*) FILTER(WHERE returned_at IS NOT NULL) returned,
- count(*) FILTER(WHERE created_at::date<(p_until AT TIME ZONE 'UTC')::date) later_day_observable FROM milestones)
- SELECT CASE WHEN n<p.min_cohort THEN jsonb_build_object('suppressed',true) ELSE jsonb_build_object('suppressed',false,
- 'accounts',n,'eligible',eligible,'unknown',n-eligible,'actual_verified',verified,'bypassed',bypassed,'verification_unknown',verification_unknown,
- 'committed_outcome',outcomes,'manual_analyze',analyzed,'voluntary_inspection',inspected,'later_day_activity',returned,'later_day_observable',later_day_observable) END INTO result FROM totals;
- WITH cohort AS(SELECT COALESCE((CASE WHEN p_basis='first' THEN first_touch ELSE last_touch END)->>'utm_source','unknown') AS channel
- FROM public.signup_attribution WHERE created_at>=p_since AND created_at<p_until AND eligibility<>'withdrawn'),
- grouped AS(SELECT channel,count(*) AS accounts FROM cohort GROUP BY channel)
- SELECT CASE WHEN bool_and(accounts>=p.min_cohort) THEN jsonb_agg(jsonb_build_object('source',channel,'accounts',accounts) ORDER BY channel)
- ELSE NULL END INTO channels FROM grouped;
-
- RETURN jsonb_build_object('revision','funnel-v1','policy',p.revision,'unit',p_unit,'basis',p_basis,'calendar','UTC-v1',
+ count(*) FILTER(WHERE (created_at AT TIME ZONE 'UTC')::date<(p_until AT TIME ZONE 'UTC')::date) later_day_observable,
+ count(*) FILTER(WHERE (inspected_at AT TIME ZONE 'UTC')::date<(p_until AT TIME ZONE 'UTC')::date) inspection_later_day_observable
+ FROM milestones GROUP BY GROUPING SETS((),(coverage,source,medium,campaign,ref,referrer_domain,landing_route))),
+ packed AS(SELECT *,CASE WHEN n<p.min_cohort THEN jsonb_build_object('suppressed',true) ELSE jsonb_build_object('suppressed',false,
+ 'accounts',n,'eligible',eligible,'unknown',n-eligible,'snapshot_present',snapshot_present,'snapshot_missing',snapshot_missing,
+ 'actual_verified',verified,'bypassed',bypassed,'verification_unknown',verification_unknown,
+ 'committed_outcome',outcomes,'manual_analyze',analyzed,'voluntary_inspection',inspected,'later_day_activity',returned,'later_day_observable',later_day_observable,
+ 'inspection_later_day_observable',inspection_later_day_observable) END AS metrics FROM totals),
+ bucket_sample AS(SELECT * FROM packed WHERE total=0
+ ORDER BY coverage,source,medium,campaign,ref,referrer_domain,landing_route LIMIT 101)
+ SELECT (SELECT metrics FROM packed WHERE total=1),
+ (SELECT CASE WHEN count(*) BETWEEN 1 AND 100 AND bool_and(n>=p.min_cohort) THEN
+ jsonb_agg(jsonb_build_object('coverage',coverage,'source',source,'medium',medium,'campaign',campaign,'ref',ref,
+ 'referrer_domain',referrer_domain,'landing_route',landing_route,'metrics',metrics)
+ ORDER BY coverage,source,medium,campaign,ref,referrer_domain,landing_route)
+ ELSE NULL END FROM bucket_sample) INTO result,attribution;
+ RETURN jsonb_build_object('revision','funnel-v2','policy',p.revision,'unit',p_unit,'basis',p_basis,'calendar','UTC-v1',
  'since',p_since,'until',p_until,'generated_at',clock_timestamp(),'coverage_start','migration-0020',
- 'freshness','transactional domain hooks; ZIP anti-join reconciliation available','metrics',result,
- 'channels',channels,'channels_suppressed',channels IS NULL,'traffic_qualification','opt-in assertion; human/bot/test status unknown',
+ 'freshness','capture/Analyze commit hooks; optional import observations require bounded reconciliation before reports','metrics',result,
+ 'visitor_denominator','touch snapshots only; no all-traffic or visitor-conversion denominator',
+ 'attribution',attribution,'attribution_suppressed',attribution IS NULL,'attribution_bucket_limit',100,
+ 'traffic_qualification','opt-in assertion; human/bot/test status unknown',
+ 'human_return_revision','human-return-v1','human_return_coverage','explicit foreground Flare/evidence inspection only; collection loss unknown',
  'maturity','later_day_observable is a calendar opportunity, no retention rate selected');
 END $$;

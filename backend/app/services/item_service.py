@@ -107,7 +107,9 @@ class ItemService:
                     file_type=file_type,
                 ),
             )
+            connection.execute("SELECT set_config('app.growth_human_action','capture',true)")
             repository.publish_version(document_id=item_id, version_id=version_id)
+            connection.execute("SELECT set_config('app.growth_human_action','',true)")
             item = repository.get_active(item_id)
             if item is None:
                 raise RuntimeError("Created item could not be read back")
