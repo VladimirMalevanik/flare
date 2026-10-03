@@ -187,3 +187,41 @@ Screenshots: [desktop EN](evidence/fix-canonical-desktop.png),
 [Subscription Sandbox](evidence/fix-subscription-desktop.png).
 Existing production OPS/Vova gates remain. No finish/done, product merge or
 deployment is authorized by this correction.
+
+## Standard development compiler correction — 2026-10-03
+
+Owner acceptance remains pending. The user explicitly delegated DATA-002 to the
+Flare Paperclip team. The task was returned to correction, claimed as
+`Fedor / Paperclip Flare Web / DATA-002`, and its complete inherited import scope
+was published before editing. The correction branch
+`task/data-002-dev-fix-20261003` includes the existing PR #33 import unit at
+`4b49eb6d8cfd14e4bc72a0c533c094784e592c40` on fresh coordination main.
+
+The previously recorded Turbopack failure is fixed in this cycle: `"use client"`
+now precedes every import in `frontend/src/lib/data/mock-provider.ts`. The only
+new changes relative to the imported unit are that directive order and this
+validation addendum. Backend, migration/SQL, import semantics, dependency files
+and other tasks were not changed.
+
+| Check rerun for this correction | Actual result |
+| --- | --- |
+| Complete frontend test suite | **129 passed**, no failures or skips |
+| ESLint on the changed provider | Passed |
+| Standard `next dev` with Turbopack | `/sources`, `/vault`, and both Notion/Obsidian guide routes returned HTTP 200 with no compilation error |
+| Production `next build --webpack` | Passed, including TypeScript and 20 generated pages |
+
+These checks ran in the team's own clean task worktree with an isolated copy of
+already installed dependencies, the synthetic mock provider and a disabled API
+address. No dependencies were installed or upgraded. The owned development
+process was stopped afterward and generated tracked development typing changes
+were restored. The HTTP smoke proves compilation and route serving; it does not
+claim a new live-API/browser acceptance run. The prior real-persistence browser
+and backend results above remain evidence for the unchanged import unit.
+
+The independent Paperclip Critic audit of the inherited `4b49eb6` unit reported
+PASS for package gates/RLS, bounded ZIP validation/cleanup, request identity and
+canonical replay, linear migration 0019, and absence of automatic Analyze. That
+audit was static and did not rerun suites. Exact published SHA, CI results and
+final review handoff are recorded separately in task-sync and the pull request.
+Production OPS decisions, owner acceptance, authorized integration and finish
+remain separate gates.

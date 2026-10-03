@@ -1,5 +1,6 @@
-import type { ImportPackage, ImportPackageReport, ZipSourceKind } from "./types";
 "use client";
+
+import type { ImportPackage, ImportPackageReport, ZipSourceKind } from "./types";
 import {
   contextInsights as seedInsights,
   contextItems as seedItems,
