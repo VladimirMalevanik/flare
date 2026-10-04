@@ -1,0 +1,78 @@
+{
+  "status": "PASS",
+  "checkedAt": "2026-10-04",
+  "baseline": "1fd54917252539bb8651041d3185ddae97d995e2",
+  "frontendTests": {
+    "passed": 158,
+    "failed": 0
+  },
+  "lint": "PASS",
+  "typescriptAndProductionBuild": "PASS",
+  "runtimeNextVersion": "16.3.4",
+  "crawlerProbes": [
+    {
+      "name": "Facebook",
+      "path": "/",
+      "status": 200,
+      "metadataInHead": true,
+      "uniqueExpectedTags": 10,
+      "unexpectedRedirect": false
+    },
+    {
+      "name": "Twitter",
+      "path": "/",
+      "status": 200,
+      "metadataInHead": true,
+      "uniqueExpectedTags": 10,
+      "unexpectedRedirect": false
+    },
+    {
+      "name": "Telegram",
+      "path": "/",
+      "status": 200,
+      "metadataInHead": true,
+      "uniqueExpectedTags": 10,
+      "unexpectedRedirect": false
+    },
+    {
+      "name": "Discord",
+      "path": "/",
+      "status": 200,
+      "metadataInHead": true,
+      "uniqueExpectedTags": 10,
+      "unexpectedRedirect": false
+    },
+    {
+      "name": "UTM",
+      "path": "/?utm_source=telegram&utm_medium=social&utm_campaign=flare_launch",
+      "status": 200,
+      "metadataInHead": true,
+      "uniqueExpectedTags": 10,
+      "unexpectedRedirect": false
+    },
+    {
+      "name": "Login",
+      "path": "/login",
+      "status": 200,
+      "metadataInHead": true,
+      "uniqueExpectedTags": 10,
+      "unexpectedRedirect": false
+    }
+  ],
+  "image": {
+    "status": 200,
+    "mimeType": "image/jpeg",
+    "width": 1200,
+    "height": 630,
+    "bytes": 38930,
+    "sha256": "e90e246b1c4dcd08265513e7742e5c4054ab12e47b8af6f180b9be4360616f36",
+    "matchesHumanApprovedAsset": true,
+    "requiresAuthentication": false
+  },
+  "canonicalOverrideAdded": false,
+  "accountsCreated": false,
+  "accessGranted": false,
+  "deploymentPerformed": false,
+  "analyticsEnabled": false,
+  "foreignProductChanges": false
+}
