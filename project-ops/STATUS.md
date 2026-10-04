@@ -2,9 +2,9 @@
 
 > Этот файл генерирует `task-sync`; вручную его не редактируют.
 
-Сформировано: `2026-10-04T05:14:05Z`
-Последнее обновление работы: `2026-10-03T18:33:17Z`
-Снимок состояния: `sha256:cf3b1f9262ed56797a6313c54c8c24105d8051346395b4992d88b28dfe6c8733`
+Сформировано: `2026-10-04T06:23:46Z`
+Последнее обновление работы: `2026-10-04T06:23:46Z`
+Снимок состояния: `sha256:42efb4f168438c2a02a95539c4fdb6e23aacf9c68ec4e1c6009c8b0f6d224b07`
 
 ## Ближайшая цель
 
@@ -17,6 +17,7 @@
 1. `API-001` (на проверке) — Implement Paddle Sandbox signed webhooks, durable ordered/deduplicated subscription state and authoritative workspace-wide Pro entitlement during trialing/active subscriptions. Add authenticated server-bound checkout intents, tenant-safe persistence, truthful Subscription status refresh and backend/frontend regression/security tests. Preserve auth, design, daily Analyze limits and Sandbox-only checkout. No Live, cancellation portal, new premium quota policy, production secret access or deployment.. Условие: Review PR36 at319a91de9f38ebbfa406fd92ad77c12b1415786c: signed Paddle Sandbox webhooks, durable workspace subscription state and Pro entitlement for all members. Matching0021/API/web rollout and Sandbox endpoint-secret setup plus real delivery smoke remain separate activation; no Live or deployment performed.; зависит от: GROWTH-002
 2. `WEB-002` (на проверке) — Add a Subscription section to Settings with Free, Pro and Team descriptions; grey Current for the current Free tier and blue Buy actions. Connect Pro Buy to official Paddle.js Sandbox overlay using public env placeholders and price pri_01m3y1nvmgw2avt60bz87161c2, quantity 1, authenticated email and customData.userId. Enforce sandbox-only tokens, single initialization and checkout locking, localized recoverable errors, existing design/auth preservation and frontend checks. Team stays explicitly unconfigured until a separate Sandbox price exists. No Live, server API key, webhooks, entitlement/DB changes, portal, cancellation or deployment.. Условие: Owner requested merge and deployment on 2026-10-02. PR32 merged and deployed to https://flare4u.tech/settings; Paddle remains Sandbox. Actual signed-in checkout/trial/payment verification is pending a Flare session; no paid access or plan DB changes.
 3. `OPS-001` (на проверке) — Resolve production staging service/upload path, API-worker storage reachability, worker isolation/resources, storage identity/network/CORS, physical ZIP deletion/retention and monitoring/load-test environment. Publish dated redacted operator decisions/evidence; no provisioning. Contract: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#ops-001.. Условие: Review redacted runtime/staging decision and evidence record; Vova selection/acceptance and sanitized inventory remain pending. Do not mark done or authorize rollout from public probes.
+4. `WEB-004` (будем брать) — YouGile MAR-64: integrate the exact human-approved Flare link-cover JPEG into Open Graph and Twitter link previews. Prepare a source-evidenced Flare service registry and record the human choice of free personal Gmail with mail delegation. No redesign, external account creation, credential access, access grants, mail-provider changes, production deployment or foreign tasks.. Условие: Human assigned MAR-64 and explicitly approved the prepared cover on 2026-10-04: add it to the link cover and prepare a service registry. Start from fresh main, claim, publish exact metadata/asset/document scope, verify built crawler HTML and the image, and leave the isolated local preview available.
 
 ## В работе
 
