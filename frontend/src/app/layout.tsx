@@ -9,6 +9,29 @@ export const metadata: Metadata = {
   title: "Flare — Startup Context",
   description:
     "A calm place to capture startup context and surface grounded Flares.",
+  openGraph: {
+    type: "website",
+    url: "https://flare4u.tech",
+    siteName: "Flare",
+    title: "Your notes go quiet. Flare doesn't.",
+    description: "Capture decisions, research, calls, and loose thoughts. Insights backed by your own sources.",
+    images: [{
+      url: "https://flare4u.tech/brand/flare-link-cover.jpg",
+      width: 1200,
+      height: 630,
+      type: "image/jpeg",
+      alt: "Flare — Your notes go quiet. Flare doesn't. Insights backed by your own sources.",
+    }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Your notes go quiet. Flare doesn't.",
+    description: "Capture decisions, research, calls, and loose thoughts. Insights backed by your own sources.",
+    images: [{
+      url: "https://flare4u.tech/brand/flare-link-cover.jpg",
+      alt: "Flare — Your notes go quiet. Flare doesn't. Insights backed by your own sources.",
+    }],
+  },
 };
 export default async function RootLayout({
   children,
