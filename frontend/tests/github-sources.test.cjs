@@ -43,6 +43,7 @@ function harness(initialSource, available = []) {
     };
     if (name === '@/lib/data') return { dataProvider: provider, dataErrorMessage: (error, fallback) => error?.message || fallback };
     if (name === '@/components/icons') return { Icon: 'icon' };
+    if (name === '@/components/select') return { Select: 'custom-select' };
     if (name === '@/components/workspace-context') return { useWorkspace: () => ({ openCapture() {} }) };
     if (name === "./zip-import") return { ZipImport: () => null };
     throw Error(`Unexpected import ${name}`);
@@ -69,7 +70,7 @@ test('GitHub pending state loads repositories and saves one selection', async ()
   app.render(); await app.runEffect();
   let tree = app.render();
   assert.deepEqual(app.calls, ['repositories']);
-  tree.find(node => node.type === 'select').props.onChange({ target: { value: '101' } });
+  tree.find(node => node.type === 'custom-select').props.onValueChange('101');
   tree = app.render();
   tree.find(node => node.type === 'button' && node.props.children === 'Save repository').props.onClick();
   await new Promise(resolve => setImmediate(resolve));

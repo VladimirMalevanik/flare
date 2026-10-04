@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { BrandMark } from "./brand-mark";
 import { LegalChrome } from "./legal-chrome";
+import { LanguageSelector } from "@/components/language-selector";
 
 export function LegalPage({ title, updated, children }: { title: string; updated: string; children: ReactNode }) {
   return (
@@ -12,7 +13,7 @@ export function LegalPage({ title, updated, children }: { title: string; updated
           <BrandMark size={28} />
           Flare
         </Link>
-        <LegalChrome kind="start" />
+        <div className="legal-header-actions"><LanguageSelector /><LegalChrome kind="start" /></div>
       </header>
       <article className="legal-document" lang="en">
         <p className="marketing-kicker">Legal</p>

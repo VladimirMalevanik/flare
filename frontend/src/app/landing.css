@@ -1566,3 +1566,96 @@
     transition: none !important;
   }
 }
+
+/* WEB-003: preserve the original centered Flare composition; refine its rhythm. */
+.landing-page { --landing-max: 1160px; --landing-radius: 20px; }
+.landing-nav-controls { display: flex; align-items: center; gap: 12px; }
+.landing-nav-links { gap: 24px; }
+.landing-hero { padding: 92px 0 92px; }
+.landing-hero::before, .landing-hero-card::before, .landing-hero-card::after { display: none; }
+.landing-hero h1 { font-size: clamp(48px, 6.7vw, 86px); line-height: 1.03; letter-spacing: -.058em; font-weight: 680; }
+.landing-eyebrow { color: var(--secondary); text-transform: none; font-size: 14px; letter-spacing: 0; font-weight: 450; margin-bottom: 22px; }
+.landing-hero-copy { max-width: 650px; font-size: 19px; margin-top: 28px; line-height: 1.65; }
+.landing-actions { margin-top: 30px; }
+.landing-button-primary { background: #0071e3; box-shadow: none; }
+.landing-button-primary:hover { background: #0059b5; }
+.landing-hero-card { margin-top: 56px; padding: 28px 30px; max-width: 640px; box-shadow: 0 12px 36px rgba(20,30,45,.065); animation: landing-card-arrive 420ms ease-out; }
+.landing-spark { display: inline-flex; align-items: center; justify-content: center; color: var(--accent-text); }
+.landing-spark svg { width: 100%; height: 100%; }
+.landing-section { padding: 88px 0; }
+.landing-problem-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 30px 88px; }
+.landing-problem-grid > div { display: contents; }
+.landing-problem h2 { grid-column: 1; font-size: clamp(36px, 4vw, 50px); line-height: 1.1; }
+.landing-problem-lines { grid-column: 2; grid-row: 1 / span 2; margin: 0; }
+.landing-problem-lines p { font-size: 23px; line-height: 1.45; padding: 18px 0; }
+.landing-problem-lines p:first-child { padding-top: 0; }
+.landing-problem-answer { grid-column: 1; font-size: 16px; }
+.landing-section-heading { margin-bottom: 38px; }
+.landing-section-heading h2, .landing-depth h2 { font-size: clamp(35px, 4.2vw, 52px); line-height: 1.12; }
+.landing-steps article { min-height: 0; padding-top: 28px; padding-bottom: 8px; }
+.landing-steps h3 { font-size: 22px; }
+.landing-steps p { max-width: 300px; }
+.landing-demo { grid-template-columns: 210px minmax(0, 1fr); border-radius: 20px; min-height: 520px; box-shadow: 0 12px 36px rgba(20,30,45,.06); }
+.landing-demo-body { padding: 38px; }
+.landing-demo-header h3, .landing-capture-panel h3 { font-size: clamp(26px, 3vw, 36px); }
+.landing-demo-kicker { font-size: 12px; text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--secondary); }
+.landing-demo-insight { background: var(--surface); border-color: var(--line); border-radius: 14px; }
+.landing-demo-insight h4 { font-size: 23px; }
+.landing-capture-input { min-height: 170px; padding: 24px; margin-top: 28px; }
+.landing-capture-input span { margin-top: 24px; }
+.landing-analysis-note { color: var(--secondary); font-size: 13px; margin: 22px 0 16px; }
+.landing-depth-grid { gap: 64px; align-items: center; }
+.landing-source-archive { border: 1px solid var(--line); border-radius: 18px; padding: 24px; background: var(--surface); }
+.landing-source-label { margin: 0 0 12px !important; color: var(--muted); font-size: 12px !important; }
+.landing-source-archive article { padding: 16px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; }
+.landing-source-archive article > span { display: none; }
+.landing-source-archive article span { color: var(--secondary); font-size: 12px; }
+.landing-source-archive article h4 { margin: 3px 0 0; font-size: 16px; font-weight: 550; }
+.landing-source-archive > p:last-child { margin: 18px 0 0; color: var(--secondary); font-size: 13px; line-height: 1.6; }
+.landing-outcome blockquote { max-width: 960px; font-size: clamp(34px, 4.5vw, 58px); line-height: 1.15; }
+.landing-final-cta { padding: 72px 0; background: #0071e3; }
+.landing-final-cta .landing-spark { display: none; }
+@keyframes landing-card-arrive { from { opacity: .4; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 900px) {
+ .landing-nav-links { gap: 16px; }
+ .landing-nav-links a[href^="#"] { display: none; }
+ .landing-demo { grid-template-columns: 170px minmax(0, 1fr); }
+ .landing-demo-body { padding: 28px; }
+ .landing-problem-grid { gap: 28px 42px; }
+}
+@media (max-width: 680px) {
+ .landing-container { width: calc(100% - 36px); }
+ .landing-hero { padding: 64px 0; }
+ .landing-hero h1 { font-size: clamp(42px, 10vw, 58px); }
+ .landing-hero-copy { font-size: 17px; line-height: 1.6; }
+ .landing-hero-card { padding: 22px; margin-top: 42px; }
+ .landing-hero-card h2 { font-size: 24px; }
+ .landing-card-topline { gap: 8px; flex-wrap: wrap; }
+ .landing-section { padding: 64px 0; }
+ .landing-problem-grid { display: block; }
+ .landing-problem-lines { margin: 28px 0; }
+ .landing-problem-lines p { font-size: 21px; }
+ .landing-steps article, .landing-steps article + article { padding: 20px 0; min-height: 0; }
+ .landing-section-heading-row { align-items: stretch; }
+ .landing-section-heading-row > p { max-width: none; margin-top: 18px; }
+ .landing-demo { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+ .landing-demo-body { padding: 24px 18px; }
+ .landing-demo-header { gap: 12px; }
+ .landing-demo-header > span { display: none; }
+ .landing-filters { gap: 6px; flex-wrap: wrap; }
+ .landing-filters button { padding: 8px 11px; min-height: 40px; }
+ .landing-demo-insight { padding: 20px; }
+ .landing-demo-insight h4 { font-size: 21px; }
+ .landing-depth-grid { gap: 32px; }
+ .landing-source-archive { padding: 20px; }
+ .landing-capture-input { padding: 20px; }
+ .landing-capture-input p { font-size: 16px; }
+ .landing-final-cta { padding: 60px 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+ .landing-hero-card { animation: none; }
+ .landing-page *, .landing-page *::before, .landing-page *::after { scroll-behavior: auto; animation: none !important; transition: none !important; }
+}
+
+.landing-hero-copy { text-wrap: balance; }
+.landing-steps article { border-right: 0; }

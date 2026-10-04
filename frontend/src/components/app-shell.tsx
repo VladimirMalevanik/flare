@@ -10,6 +10,7 @@ import { dataProvider } from "@/lib/data";
 import { Dialog } from "./dialog";
 import { BrandMark } from "./brand-mark";
 import { useI18n } from "@/i18n/provider";
+import { LanguageSelector } from "@/components/language-selector";
 const navigation = [
   { href: "/insights", label: "flares", icon: "insights" },
   { href: "/vault", label: "vault", icon: "vault" },
@@ -91,6 +92,7 @@ function Shell({ children }: { children: ReactNode }) {
         </nav>
       </div>
       <div className="sidebar-footer">
+        <div className="sidebar-language"><span>{t("language")}</span><LanguageSelector /></div>
         <label className="theme-row">
           <Icon name="moon" />
           <span>{t("darkMode")}</span>

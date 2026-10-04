@@ -5,6 +5,7 @@ import { ZipImport } from "./zip-import";
 import { useEffect, useState } from "react";
 import { dataErrorMessage, dataProvider, type GitHubRepository, type Source } from "@/lib/data";
 import { Icon } from "@/components/icons";
+import { Select } from "@/components/select";
 import { useWorkspace } from "@/components/workspace-context";
 
 export function SourcesPage() {
@@ -111,19 +112,19 @@ export function SourcesPage() {
                     <span className="dot" />{label(sourceStatus(source))}
                   </span>
                 </header>
-                <div className="source-scope">
+                {source.id !== "notion" && source.id !== "obsidian" && <div className="source-scope">
                   <p className="eyebrow muted">{source.status === "ready" ? t("AVAILABLE CONTEXT") : t("PRIMARY")}</p>
                   {source.channels.length ? (
                     <div className="tags">{source.channels.map((channel) => <span key={channel}>{source.status === "connected" ? channel : label(channel)}</span>)}</div>
                   ) : source.status === "connected" ? null : <p className="muted">{t("Not available yet.")}</p>}
-                </div>
-                <p className="source-description">{label(source.description)}</p>
-                <p className="muted meta">{source.id === "github" && source.status === "syncing" ? t("authorizedAs", { name: source.accountLogin ?? "GitHub" }) : label(source.updated)}</p>
+                </div>}
+                <p className="source-description">{source.id === "notion" || source.id === "obsidian" ? t("ZIP snapshots with Markdown, TXT and CSV. Files are checked and added together. Analyze runs only when you choose it.") : label(source.description)}</p>
+                {source.id !== "notion" && source.id !== "obsidian" && <p className="muted meta">{source.id === "github" && source.status === "syncing" ? t("authorizedAs", { name: source.accountLogin ?? "GitHub" }) : label(source.updated)}</p>}
                 <footer>
                   {source.id === "notion" || source.id === "obsidian" ? (
                     <>
                       <ZipImport sourceKind={source.id} />
-                      <Link className="button" href={`/settings/import-guides/${source.id}`}>
+                      <Link className="zip-guide-link" href={`/settings/import-guides/${source.id}`}>
                         {t("View import guide")}</Link>
                     </>
                   ) : source.status === "manual-import" ? (
@@ -200,12 +201,14 @@ export function GitHubControls({ source, repositories, selectedRepository, loadi
     return <div className="github-source-controls">
       {loading ? <p className="muted" role="status">{t("Loading repositories…")}</p> : (
         <label className="github-repository-picker">
-          {t("Repository")}{" "}<select value={selectedRepository} onChange={(event) => onSelect(event.target.value)}>
-            <option value="">{t("Select one repository…")}</option>
-            {repositories.map((repository) => (
-              <option key={repository.id} value={repository.id}>{repository.fullName}</option>
-            ))}
-          </select>
+          {t("Repository")}{" "}<Select
+            aria-label={t("Repository")}
+            value={selectedRepository}
+            placeholder={t("Select one repository…")}
+            disabled={action !== "" || repositories.length === 0}
+            onValueChange={onSelect}
+            options={repositories.map((repository) => ({ value: String(repository.id), label: repository.fullName }))}
+          />
         </label>
       )}
       {!loading && repositories.length === 0 && !error && <p className="muted">{t("No accessible repositories found.")}</p>}

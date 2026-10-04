@@ -20,6 +20,7 @@ function load(relative, mocks = {}, globals = {}) {
     if (name === 'react/jsx-runtime') return jsx;
     if (name === 'next/link') return { default: 'a' };
     if (name === '@/components/language-selector') return { LanguageSelector: 'language-selector' };
+    if (name === '@/components/select') return { Select: 'custom-select' };
     if (name === '@/components/brand-mark') return { BrandMark: 'brand-mark' };
     if (name === '@/components/icons') return { Icon: 'icon', itemIcon: { note: 'note' } };
     if (name === '@/components/dialog') return { Dialog: 'dialog' };
@@ -127,11 +128,11 @@ test('shared LanguageSelector exposes supported locales and switches through the
     '@/i18n/provider': i18nMock('es', value => changes.push(value)), '@/i18n/config': loadPure('../src/i18n/config.ts'),
   });
   for (const compact of [true, false]) {
-    const select = nodes(LanguageSelector({ compact })).find(node => node.type === 'select');
+    const select = nodes(LanguageSelector({ compact })).find(node => node.type === 'custom-select');
     assert.equal(select.props.value, 'es');
     assert.equal(select.props['aria-label'], 'Idioma');
-    assert.deepEqual(nodes(select).filter(node => node.type === 'option').map(node => node.props.value), ['en', 'es']);
-    select.props.onChange({ target: { value: 'en' } });
+    assert.deepEqual(Array.from(select.props.options, option => option.value), ['en', 'es']);
+    select.props.onValueChange('en');
   }
   assert.deepEqual(changes, ['en', 'en']);
 });
@@ -149,7 +150,7 @@ test('landing selectors and translated demo retain tab, filter, and evidence sta
   locale = 'es';
   tree = h.render(Home);
   assert.ok(text(tree).includes('Tus notas se quedan en silencio.'));
-  assert.equal(nodes(tree).filter(node => node.type === 'language-selector').length, 2);
+  assert.equal(nodes(tree).filter(node => node.type === 'language-selector').length, 1);
   assert.ok(nodes(tree).some(node => node.props?.className === 'active' && text(node) === 'Riesgos'));
   assert.ok(text(tree).includes('Ocultar evidencia ↑'));
 });

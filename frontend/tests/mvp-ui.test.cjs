@@ -13,6 +13,7 @@ function load(relative, mocks) {
   const exports = {};
   vm.runInNewContext(code, { exports, require: (name) => {
     if (name in mocks) return mocks[name];
+    if (name === '@/components/select') return { Select: 'custom-select' };
     if (name === '@/i18n/provider') return require('./i18n-utils.cjs').i18nMock();
     if (name === '@/features/funny/funny-state') return load('../src/features/funny/funny-state.ts', {});
     if (name === '@/features/funny/funny-sounds') return { playFunnySound() {} };
