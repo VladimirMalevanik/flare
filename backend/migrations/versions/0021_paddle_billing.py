@@ -17,21 +17,55 @@ FUNCTIONS = {
     "_apply_paddle_billing_event(jsonb)": None,
 }
 
+# PostgreSQL 16+ gives a non-superuser role creator this unavoidable inert
+# administrative edge. Bootstrap superuser OID 10 is fixed by PostgreSQL.
+# It grants no inherited/SET privileges and is not an application capability.
+SAFE_EXECUTOR = """
+    NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='flare_billing_executor'
+        AND (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolbypassrls))
+    AND NOT EXISTS(SELECT 1 FROM pg_auth_members
+        WHERE member='flare_billing_executor'::regrole)
+    AND NOT EXISTS(SELECT 1 FROM pg_auth_members
+        WHERE roleid='flare_billing_executor'::regrole
+          AND NOT (member=current_user::regrole AND grantor=10
+                   AND admin_option AND NOT inherit_option AND NOT set_option
+                   AND current_user NOT IN ('flare_app','flare_worker','flare_onboarding')
+                   AND EXISTS(SELECT 1 FROM pg_roles WHERE rolname=current_user
+                              AND NOT rolsuper AND rolcreaterole)))
+"""
+
 
 def upgrade():
     managed = os.getenv("FLARE_DATABASE_PROVIDER") == "yandex"
     owner = "flare_owner" if managed else "flare_billing_executor"
     if not managed:
-        op.execute("""DO $$ BEGIN
+        op.execute("""DO $$ DECLARE previous_self_grant text;
+        BEGIN
+            IF current_user IN ('flare_app','flare_worker','flare_onboarding') THEN
+                RAISE EXCEPTION 'Runtime roles cannot migrate billing';
+            END IF;
             IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='flare_billing_executor') THEN
+                -- Do not let a connection default create an additional effective
+                -- membership. Restore the caller's setting immediately afterwards.
+                previous_self_grant := current_setting('createrole_self_grant');
+                PERFORM set_config('createrole_self_grant','',true);
                 CREATE ROLE flare_billing_executor NOLOGIN NOSUPERUSER NOCREATEDB
                     NOCREATEROLE NOINHERIT NOBYPASSRLS;
+                PERFORM set_config('createrole_self_grant',previous_self_grant,true);
             END IF;
-            IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='flare_billing_executor'
-                AND (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolbypassrls))
-                OR EXISTS(SELECT 1 FROM pg_auth_members
-                    WHERE member='flare_billing_executor'::regrole OR roleid='flare_billing_executor'::regrole) THEN
+            IF NOT (""" + SAFE_EXECUTOR + """) THEN
                 RAISE EXCEPTION 'Unsafe billing executor role';
+            END IF;
+            IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname=current_user AND rolsuper) THEN
+                IF NOT EXISTS(SELECT 1 FROM pg_auth_members
+                    WHERE roleid='flare_billing_executor'::regrole
+                      AND member=current_user::regrole AND grantor=10 AND admin_option) THEN
+                    RAISE EXCEPTION 'Billing migration requires executor administrative authority';
+                END IF;
+                -- Separate grantor record: remove only this temporary grant below.
+                -- INHERIT is required for the owner DDL following OWNER TO; SET
+                -- is required for the ownership transfer itself.
+                EXECUTE format('GRANT flare_billing_executor TO %I WITH ADMIN FALSE, INHERIT TRUE, SET TRUE GRANTED BY %I',current_user,current_user);
             END IF;
         END $$;""")
     op.execute(Path(__file__).resolve().parents[2].joinpath("db/billing.sql").read_text())
@@ -66,6 +100,14 @@ def upgrade():
         op.execute(f"ALTER FUNCTION public.{signature} SET lock_timeout='1s'")
     if not managed:
         op.execute(f"REVOKE CREATE ON SCHEMA public FROM {owner}")
+        op.execute("""DO $$ BEGIN
+            IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname=current_user AND rolsuper) THEN
+                EXECUTE format('REVOKE flare_billing_executor FROM %I GRANTED BY %I',current_user,current_user);
+            END IF;
+            IF NOT (""" + SAFE_EXECUTOR + """) THEN
+                RAISE EXCEPTION 'Unsafe billing executor role after migration';
+            END IF;
+        END $$;""")
 
 
 def downgrade():

@@ -1,0 +1,56 @@
+{
+  "task": "API-002",
+  "date": "2026-10-05",
+  "base_sha": "05f83d417f31afdf5b767089bee98d4e69148838",
+  "source_sha256": {
+    "backend/migrations/versions/0021_paddle_billing.py": "1b6abcbc88f901774b5d161b8b904f2e46d39621c4ebec3f4ae1eb29d9ec0b2a",
+    "backend/scripts/check_billing_restricted_admin.py": "8d30ce479d0ba3c40332613e4a81c5c610f3a5c2d7c38a1db27a6becc2be2d34",
+    "backend/tests/test_billing_database.py": "cb118eb4f2eef72d5bf4ed8258489b7ee84aa3cc29e80608493e239acc0f9df0"
+  },
+  "source_manifest_sha256": "4e6e77cbd4d9ce1b07f9f96099bcf3d76afa6b7d7e0e6a55dbe565ecca4f93d7",
+  "original_failure": {
+    "result": "reproduced",
+    "error": "Unsafe billing executor role",
+    "head_after_rollback": "0020",
+    "no_new_executor_or_billing_objects": true,
+    "log": "/private/tmp/flare-api002-original-failure.log"
+  },
+  "checks": {
+    "restricted_pg17": {
+      "behavioral_cases": 28,
+      "billing_database_tests_passed": 29,
+      "log": "/private/tmp/flare-api002-restricted-final2.log"
+    },
+    "full_self_managed": {
+      "passed": 997,
+      "failed": 0,
+      "warnings": 2,
+      "log": "/private/tmp/flare-api002-full-self-final.log"
+    },
+    "full_managed_owner": {
+      "passed": 996,
+      "skipped": 1,
+      "failed": 0,
+      "warnings": 2,
+      "expected_skip": "self-managed0018 ownership regression",
+      "log": "/private/tmp/flare-api002-full-managed-final.log"
+    },
+    "preserved_data_self_managed": {
+      "result": "PASS",
+      "log": "/private/tmp/flare-api002-preserved-self-final.log"
+    },
+    "preserved_data_managed": {
+      "result": "PASS",
+      "log": "/private/tmp/flare-api002-preserved-managed-final.log"
+    },
+    "python_compile": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "limitations": [
+    "Azure provider-specific administrator behavior requires OPS-002 live preflight; vanillaPG17 fixture does not emulate Azure patches.",
+    "No cloudDDL, secrets, resources, LivePaddle or deployment performed.",
+    "New restricted-role checker is a standalone operator regression command; existing CI runs both complete backend provider suites.",
+    "Experimental whole-suite restricted fixture produced992pass/5fixture-assumption failures; final full suites run on separate clean standard CI fixtures as documented."
+  ],
+  "cleanup": "All temporary Unix-socket-only clusters stopped and removed in finally; logs retained outside repository."
+}
