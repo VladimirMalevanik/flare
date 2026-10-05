@@ -26,6 +26,7 @@ function fixture() {
     if (name === '@/components/language-selector') return { LanguageSelector: 'language-selector' };
     if (name === '@/i18n/provider') return { useI18n: () => ({ t: key => key, label: key => key }) };
     if (name === '@/components/icons') return { Icon: 'icon' };
+    if (name === '@/components/landing-motion') return { LandingMotion: 'landing-motion' };
     // Any network/data dependency would turn an example into a live product action.
     throw new Error(`Unexpected landing dependency: ${name}`);
   } });
@@ -128,4 +129,13 @@ test('landing labels its sample and every rendered action has a real local handl
     if (node.type === 'button') assert.equal(typeof node.props.onClick, 'function');
     if (node.type === 'a') assert.ok(node.props.href?.startsWith('/') || node.props.href?.startsWith('#'));
   }
+});
+
+test('restored landing explains the outcome, evidence and memory without invented integration claims', () => {
+  const tree = fixture().render();
+  for (const expected of ["Less time reconstructing what happened.", "More time deciding what happens next.",
+    "A workspace that shows its reasoning.", "Links every signal to evidence", "Decisions, interviews, and research in one Vault.",
+    "Editable notes and sources", "Exportable workspace data"]) assert.ok(text(tree).includes(expected), expected);
+  assert.equal(nodes(tree).filter(node => node.type === 'landing-motion').length, 1);
+  assert.doesNotMatch(text(tree), /148|automatically synced|live sync|04 \/|05 \/|06 \//);
 });

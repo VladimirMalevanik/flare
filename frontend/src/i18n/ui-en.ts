@@ -1,4 +1,10 @@
 export const uiEn = {
+  "Pause animations": "Pause animations",
+  "Resume animations": "Resume animations",
+  "Your saved context": "Your saved context",
+  "Decisions, interviews, and research in one Vault.": "Decisions, interviews, and research in one Vault.",
+  "A separate workspace for your team": "A separate workspace for your team",
+  "Editable notes and sources": "Editable notes and sources",
   "01 / THE WORKFLOW": "01 / THE WORKFLOW",
   "02 / YOUR SOURCES": "02 / YOUR SOURCES",
   "03 / THE PRINCIPLE": "03 / THE PRINCIPLE",
