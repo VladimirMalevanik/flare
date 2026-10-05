@@ -4,6 +4,8 @@ From backend/: python scripts/check_flares_migration.py --pg-bin /path/to/postgr
 Never connects to an existing database; requires a non-root OS user for initdb.
 """
 import argparse
+from datetime import datetime
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -13,6 +15,36 @@ from uuid import uuid4
 
 import psycopg
 from psycopg.conninfo import make_conninfo
+
+
+def assert_head_preserved(tables, before, after):
+    """Keep every original row/column, allowing the explicit 0015 legacy fence.
+
+    This fixture has no analysis_runs. Migration 0015 intentionally fails its
+    unfinished generation rows; completed history must remain unchanged. New
+    columns are additive and must not invalidate comparison of original data.
+    """
+    for table, old_rows, new_rows in zip(tables, before, after, strict=True):
+        assert len(old_rows) == len(new_rows), table
+        if not old_rows:
+            continue
+        columns = old_rows[0][0].keys()
+        expected = []
+        by_id = {row["id"]: row for (row,) in new_rows} if table == 'flare_generation_runs' else {}
+        for (old,) in old_rows:
+            row = dict(old)
+            if table == 'flare_generation_runs' and old['status'] in ('pending', 'processing'):
+                current = by_id[old['id']]
+                for column in ('completed_at', 'updated_at'):
+                    assert current[column] is not None, (table, column)
+                    assert datetime.fromisoformat(current[column]) >= datetime.fromisoformat(old['updated_at'])
+                row.update(status='failed', last_error_code='generation_mismatch',
+                           metadata=None, flare_ids=None, lease_owner=None,
+                           lease_token=None, lease_expires_at=None,
+                           completed_at=current['completed_at'], updated_at=current['updated_at'])
+            expected.append(json.dumps(row, sort_keys=True))
+        actual = [json.dumps({key: row[key] for key in columns}, sort_keys=True) for (row,) in new_rows]
+        assert sorted(actual) == sorted(expected), table
 
 
 def main(*, verify_analysis_runs=False):
@@ -130,8 +162,9 @@ def main(*, verify_analysis_runs=False):
                 run(migrate + ['head'], env=env)
                 run(migrate + ['head'], env=env)
                 with psycopg.connect(dsn) as conn:
-                    assert snapshot(conn) == preserved
-                    assert conn.execute('SELECT version_num FROM alembic_version').fetchone() == ('0019',)
+                    assert conn.execute('SELECT count(*) FROM analysis_runs').fetchone() == (0,)
+                    assert_head_preserved(tables, preserved, snapshot(conn))
+                    assert conn.execute('SELECT version_num FROM alembic_version').fetchone() == ('0021',)
                     assert conn.execute('SELECT count(*) FROM github_connection_states').fetchone() == (0,)
                     assert conn.execute('SELECT count(*) FROM github_connections').fetchone() == (0,)
                     assert conn.execute('SELECT count(*) FROM activity_events').fetchone() == (0,)
@@ -161,7 +194,7 @@ def main(*, verify_analysis_runs=False):
                     assert not conn.execute(
                         "SELECT has_table_privilege('flare_worker','analysis_chunk_selection_history','SELECT')"
                     ).fetchone()[0]
-                print(f'PASS ({args.provider}): 0007 -> 0019; all existing data preserved; repeat upgrade; email, GitHub, analytics, import provenance, daily-analysis RLS, legal acceptance and worker isolation')
+                print(f'PASS ({args.provider}): 0007 -> 0021; original content/completed history preserved; explicit 0015 legacy generation fence; repeat upgrade; email, GitHub, analytics, import provenance, daily-analysis RLS, legal acceptance and worker isolation')
             print(f'PASS ({args.provider}): 0005 -> 0006; eleven tables preserved; historical ordinals preserved; repeat startup; legacy identity/RLS; old-parent enqueue; atomic handoff')
         finally:
             run([binary('pg_ctl'), '-D', data, '-m', 'fast', '-w', 'stop'])

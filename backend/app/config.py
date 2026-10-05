@@ -31,6 +31,19 @@ class Settings:
     app_public_url: str | None = None
     smtp_url: str | None = field(default=None, repr=False)
     email_from: str | None = None
+    paddle_environment: str = "sandbox"
+    paddle_pro_price_id: str | None = None
+    paddle_webhook_secret: str | None = field(default=None, repr=False)
+
+    @property
+    def paddle_billing_enabled(self) -> bool:
+        return bool(
+            self.paddle_environment == "sandbox"
+            and self.paddle_pro_price_id
+            and re.fullmatch(r"pri_[a-z0-9]{26}", self.paddle_pro_price_id)
+            and self.paddle_webhook_secret
+            and self.paddle_webhook_secret.strip()
+        )
 
     def __post_init__(self) -> None:
         if self.email_verification_required is None:
@@ -45,6 +58,10 @@ class Settings:
         return "__Host-flare_session" if self.secure_cookies else "flare_session"
 
     def validate(self) -> None:
+        if self.paddle_environment != "sandbox":
+            raise RuntimeError("Paddle billing supports Sandbox only")
+        if self.paddle_pro_price_id and not re.fullmatch(r"pri_[a-z0-9]{26}", self.paddle_pro_price_id):
+            raise RuntimeError("PADDLE_PRO_PRICE_ID is invalid")
         if self.environment not in {"production", "development", "test"}:
             raise RuntimeError("FLARE_ENV must be production, development or test")
         if self.dev_mode and self.environment == "production":
@@ -155,6 +172,9 @@ def load_settings() -> Settings:
         app_public_url=os.getenv("APP_PUBLIC_URL"),
         smtp_url=os.getenv("SMTP_URL"),
         email_from=os.getenv("EMAIL_FROM"),
+        paddle_environment=os.getenv("PADDLE_ENVIRONMENT", "sandbox"),
+        paddle_pro_price_id=os.getenv("PADDLE_PRO_PRICE_ID"),
+        paddle_webhook_secret=os.getenv("PADDLE_WEBHOOK_SECRET"),
     )
     if configured.dev_mode:
         configured.require_dev_identity()
