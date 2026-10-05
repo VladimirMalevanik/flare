@@ -2,9 +2,9 @@
 
 > Этот файл генерирует `task-sync`; вручную его не редактируют.
 
-Сформировано: `2026-10-05T12:36:22Z`
-Последнее обновление работы: `2026-10-05T12:36:22Z`
-Снимок состояния: `sha256:9e46e5956aaba10a7595b0c6c2b9083079f85b9a48142deaa2515525711739e6`
+Сформировано: `2026-10-05T12:37:24Z`
+Последнее обновление работы: `2026-10-05T12:37:24Z`
+Снимок состояния: `sha256:12f1bf1b5aad8955afb53c60f756eecdb6ad091d3ffa993485283b917eb64551`
 
 ## Ближайшая цель
 
@@ -14,14 +14,14 @@
 
 ## Ближайшие шаги (не более пяти)
 
-1. `WEB-005` (в работе) — YouGile MAR-61: restore useful original landing information and the Vault orbit illustration, preserve accepted upper navigation, hero wording and Flare palette, and add reference-grounded high-quality motion inspired by the supplied Componentry, Motion, Anime.js, SVGator, Aceternity, Refero, Jitter, Iconsax and Webild sources. Deliver an isolated local preview and reviewable tested branch. No main merge, public deployment, dependency changes, paid accounts, provider calls or foreign tasks.. Сейчас: Restore approved landing content and design reference-grounded motion in an isolated local branch
+1. `WEB-005` (в работе) — YouGile MAR-61: restore useful original landing information and the Vault orbit illustration, preserve accepted upper navigation, hero wording and Flare palette, and add reference-grounded high-quality motion inspired by the supplied Componentry, Motion, Anime.js, SVGator, Aceternity, Refero, Jitter, Iconsax and Webild sources. Deliver an isolated local preview and reviewable tested branch. No main merge, public deployment, dependency changes, paid accounts, provider calls or foreign tasks.. Сейчас: Implement restored Vault, outcome, comparison and context sections with SVG orbits, section reveals and annotations
 2. `API-001` (на проверке) — Implement Paddle Sandbox signed webhooks, durable ordered/deduplicated subscription state and authoritative workspace-wide Pro entitlement during trialing/active subscriptions. Add authenticated server-bound checkout intents, tenant-safe persistence, truthful Subscription status refresh and backend/frontend regression/security tests. Preserve auth, design, daily Analyze limits and Sandbox-only checkout. No Live, cancellation portal, new premium quota policy, production secret access or deployment.. Условие: Review PR36 at319a91de9f38ebbfa406fd92ad77c12b1415786c: signed Paddle Sandbox webhooks, durable workspace subscription state and Pro entitlement for all members. Matching0021/API/web rollout and Sandbox endpoint-secret setup plus real delivery smoke remain separate activation; no Live or deployment performed.; зависит от: GROWTH-002
 3. `WEB-002` (на проверке) — Add a Subscription section to Settings with Free, Pro and Team descriptions; grey Current for the current Free tier and blue Buy actions. Connect Pro Buy to official Paddle.js Sandbox overlay using public env placeholders and price pri_01m3y1nvmgw2avt60bz87161c2, quantity 1, authenticated email and customData.userId. Enforce sandbox-only tokens, single initialization and checkout locking, localized recoverable errors, existing design/auth preservation and frontend checks. Team stays explicitly unconfigured until a separate Sandbox price exists. No Live, server API key, webhooks, entitlement/DB changes, portal, cancellation or deployment.. Условие: Owner requested merge and deployment on 2026-10-02. PR32 merged and deployed to https://flare4u.tech/settings; Paddle remains Sandbox. Actual signed-in checkout/trial/payment verification is pending a Flare session; no paid access or plan DB changes.
 4. `OPS-001` (на проверке) — Resolve production staging service/upload path, API-worker storage reachability, worker isolation/resources, storage identity/network/CORS, physical ZIP deletion/retention and monitoring/load-test environment. Publish dated redacted operator decisions/evidence; no provisioning. Contract: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#ops-001.. Условие: Review redacted runtime/staging decision and evidence record; Vova selection/acceptance and sanitized inventory remain pending. Do not mark done or authorize rollout from public probes.
 
 ## В работе
 
-- `WEB-005` (в работе) — YouGile MAR-61: restore useful original landing information and the Vault orbit illustration, preserve accepted upper navigation, hero wording and Flare palette, and add reference-grounded high-quality motion inspired by the supplied Componentry, Motion, Anime.js, SVGator, Aceternity, Refero, Jitter, Iconsax and Webild sources. Deliver an isolated local preview and reviewable tested branch. No main merge, public deployment, dependency changes, paid accounts, provider calls or foreign tasks.. Сейчас: Restore approved landing content and design reference-grounded motion in an isolated local branch; владелец: Fedor / Codex Design / WEB-005
+- `WEB-005` (в работе) — YouGile MAR-61: restore useful original landing information and the Vault orbit illustration, preserve accepted upper navigation, hero wording and Flare palette, and add reference-grounded high-quality motion inspired by the supplied Componentry, Motion, Anime.js, SVGator, Aceternity, Refero, Jitter, Iconsax and Webild sources. Deliver an isolated local preview and reviewable tested branch. No main merge, public deployment, dependency changes, paid accounts, provider calls or foreign tasks.. Сейчас: Implement restored Vault, outcome, comparison and context sections with SVG orbits, section reveals and annotations; владелец: Fedor / Codex Design / WEB-005
 
 ## На проверке
 
@@ -39,4 +39,4 @@
 
 ## Предупреждения
 
-- WEB-005: ещё не записаны опубликованная ветка и область файлов.
+Нет.
