@@ -338,7 +338,16 @@ def test_runtime_privileges_fail_closed_and_readiness_checks_current_schema(bill
         assert billing.query("SELECT has_function_privilege('public',%s,'EXECUTE')", (function,)) == [(False,)]
     if owner == "flare_billing_executor":
         assert billing.query("SELECT rolcanlogin,rolsuper,rolbypassrls,rolinherit FROM pg_roles WHERE rolname=%s", (owner,)) == [(False,False,False,False)]
-        assert billing.query("SELECT count(*) FROM pg_auth_members WHERE member=%s::regrole OR roleid=%s::regrole", (owner,owner)) == [(0,)]
+        assert billing.query("""SELECT count(*) FROM pg_auth_members m
+            WHERE member=%s::regrole OR (roleid=%s::regrole AND NOT (
+                grantor=10 AND admin_option AND NOT inherit_option AND NOT set_option
+                AND member=(SELECT relowner FROM pg_class WHERE oid='public.billing_subscriptions'::regclass)
+                AND EXISTS(SELECT 1 FROM pg_roles r WHERE r.oid=m.member
+                    AND r.rolcreaterole AND NOT r.rolsuper
+                    AND r.rolname NOT IN ('flare_app','flare_worker','flare_onboarding'))))""", (owner,owner)) == [(0,)]
+        for runtime_role in ('flare_app','flare_worker','flare_onboarding'):
+            assert billing.query("SELECT pg_has_role(%s,%s,'USAGE'),pg_has_role(%s,%s,'SET')",
+                (runtime_role,owner,runtime_role,owner)) == [(False,False)]
 
 
 def test_capability_restores_context_and_ignores_temp_table_shadowing(billing):
