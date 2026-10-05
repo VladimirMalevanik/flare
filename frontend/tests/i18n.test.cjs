@@ -23,6 +23,7 @@ function load(relative, mocks = {}, globals = {}) {
     if (name === '@/components/select') return { Select: 'custom-select' };
     if (name === '@/components/brand-mark') return { BrandMark: 'brand-mark' };
     if (name === '@/components/icons') return { Icon: 'icon', itemIcon: { note: 'note' } };
+    if (name === '@/components/landing-motion') return { LandingMotion: 'landing-motion' };
     if (name === '@/components/dialog') return { Dialog: 'dialog' };
     if (name === '@/features/funny/funny-state') return loadPure('../src/features/funny/funny-state.ts');
     if (name === '@/features/funny/funny-sounds') return { playFunnySound() {}, speakFunnyLine() {}, stopFunnySounds() {} };

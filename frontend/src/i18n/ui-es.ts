@@ -1,6 +1,12 @@
 import type { uiEn } from "./ui-en";
 
 export const uiEs = {
+  "Pause animations": "Pausar animaciones",
+  "Resume animations": "Reanudar animaciones",
+  "Your saved context": "Tu contexto guardado",
+  "Decisions, interviews, and research in one Vault.": "Decisiones, entrevistas e investigaciones en un solo Vault.",
+  "A separate workspace for your team": "Un espacio separado para tu equipo",
+  "Editable notes and sources": "Notas y fuentes editables",
   "01 / THE WORKFLOW": "01 / CÓMO FUNCIONA",
   "02 / YOUR SOURCES": "02 / TUS FUENTES",
   "03 / THE PRINCIPLE": "03 / EL PRINCIPIO",
