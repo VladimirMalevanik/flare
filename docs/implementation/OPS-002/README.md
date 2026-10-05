@@ -90,6 +90,25 @@ prepare and verify a same-schema application fallback, or obtain a concrete
 authorized and tested database recovery plan. No such restoration was performed
 and no database recovery permission or successful restore is inferred here.
 
+Read-only comparison identified a candidate for temporary core-service recovery:
+pin legacy `8679d075ea973d2d8ca63e178591fb520642412e` API/worker/web while retaining
+the complete accepted `453ebec4b6592d1e089a3f5d04da0f35a78a4f09`
+`backend/app/models/database.py`. This preserves current schema, RLS and private
+ledger capability checks; changing only the legacy revision constant is rejected.
+Existing analysis SQL/worker contracts are unchanged, and legacy auth uses explicit
+columns compatible with the additive migrations. This is source-level evidence,
+not a tested or publishable fallback artifact. Billing, ZIP import and new
+privacy/growth interfaces would be temporarily unavailable, and verification
+provenance would be incomplete. A matching legacy web is required to stop checkout.
+
+Before accepting that candidate, run it under restricted API/worker roles against
+disposable PostgreSQL17 upgraded from preserved0018 data through the accepted0021
+migration. Verify verified-email registration/login and existing sessions, workspace
+isolation, notes/text import/export, queued analysis/scheduler/daily quota, pending
+ZIP invisibility, and rejection of deliberately exposed billing ledger permissions.
+Pin all package hashes, leave schema/data at0021, and verify Sandbox replay after
+returning to the current release. No candidate code was edited or deployed here.
+
 Direct local database access timed out, and the older SSH tunnel returned403.
 The official App Service execute path completed the read-only catalog query; no
 firewall, TLS or access policy was loosened. Temporary probe source/output contain
