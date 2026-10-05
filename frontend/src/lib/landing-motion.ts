@@ -4,7 +4,6 @@ export function attachLandingMotion(root: HTMLElement, view: Window = window) {
   const media = view.matchMedia("(prefers-reduced-motion: reduce)");
   const animations = new Set<Animation>();
   const revealed = new WeakSet<Element>();
-  let paused = false;
   let disposed = false;
 
   function cancelAnimations() {
@@ -13,14 +12,14 @@ export function attachLandingMotion(root: HTMLElement, view: Window = window) {
   }
 
   function refresh() {
-    root.dataset.motion = media.matches ? "reduced" : paused || doc.hidden ? "paused" : "running";
-    if (media.matches || paused || doc.hidden) cancelAnimations();
+    root.dataset.motion = media.matches ? "reduced" : doc.hidden ? "paused" : "running";
+    if (media.matches || doc.hidden) cancelAnimations();
   }
 
   function reveal(element: HTMLElement) {
     if (revealed.has(element)) return;
     revealed.add(element);
-    if (media.matches || paused || doc.hidden || typeof element.animate !== "function") return;
+    if (media.matches || doc.hidden || typeof element.animate !== "function") return;
     const annotation = element.matches("[data-motion-annotation]");
     const frames = annotation
       ? [{ strokeDashoffset: "1", opacity: 0.2 }, { strokeDashoffset: "0", opacity: 1 }]
@@ -60,11 +59,6 @@ export function attachLandingMotion(root: HTMLElement, view: Window = window) {
   refresh();
 
   return {
-    setPaused(value: boolean) {
-      if (disposed) return;
-      paused = value;
-      refresh();
-    },
     dispose() {
       if (disposed) return;
       disposed = true;

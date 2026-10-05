@@ -25,6 +25,10 @@ All nine user links were read with web tools. Componentry sources and licenses w
 
 Keep native scrolling. Vault spheres orbit slowly with upright labels; blue ribbon moves only in its bounded outcome section. One-time clip/opacity reveals and one underline add hierarchy. Loops require an accessible pause/resume control, pause outside view and in hidden tabs, and stay static with reduced motion. No-JS content and illustration remain complete. No per-frame JavaScript layout reads. Clean up observers, media/visibility listeners and active Web Animations on unmount.
 
+### Fedor review follow-up, 2026-10-05
+
+Fedor approved the overall direction and requested three narrow adjustments. Sphere centers must follow the visible orbital paths: labels cannot participate in anchor dimensions. Widen the shared ring/track radii slightly while reserving space at narrow widths. Remove the visible animation pause control at Fedor's explicit request; that overrides the earlier control decision. Preserve reduced-motion, offscreen/hidden-tab pausing and cleanup. Make the outcome ribbon more dynamic by shortening each direction from 18 to 8 seconds with a modestly wider transform range. Navigation, hero, content and palette remain locked.
+
 ## Verification target
 
 Frontend tests, lint, type/build; compare accepted nav/hero; EN/ES mobile and desktop; keyboard controls and sample evidence; motion pause/resume, reduced motion, observer cleanup and fallback. Local preview only; no main merge or deployment until Fedor accepts this iteration.

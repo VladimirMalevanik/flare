@@ -79,6 +79,7 @@ export default function Home() {
 
   return (
     <main className="landing-page" id="top">
+      <LandingMotion />
       <header className="landing-nav-shell" onKeyDown={(event) => { if (event.key === "Escape" && menuOpen) { closeMenu(); event.currentTarget.querySelector<HTMLButtonElement>(".landing-menu-button")?.focus(); } }}>
         <div className="landing-container landing-nav">
           <Link className="landing-brand" href="/" aria-label={t("Flare home")}>
@@ -319,7 +320,7 @@ export default function Home() {
               </div>
               <div className="landing-vault-center"><BrandMark size={40} /><strong>Vault</strong><small>{t("Your saved context")}</small></div>
             </div>
-            <figcaption><span>{t("Decisions, interviews, and research in one Vault.")}</span><LandingMotion /></figcaption>
+            <figcaption>{t("Decisions, interviews, and research in one Vault.")}</figcaption>
           </figure>
         </div>
       </section>

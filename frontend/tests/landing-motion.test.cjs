@@ -59,12 +59,10 @@ test('section reveals run once and loops follow actual viewport visibility', () 
   f.enter(f.annotation); assert.equal(f.animations.length, 2);
 });
 
-test('pause, hidden tab and live reduced-motion changes cancel transient animations and stop loops', () => {
+test('hidden tab and live reduced-motion changes cancel transient animations and stop loops', () => {
   const f = fixture(); f.enter(f.reveal);
-  f.controller.setPaused(true);
-  assert.equal(f.root.dataset.motion, 'paused'); assert.equal(f.animations[0].canceled, true);
-  f.controller.setPaused(false); assert.equal(f.root.dataset.motion, 'running');
   f.visibility(true); assert.equal(f.root.dataset.motion, 'paused');
+  assert.equal(f.animations[0].canceled, true);
   f.visibility(false); assert.equal(f.root.dataset.motion, 'running');
   f.enter(f.annotation); f.preference(true);
   assert.equal(f.root.dataset.motion, 'reduced'); assert.equal(f.animations[1].canceled, true);
@@ -83,7 +81,7 @@ test('unmount disconnects everything, cancels running animations and makes a lat
   const f = fixture(); f.enter(f.loop); f.enter(f.reveal); f.controller.dispose();
   assert.equal(f.io.disconnected, true); assert.equal(f.mediaListeners.size, 0); assert.equal(f.docListeners.size, 0);
   assert.equal(f.animations[0].canceled, true); assert.equal(f.root.dataset.motion, undefined); assert.equal(f.loop.dataset.inView, undefined);
-  f.controller.setPaused(false); f.controller.dispose();
+  f.controller.dispose();
   f.enter(f.loop); f.enter(f.annotation);
   assert.equal(f.animations.length, 1, 'queued observer delivery after unmount cannot start work');
   assert.equal(f.loop.dataset.inView, undefined);
