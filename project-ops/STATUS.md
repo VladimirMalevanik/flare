@@ -2,9 +2,9 @@
 
 > Этот файл генерирует `task-sync`; вручную его не редактируют.
 
-Сформировано: `2026-10-05T14:26:22Z`
-Последнее обновление работы: `2026-10-05T14:19:36Z`
-Снимок состояния: `sha256:b4e41cd6a0ab366b8811c22cf7ae4fcd9e01e82c7cf905021a48a2ac6a8c21a5`
+Сформировано: `2026-10-05T14:35:14Z`
+Последнее обновление работы: `2026-10-05T14:35:14Z`
+Снимок состояния: `sha256:ece5fe25728a10e25ddbb05e1873f3cc54fe71765ac29eb05cb56c80708eba66`
 
 ## Ближайшая цель
 
@@ -18,6 +18,7 @@
 2. `API-001` (на проверке) — Implement Paddle Sandbox signed webhooks, durable ordered/deduplicated subscription state and authoritative workspace-wide Pro entitlement during trialing/active subscriptions. Add authenticated server-bound checkout intents, tenant-safe persistence, truthful Subscription status refresh and backend/frontend regression/security tests. Preserve auth, design, daily Analyze limits and Sandbox-only checkout. No Live, cancellation portal, new premium quota policy, production secret access or deployment.. Условие: Review PR36 at319a91de9f38ebbfa406fd92ad77c12b1415786c: signed Paddle Sandbox webhooks, durable workspace subscription state and Pro entitlement for all members. Matching0021/API/web rollout and Sandbox endpoint-secret setup plus real delivery smoke remain separate activation; no Live or deployment performed.; зависит от: GROWTH-002
 3. `WEB-002` (на проверке) — Add a Subscription section to Settings with Free, Pro and Team descriptions; grey Current for the current Free tier and blue Buy actions. Connect Pro Buy to official Paddle.js Sandbox overlay using public env placeholders and price pri_01m3y1nvmgw2avt60bz87161c2, quantity 1, authenticated email and customData.userId. Enforce sandbox-only tokens, single initialization and checkout locking, localized recoverable errors, existing design/auth preservation and frontend checks. Team stays explicitly unconfigured until a separate Sandbox price exists. No Live, server API key, webhooks, entitlement/DB changes, portal, cancellation or deployment.. Условие: Owner requested merge and deployment on 2026-10-02. PR32 merged and deployed to https://flare4u.tech/settings; Paddle remains Sandbox. Actual signed-in checkout/trial/payment verification is pending a Flare session; no paid access or plan DB changes.
 4. `OPS-001` (на проверке) — Resolve production staging service/upload path, API-worker storage reachability, worker isolation/resources, storage identity/network/CORS, physical ZIP deletion/retention and monitoring/load-test environment. Publish dated redacted operator decisions/evidence; no provisioning. Contract: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#ops-001.. Условие: Review redacted runtime/staging decision and evidence record; Vova selection/acceptance and sanitized inventory remain pending. Do not mark done or authorize rollout from public probes.
+5. `API-002` (будем брать) — Unblock authorized OPS-002 Sandbox rollout by making migration0021 compatible with PostgreSQL17 NOSUPERUSER CREATEROLE administrators. Permit only the documented inert automatic bootstrap admin edge, keep unsafe executor attributes/memberships and runtime capabilities rejected, scope any temporary ownership privilege to migration transaction and clean it up. Add meaningful disposable PG17 restricted-admin migration, repeat-upgrade, RLS and rejection/rollback tests and document compatibility. No cloudDDL, secret access, Live Paddle, new quotas or unrelated product changes.. Условие: Start from accepted fresh main after read-only production preflight found schema0018/self-managed and source review proved0021 rejects PG17 automatic ADMIN-only creator membership. OPS-002 holds deployment until this compatibility fix is reviewed and accepted.
 
 ## В работе
 
