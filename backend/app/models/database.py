@@ -225,10 +225,19 @@ class Database:
         identity: WorkspaceIdentity,
         *,
         write: bool = False,
+        snapshot: bool = False,
     ) -> Iterator[Connection]:
         """Select one workspace locally, verify membership, then yield a transaction."""
+        if snapshot and write:
+            raise ValueError("A workspace snapshot is read-only")
         with self._pool.connection() as connection:
             with connection.transaction():
+                if snapshot:
+                    # Establish the snapshot before context/membership reads;
+                    # SET TRANSACTION leaves the pooled session default intact.
+                    connection.execute(
+                        "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
+                    )
                 connection.execute(
                     "SELECT set_config('app.workspace_id', %s, true), set_config('app.user_id', %s, true)",
                     (str(identity.workspace_id), identity.user_id),
