@@ -1,0 +1,60 @@
+{
+  "release_sha": "453ebec4b6592d1e089a3f5d04da0f35a78a4f09",
+  "activation_complete": false,
+  "accepted_pull_requests": {
+    "36": "f62bc3f43b739bfd1f91b9630553f3f989fef52d",
+    "40": "e6b831cc51ce80e517490c25327fb0a88559efcd",
+    "41": "453ebec4b6592d1e089a3f5d04da0f35a78a4f09"
+  },
+  "ci": {
+    "integrated_main_run": 37329909083,
+    "integrated_main_result": "success",
+    "release_package_run": 37330253646,
+    "release_package_result": "success"
+  },
+  "release": {
+    "tag": "azure-453ebec4b659",
+    "url": "https://github.com/VladimirMalevanik/flare/releases/tag/azure-453ebec4b659",
+    "archives": {
+      "flare-backend.zip": {
+        "sha256": "cf1e6f1071d36c3e0bf947c775771599aa23b7ebbb541e3bdd2a8bbe232416f3",
+        "size_bytes": 25686911,
+        "published_digest_and_sidecar_verified": true,
+        "zip_crc_verified": true,
+        "release_sha_verified": true,
+        "required_files_verified": true
+      },
+      "flare-web.zip": {
+        "sha256": "a28c72125cef479fcff33240b7c683c14257d5fb900aa78001568f34f0940a8a",
+        "size_bytes": 24473043,
+        "published_digest_and_sidecar_verified": true,
+        "zip_crc_verified": true,
+        "release_sha_verified": true,
+        "required_files_verified": true
+      }
+    }
+  },
+  "read_only_azure_preflight": {
+    "database_revision": "0018",
+    "database_provider": "self-managed",
+    "postgresql_major_version": 17,
+    "backup_retention_days": 7,
+    "restore_test_performed": false,
+    "api_worker_web_running": true,
+    "private_current_archives_captured_and_verified": true,
+    "email_verification_preserved": true,
+    "runtime_roles_not_expanded": true,
+    "temporary_cloud_probes_removed": true,
+    "local_migration_credential_copy_removed": true
+  },
+  "pending": [
+    "Operator login to the Paddle Sandbox account containing Flare Pro",
+    "Executable recovery plan for forward-only migration0021",
+    "Sandbox notification destination and server-only endpoint secret",
+    "Controlled exact-source cloud migration and coordinated deployment",
+    "Real Sandbox checkout, delivery and workspace entitlement lifecycle smoke"
+  ],
+  "production_migration_performed": false,
+  "azure_deployment_performed": false,
+  "paddle_live_used": false
+}
