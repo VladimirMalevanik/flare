@@ -23,7 +23,7 @@ export function attachLandingMotion(root: HTMLElement, view: Window = window) {
     if (media.matches || paused || doc.hidden || typeof element.animate !== "function") return;
     const annotation = element.matches("[data-motion-annotation]");
     const frames = annotation
-      ? [{ transform: "scaleX(0)", opacity: 0.2 }, { transform: "scaleX(1)", opacity: 1 }]
+      ? [{ strokeDashoffset: "1", opacity: 0.2 }, { strokeDashoffset: "0", opacity: 1 }]
       : [{ opacity: 0.2, transform: "translateY(22px)", clipPath: "inset(0 0 28% 0)" },
         { opacity: 1, transform: "translateY(0)", clipPath: "inset(0 0 0% 0)" }];
     const animation = element.animate(frames, {

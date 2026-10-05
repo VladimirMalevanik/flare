@@ -347,7 +347,7 @@ export default function Home() {
             <article><span>{t("Typical notes")}</span><p>{t("Store information")}</p><p>{t("Rely on folders")}</p><p>{t("Wait for you to remember")}</p></article>
             <article className="landing-difference-flare"><span><BrandMark size={18} /> Flare</span><p>{t("Connects information")}</p>
               <p><span className="landing-annotation">{t("Links every signal to evidence")}
-                <svg viewBox="0 0 400 12" preserveAspectRatio="none" aria-hidden="true" data-motion-annotation><path d="M2 8Q190 0 398 6" /></svg>
+                <svg viewBox="0 0 400 12" preserveAspectRatio="none" aria-hidden="true"><path d="M2 8Q190 0 398 6" pathLength="1" data-motion-annotation /></svg>
               </span></p><p>{t("Brings forgotten context back")}</p></article>
           </div>
         </div>
