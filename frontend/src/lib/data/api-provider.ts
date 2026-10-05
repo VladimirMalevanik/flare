@@ -444,8 +444,8 @@ export class ApiDataProvider implements FlareDataProvider {
     }));
   }
 
-  async getDailyAnalysisStatus(): Promise<DailyAnalysisStatus> {
-    return mapDailyAnalysisStatus(await this.request("/analysis/daily-status"));
+  async getDailyAnalysisStatus(signal?: AbortSignal): Promise<DailyAnalysisStatus> {
+    return mapDailyAnalysisStatus(await this.request("/analysis/daily-status", { signal }));
   }
 
   async listSources(): Promise<Source[]> {

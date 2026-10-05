@@ -44,7 +44,7 @@ export function AnalyzeAction() {
       let nextDelay = 60_000;
       request = new AbortController();
       try {
-        const value = await withRequestDeadline(() => dataProvider.getDailyAnalysisStatus(), request);
+        const value = await withRequestDeadline(() => dataProvider.getDailyAnalysisStatus(request?.signal), request);
         if (!live) return;
         if (dailyRunChanged(dailyRef.current, value)) {
           controller.current?.reset();

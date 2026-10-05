@@ -170,7 +170,7 @@ test('the initial daily status deadline releases Analyze and cleanup suppresses 
   for (const unmount of [false, true]) {
     const timer = clock(), state = [], effects = [], cleanups = [], deps = [];
     const ritual = { phase: 'idle', requestId: 0, shakes: 0 };
-    let cursor = 0, starts = 0, finish;
+    let cursor = 0, starts = 0, finish, statusSignal;
     const jsx = { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
     const load = modules(timer, {
       'react/jsx-runtime': jsx,
@@ -184,7 +184,7 @@ test('the initial daily status deadline releases Analyze and cleanup suppresses 
       '@/components/auth-session': { useSession: () => ({ workspace: { role: 'owner' } }) },
       '@/components/workspace-context': { useWorkspace: () => ({ refresh() {}, captureOpen: false, funnyMode: false,
         funnyRitual: ritual, setFunnyRitual() {} }) },
-      '@/lib/data': { dataProviderMode: 'api', dataProvider: { getDailyAnalysisStatus: () => new Promise(resolve => { finish = resolve; }) } },
+      '@/lib/data': { dataProviderMode: 'api', dataProvider: { getDailyAnalysisStatus: signal => { statusSignal = signal; return new Promise(resolve => { finish = resolve; }); } } },
       './analyze-controller': { AnalyzeController: class { start() { starts++; } dispose() {} reset() {} } },
       '@/features/funny/funny-state': { consumeFunnyRequest: () => null, funnyMessage: () => '', REQUIRED_SHAKES: 3 },
       '@/features/funny/funny-sounds': { playFunnySound() {}, speakFunnyLine() {} },
@@ -197,6 +197,7 @@ test('the initial daily status deadline releases Analyze and cleanup suppresses 
     if (unmount) { for (const cleanup of cleanups) cleanup(); assert.equal(timer.timers.size, 0); }
     else { timer.tick(30_000); await settle(); assert.equal(button().props.disabled, false);
       button().props.onClick(); assert.equal(starts, 1); }
+    assert.equal(statusSignal.aborted, true, 'the underlying status request receives cancellation');
     const snapshot = JSON.stringify(state);
     finish({ state: 'scheduled', canRequestToday: false, timezone: 'UTC' }); await settle();
     assert.equal(JSON.stringify(state), snapshot);

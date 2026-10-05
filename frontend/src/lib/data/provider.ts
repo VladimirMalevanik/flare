@@ -49,7 +49,7 @@ export interface FlareDataProvider {
     timezone: string;
     localTime: string;
   }): Promise<AnalysisSchedule>;
-  getDailyAnalysisStatus(): Promise<DailyAnalysisStatus>;
+  getDailyAnalysisStatus(signal?: AbortSignal): Promise<DailyAnalysisStatus>;
   listSources(): Promise<Source[]>;
   saveSource(source: Source): Promise<Source>;
   getGitHubConnection(): Promise<GitHubConnection>;
