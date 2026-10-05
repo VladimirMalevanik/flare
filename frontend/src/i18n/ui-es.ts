@@ -639,6 +639,7 @@ export const uiEs = {
   "Voice transcription failed. Try again.": "No se pudo transcribir el audio. Inténtalo de nuevo.",
   "Your acceptance could not be saved. Please retry.": "No se pudo guardar tu aceptación. Inténtalo de nuevo.",
   "Your recent items could not be loaded.": "No se pudieron cargar tus elementos recientes.",
+  "Recent Flares could not be loaded. Try again.": "No se pudieron cargar los Flares recientes. Inténtalo de nuevo.",
   "Write note": "Escribir nota",
   "Paste URL": "Pegar URL",
   "Upload file": "Subir archivo",
