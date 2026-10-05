@@ -7,6 +7,7 @@ import { useState, type KeyboardEvent } from "react";
 
 import { BrandMark } from "@/components/brand-mark";
 import { Icon } from "@/components/icons";
+import { LandingMotion } from "@/components/landing-motion";
 
 type DemoTab = "capture" | "insights" | "vault";
 const demoTabs: DemoTab[] = ["capture", "vault", "insights"];
@@ -78,6 +79,7 @@ export default function Home() {
 
   return (
     <main className="landing-page" id="top">
+      <LandingMotion />
       <header className="landing-nav-shell" onKeyDown={(event) => { if (event.key === "Escape" && menuOpen) { closeMenu(); event.currentTarget.querySelector<HTMLButtonElement>(".landing-menu-button")?.focus(); } }}>
         <div className="landing-container landing-nav">
           <Link className="landing-brand" href="/" aria-label={t("Flare home")}>
@@ -154,14 +156,14 @@ export default function Home() {
       <section className="landing-section landing-problem" id="problem">
         <div className="landing-container landing-problem-grid">
           <div>
-            <h2>{t("Startup context disappears in plain sight.")}</h2>
+            <h2 data-motion-reveal>{t("Startup context disappears in plain sight.")}</h2>
             <div className="landing-problem-lines">
               <p>{t("Decisions hide in chat.")}</p>
               <p>{t("Research sits in tabs.")}</p>
               <p>{t("Meeting notes become archives.")}</p>
               <p>{t("Patterns only surface when it's too late.")}</p>
             </div>
-            <p className="landing-problem-answer">
+            <p className="landing-problem-answer" data-motion-reveal>
               {t("Flare gives scattered knowledge one place to become useful again.")}</p>
           </div>
         </div>
@@ -169,20 +171,20 @@ export default function Home() {
 
       <section className="landing-section" id="how-it-works">
         <div className="landing-container">
-          <div className="landing-section-heading">
+          <div className="landing-section-heading" data-motion-reveal>
             <h2>{t("From scattered context to one useful signal.")}</h2>
           </div>
 
           <div className="landing-steps">
-            <article>
+            <article data-motion-reveal>
               <h3>{t("Capture")}</h3>
               <p>{t("Write a note, paste context, or import bounded CSV, TXT, and Markdown files.")}</p>
             </article>
-            <article>
+            <article data-motion-reveal data-motion-delay="90">
               <h3>{t("Choose when to Analyze")}</h3>
               <p>{t("Run Analyze when you want to compare saved context and look for useful connections.")}</p>
             </article>
-            <article>
+            <article data-motion-reveal data-motion-delay="180">
               <h3>{t("Review the evidence")}</h3>
               <p>{t("Every published Flare links back to the saved context that supports it.")}</p>
             </article>
@@ -192,14 +194,14 @@ export default function Home() {
 
       <section className="landing-section landing-demo-section" id="demo">
         <div className="landing-container">
-          <div className="landing-section-heading landing-section-heading-row">
+          <div className="landing-section-heading landing-section-heading-row" data-motion-reveal>
             <div>
               <h2>{t("See the signal, then see why.")}</h2>
             </div>
             <p>{t("Try the tabs and open the evidence behind the sample insight.")}</p>
           </div>
 
-          <div className="landing-demo">
+          <div className="landing-demo" data-motion-reveal>
             <aside className="landing-demo-sidebar">
               <div className="landing-demo-brand"><BrandMark size={22} /> Flare</div>
               <div className="landing-demo-tabs" role="tablist" aria-label={t("Product preview")}>
@@ -289,18 +291,77 @@ export default function Home() {
 
       <section className="landing-section landing-depth">
         <div className="landing-container landing-depth-grid">
-          <div>
+          <div data-motion-reveal>
             <h2>{t("Your startup's memory gets stronger over time.")}</h2>
             <p>
               {t("Notes stay editable and source records stay available. As the Vault grows, Flare has more context to compare before it presents a signal.")}</p>
-
+            <p className="landing-import-note">{t("ZIP imports are one-time copies. Later changes in Notion or Obsidian are not synced automatically.")}</p>
           </div>
-          <div className="landing-source-archive">
-            <p className="landing-source-label">{t("Sample workspace")}</p>
-            <VaultItem meta={t("Decision")} title={t("June planning note")} />
-            <VaultItem meta={t("Planning")} title={t("Launch brief")} />
-            <VaultItem meta={t("Interview")} title={t("Customer interview — Northstar")} />
-            <p>{t("ZIP imports are one-time copies. Later changes in Notion or Obsidian are not synced automatically.")}</p>
+          <figure className="landing-vault-figure">
+            <div className="landing-vault-orbits" data-motion-loop aria-hidden="true">
+              <div className="landing-vault-halo" />
+              <div className="landing-vault-ring landing-vault-ring-one" />
+              <div className="landing-vault-ring landing-vault-ring-two" />
+              <div className="landing-vault-ring landing-vault-ring-three" />
+              <div className="landing-vault-turn landing-vault-turn-one landing-loop">
+                <div className="landing-vault-satellite"><div className="landing-vault-counter landing-loop">
+                  <i className="landing-vault-sphere" /><span>{t("Decision")}</span>
+                </div></div>
+              </div>
+              <div className="landing-vault-turn landing-vault-turn-two landing-loop">
+                <div className="landing-vault-satellite"><div className="landing-vault-counter landing-loop">
+                  <i className="landing-vault-sphere" /><span>{t("Interview")}</span>
+                </div></div>
+              </div>
+              <div className="landing-vault-turn landing-vault-turn-three landing-loop">
+                <div className="landing-vault-satellite"><div className="landing-vault-counter landing-loop">
+                  <i className="landing-vault-sphere" /><span>{t("Research")}</span>
+                </div></div>
+              </div>
+              <div className="landing-vault-center"><BrandMark size={40} /><strong>Vault</strong><small>{t("Your saved context")}</small></div>
+            </div>
+            <figcaption>{t("Decisions, interviews, and research in one Vault.")}</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section className="landing-section landing-outcome" data-motion-loop>
+        <svg className="landing-ribbon" viewBox="0 0 1440 520" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <defs><linearGradient id="landing-ribbon-blue" x1="0" y1="0" x2="1" y2="1">
+            <stop stopColor="#003e84" /><stop offset=".42" stopColor="#0071e3" /><stop offset=".7" stopColor="#89ccff" /><stop offset="1" stopColor="#0071e3" />
+          </linearGradient></defs>
+          <g className="landing-ribbon-drift landing-loop" fill="none" stroke="url(#landing-ribbon-blue)">
+            <path strokeWidth="30" d="M-160 410C110 20 350 610 630 230S1110 50 1590 260" />
+            <path strokeWidth="2" d="M-160 385C110-5 350 585 630 205S1110 25 1590 235" />
+            <path strokeWidth="1" d="M-160 430C110 40 350 630 630 250S1110 70 1590 280" />
+          </g>
+        </svg>
+        <div className="landing-container" data-motion-reveal>
+          <blockquote>{t("Less time reconstructing what happened.")}{" "}<span>{t("More time deciding what happens next.")}</span></blockquote>
+        </div>
+      </section>
+
+      <section className="landing-section landing-difference">
+        <div className="landing-container">
+          <div className="landing-section-heading" data-motion-reveal><h2>{t("A workspace that shows its reasoning.")}</h2></div>
+          <div className="landing-difference-grid" data-motion-reveal>
+            <article><span>{t("Typical notes")}</span><p>{t("Store information")}</p><p>{t("Rely on folders")}</p><p>{t("Wait for you to remember")}</p></article>
+            <article className="landing-difference-flare"><span><BrandMark size={18} /> Flare</span><p>{t("Connects information")}</p>
+              <p><span className="landing-annotation">{t("Links every signal to evidence")}
+                <svg viewBox="0 0 400 12" preserveAspectRatio="none" aria-hidden="true"><path d="M2 8Q190 0 398 6" pathLength="1" data-motion-annotation /></svg>
+              </span></p><p>{t("Brings forgotten context back")}</p></article>
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-section landing-trust">
+        <div className="landing-container" data-motion-reveal>
+          <h2>{t("Your workspace stays separated and every insight needs evidence.")}</h2>
+          <div className="landing-trust-pills">
+            <span>{t("A separate workspace for your team")}</span>
+            <span>{t("Editable notes and sources")}</span>
+            <span>{t("Evidence-linked Flares")}</span>
+            <span>{t("Exportable workspace data")}</span>
           </div>
         </div>
       </section>
