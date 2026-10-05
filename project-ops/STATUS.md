@@ -2,9 +2,9 @@
 
 > Этот файл генерирует `task-sync`; вручную его не редактируют.
 
-Сформировано: `2026-10-05T19:27:42Z`
-Последнее обновление работы: `2026-10-05T19:27:42Z`
-Снимок состояния: `sha256:9cc594e11e02e5f6541d9bd14f747833ee4461d9dcf6fec9ce050be9c2ffbddf`
+Сформировано: `2026-10-05T19:28:01Z`
+Последнее обновление работы: `2026-10-05T19:28:01Z`
+Снимок состояния: `sha256:dfe7ca2da49cacab6ff1025caf678e3b19ee8d7ad20cfa4cee75659fdaf4c8cf`
 
 ## Ближайшая цель
 
@@ -14,13 +14,13 @@
 
 ## Ближайшие шаги (не более пяти)
 
-1. `API-003` (в работе) — Fix the six regressions confirmed by the read-only audit of c811bbd: voice write authorization before provider work and nonblocking persistence, consistent ZIP export, dashboard duplicate capture and recent-insight errors, bounded Analyze status requests. Add reproducing regressions and fix concrete closely related defects found during implementation. Preserve existing product semantics and quotas; no migrations, billing, provider-budget changes, production dependencies or deployment.. Сейчас: Fix confirmed audit regressions on an isolated branch; prepare exact-scope regression tests and independent review.
+1. `API-003` (в работе) — Fix the six regressions confirmed by the read-only audit of c811bbd: voice write authorization before provider work and nonblocking persistence, consistent ZIP export, dashboard duplicate capture and recent-insight errors, bounded Analyze status requests. Add reproducing regressions and fix concrete closely related defects found during implementation. Preserve existing product semantics and quotas; no migrations, billing, provider-budget changes, production dependencies or deployment.. Сейчас: Implement voice authorization and async persistence, coherent ZIP export, duplicate-save/error handling and Analyze request deadlines; regression tests and validation only in the declared paths.
 2. `WEB-002` (на проверке) — Add a Subscription section to Settings with Free, Pro and Team descriptions; grey Current for the current Free tier and blue Buy actions. Connect Pro Buy to official Paddle.js Sandbox overlay using public env placeholders and price pri_01m3y1nvmgw2avt60bz87161c2, quantity 1, authenticated email and customData.userId. Enforce sandbox-only tokens, single initialization and checkout locking, localized recoverable errors, existing design/auth preservation and frontend checks. Team stays explicitly unconfigured until a separate Sandbox price exists. No Live, server API key, webhooks, entitlement/DB changes, portal, cancellation or deployment.. Условие: Owner requested merge and deployment on 2026-10-02. PR32 merged and deployed to https://flare4u.tech/settings; Paddle remains Sandbox. Actual signed-in checkout/trial/payment verification is pending a Flare session; no paid access or plan DB changes.
 3. `OPS-001` (на проверке) — Resolve production staging service/upload path, API-worker storage reachability, worker isolation/resources, storage identity/network/CORS, physical ZIP deletion/retention and monitoring/load-test environment. Publish dated redacted operator decisions/evidence; no provisioning. Contract: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#ops-001.. Условие: Review redacted runtime/staging decision and evidence record; Vova selection/acceptance and sanitized inventory remain pending. Do not mark done or authorize rollout from public probes.
 
 ## В работе
 
-- `API-003` (в работе) — Fix the six regressions confirmed by the read-only audit of c811bbd: voice write authorization before provider work and nonblocking persistence, consistent ZIP export, dashboard duplicate capture and recent-insight errors, bounded Analyze status requests. Add reproducing regressions and fix concrete closely related defects found during implementation. Preserve existing product semantics and quotas; no migrations, billing, provider-budget changes, production dependencies or deployment.. Сейчас: Fix confirmed audit regressions on an isolated branch; prepare exact-scope regression tests and independent review.; владелец: Fedor / Codex / API-003
+- `API-003` (в работе) — Fix the six regressions confirmed by the read-only audit of c811bbd: voice write authorization before provider work and nonblocking persistence, consistent ZIP export, dashboard duplicate capture and recent-insight errors, bounded Analyze status requests. Add reproducing regressions and fix concrete closely related defects found during implementation. Preserve existing product semantics and quotas; no migrations, billing, provider-budget changes, production dependencies or deployment.. Сейчас: Implement voice authorization and async persistence, coherent ZIP export, duplicate-save/error handling and Analyze request deadlines; regression tests and validation only in the declared paths.; владелец: Fedor / Codex / API-003
 
 ## На проверке
 
@@ -38,4 +38,4 @@
 
 ## Предупреждения
 
-- API-003: ещё не записаны опубликованная ветка и область файлов.
+Нет.
