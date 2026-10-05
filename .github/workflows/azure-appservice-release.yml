@@ -174,5 +174,6 @@ jobs:
           tag="azure-${short_sha}"
           gh release create "$tag" release-assets/* \
             --target "$GITHUB_SHA" \
+            --latest=false \
             --title "Azure deployment ${short_sha}" \
             --notes "Immutable Azure App Service deployment packages for commit ${GITHUB_SHA}. Packages contain application code and public runtime dependencies only; environment secrets stay in Azure Key Vault and App Service settings."
