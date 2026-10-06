@@ -52,22 +52,232 @@
   },
   "sandbox_destination": {
     "id": "ntfset_01m47zz283676cayy23388e71v",
-    "active": false,
+    "active": true,
     "traffic_source": "platform",
     "event_count": 8,
     "url": "https://flare-api-vm-260914.azurewebsites.net/billing/paddle/webhook",
     "secret_saved_and_privately_verified": true,
     "local_plaintext_removed": true,
-    "api_secret_permissions_unchanged": ["get", "list"],
-    "api_key_vault_reference_applied": false
+    "api_secret_permissions_unchanged": [
+      "get",
+      "list"
+    ],
+    "api_key_vault_reference_applied": true,
+    "api_key_vault_reference_resolved": true,
+    "ui_test_mode_active_platform_8_events_verified": true
   },
   "pending": [
-    "Validated Linux recovery packages for forward-only migration0021 (OPS-003)",
-    "API-only Sandbox settings and signing-secret reference",
-    "Controlled exact-source cloud migration and coordinated deployment",
-    "Real Sandbox checkout, delivery and workspace entitlement lifecycle smoke"
+    "Real verified owner Flare login, Sandbox checkout, signed delivery, refresh/replay/cancellation and workspace entitlement lifecycle smoke"
   ],
-  "production_migration_performed": false,
-  "azure_deployment_performed": false,
-  "paddle_live_used": false
+  "production_migration_performed": true,
+  "azure_deployment_performed": true,
+  "paddle_live_used": false,
+  "recovery_packages": {
+    "workflow_fix_pr": 45,
+    "linux_build_run": 37431064967,
+    "linux_build_result": "success",
+    "source_sha": "b9ccdc62fd166d13ea412753f736c635eff0a984",
+    "independent_archive_validation": true,
+    "historical_core_tests_passed": 215,
+    "production_fallback_deployed": false,
+    "archives": {
+      "api": {
+        "sha256": "168b422c35330ae82b54afc9f41383372dcba37734ebaab3256c309359d7fc2f",
+        "sizeBytes": 25688067,
+        "zipCrcVerified": true,
+        "manifestVerified": true,
+        "releaseHeadVerified": true
+      },
+      "worker": {
+        "sha256": "eeee73356d23395d0841315aa88377acae5c9d7fd3e6f14ef2538f2a926eae44",
+        "sizeBytes": 25688070,
+        "zipCrcVerified": true,
+        "manifestVerified": true,
+        "releaseHeadVerified": true
+      },
+      "web": {
+        "sha256": "d0850724add3db2e5eecb769cf81e53a455474ab3627f87d5bce5ee61f18f3ad",
+        "sizeBytes": 24373781,
+        "zipCrcVerified": true,
+        "manifestVerified": true,
+        "releaseHeadVerified": true
+      }
+    },
+    "source_manifest_sha256": "6cd6c29d92bf1be5f7163cfc359649deea9ca1ab9e5011b5b49b1b9184776c63",
+    "application_python_files": 79,
+    "task_state_done_commit": "8cf4939ddf1b66aafde86cec5a0cbbb4ae973eef"
+  },
+  "controlled_cloud_migration": {
+    "date_utc": "2026-10-06",
+    "report_last_modified_utc": "2026-10-06T07:59:48Z",
+    "source_sha": "453ebec4b6592d1e089a3f5d04da0f35a78a4f09",
+    "operator_script_sha256": "0ce593c6ecc38fc497730de4f08f081c74d5a7e8c2523e9bd66002a708550524",
+    "before_revision": "0018",
+    "after_revision": "0021",
+    "upgrade_exit_code": 0,
+    "repeat_upgrade_exit_code": 0,
+    "preserved_aggregate_counts_unchanged": true,
+    "temporary_extraction_removed": true,
+    "maintenance_local_503_guard_passed": true,
+    "worker_stopped_before_ddl": true,
+    "runtime_admin_credentials_not_added": true,
+    "migration_credential_memory_only": true
+  },
+  "deployments": {
+    "api": {
+      "role": "api",
+      "returnCode": 0,
+      "packageSha256": "cf1e6f1071d36c3e0bf947c775771599aa23b7ebbb541e3bdd2a8bbe232416f3",
+      "rawOutputOmitted": true,
+      "deploymentId": "18ec5188-6373-4544-a30e-5345f30feb7a",
+      "deploymentStatus": 4,
+      "complete": true
+    },
+    "worker": {
+      "role": "worker",
+      "returnCode": 0,
+      "packageSha256": "cf1e6f1071d36c3e0bf947c775771599aa23b7ebbb541e3bdd2a8bbe232416f3",
+      "rawOutputOmitted": true,
+      "deploymentId": "866cb735-91f5-4b93-8206-48b17770f3cf",
+      "deploymentStatus": 4,
+      "complete": true
+    },
+    "web": {
+      "role": "web",
+      "returnCode": 0,
+      "packageSha256": "a28c72125cef479fcff33240b7c683c14257d5fb900aa78001568f34f0940a8a",
+      "rawOutputOmitted": true,
+      "deploymentId": "fcfed178-427a-4a43-be13-61420286c356",
+      "deploymentStatus": 4,
+      "complete": true
+    }
+  },
+  "api_startup_allowance_seconds": 600,
+  "worker_readonly_probe": {
+    "result": "passed",
+    "time_utc": "2026-10-06T08:29:57.582073+00:00",
+    "script_sha256": "127029af538f28c93c2f824070524dfd2354c812729e92bdceff7dc46f84ed2e",
+    "check_count": 27,
+    "actual_worker_sql_select_passed": true,
+    "restricted_capabilities_verified": true,
+    "worker_and_health_processes_live": true,
+    "effective_secret_isolation_verified": true,
+    "queue_counts_unavailable_by_design": true,
+    "no_jobs_claimed_by_probe": true,
+    "no_provider_requests_by_probe": true,
+    "completed_job_test_performed": false,
+    "initial_time_utc": "2026-10-06T08:18:40.601324+00:00",
+    "post_restart_sql_probe_passed": true
+  },
+  "startup_diagnostics": {
+    "availableMetricNames": [
+      "CpuPercentage",
+      "MemoryPercentage"
+    ],
+    "capacity": 1,
+    "interval": "PT1M",
+    "metricDefinitionsVerified": true,
+    "metrics": {
+      "CpuPercentage": {
+        "averageOfMinuteAverages": 83.6,
+        "averageSampleCount": 15,
+        "firstAvailableTimestampUtc": "2026-10-06T08:03:00Z",
+        "lastAvailableTimestampUtc": "2026-10-06T08:17:00Z",
+        "maximum": 100.0,
+        "maximumSampleCount": 15,
+        "maximumTimestampUtc": "2026-10-06T08:07:00Z",
+        "peakMinuteAverage": 100.0,
+        "peakMinuteAverageTimestampUtc": "2026-10-06T08:07:00Z",
+        "sampleCount": 15,
+        "unit": "Percent"
+      },
+      "MemoryPercentage": {
+        "averageOfMinuteAverages": 81.2,
+        "averageSampleCount": 15,
+        "firstAvailableTimestampUtc": "2026-10-06T08:03:00Z",
+        "lastAvailableTimestampUtc": "2026-10-06T08:17:00Z",
+        "maximum": 86.0,
+        "maximumSampleCount": 15,
+        "maximumTimestampUtc": "2026-10-06T08:13:00Z",
+        "peakMinuteAverage": 86.0,
+        "peakMinuteAverageTimestampUtc": "2026-10-06T08:13:00Z",
+        "sampleCount": 15,
+        "unit": "Percent"
+      }
+    },
+    "plan": "flare-dev-web-plan-b1",
+    "requestedAggregations": [
+      "Average",
+      "Maximum"
+    ],
+    "resourceGroup": "flare-dev",
+    "sku": "B1",
+    "source": "Azure Monitor Microsoft.Web/serverfarms platform metrics",
+    "status": "complete",
+    "windowEndUtc": "2026-10-06T08:18:25Z",
+    "windowStartUtc": "2026-10-06T08:03:25Z"
+  },
+  "api_readiness": {
+    "/ready": {
+      "status": 200,
+      "body": "{\"status\":\"ready\"}"
+    },
+    "/billing/paddle/webhook": {
+      "status": 401,
+      "body": "{\"detail\":{\"code\":\"billing_invalid_signature\",\"message\":\"Invalid webhook signature\"}}"
+    },
+    "webhookKeyVaultReferenceStatus": "Resolved",
+    "completed": true
+  },
+  "web_readiness": {
+    "web": {
+      "status": 200,
+      "body": {
+        "status": "ready"
+      }
+    },
+    "webLogin": {
+      "status": 200
+    },
+    "billingWithoutLogin": {
+      "status": 401,
+      "body": {
+        "detail": "Authentication required"
+      }
+    }
+  },
+  "worker_restart_http_readiness": {
+    "status": 200,
+    "role": "worker"
+  },
+  "runtime_boundaries": {
+    "api": {
+      "serverWebhookSecretPresent": true,
+      "paddleServerApiKeyPresent": false,
+      "sandbox": true,
+      "priceMatches": true,
+      "emailVerificationRequired": true,
+      "developmentDisabled": true,
+      "adminMigrationCredentialAbsent": true,
+      "localZipStagingNotEnabled": true
+    },
+    "worker": {
+      "serverWebhookSecretPresent": false,
+      "paddleServerApiKeyPresent": false
+    },
+    "web": {
+      "serverWebhookSecretPresent": false,
+      "paddleServerApiKeyPresent": false
+    }
+  },
+  "cloud_operator_cleanup": {
+    "completed": true,
+    "temporary_source_directories_removed": true,
+    "temporary_logfiles_removed": true,
+    "private_local_sanitized_evidence_preserved": true
+  },
+  "real_owner_checkout_verified": false,
+  "real_signed_delivery_verified": false,
+  "workspace_pro_live_verified": false,
+  "real_replay_cancellation_verified": false
 }
