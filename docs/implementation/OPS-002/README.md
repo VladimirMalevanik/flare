@@ -42,7 +42,21 @@ The subsequently accepted WEB-005 landing change is already part of main.
   privately and verified against the published SHA256 and sidecar checksum,
   ZIP CRC, expected files and embedded RELEASE_SHA. See `validation.json`.
 - The public Checkout token and price are configured and match Sandbox; no token
-  is reproduced here. Paddle dashboard login still shows the login screen.
+  is reproduced here. Operator login on 2026-10-06 confirmed the Flare Sandbox
+  product and active USD12/month price with a 30-day trial.
+- Owner-confirmed Sandbox destination `ntfset_01m47zz283676cayy23388e71v` was
+  created for the exact API URL and eight subscription events listed below,
+  Platform traffic/API1. It is explicitly Inactive while the API is unprepared.
+  The endpoint secret was saved as `paddle-sandbox-webhook-secret` in the existing
+  Key Vault and compared privately; the temporary local plaintext was deleted.
+  Existing API secret permissions remain only `get`/`list`. No API secret
+  reference or billing environment settings have yet been applied.
+- A 2026-10-06 read-only preflight in the actual API container verified existing
+  managed-identity access to the migration credential in memory, full pinned
+  source import provenance, schema0018, restricted migration-admin flags and zero
+  processing analysis/Flare/refresh work. Existing row-count snapshots are private.
+  No production migration was attempted. PostgreSQL remains Ready with7-day
+  retention; this remains metadata, not a performed restore.
 
 ## Gates before changing production
 
@@ -115,9 +129,46 @@ firewall, TLS or access policy was loosened. Temporary probe source/output conta
 no credentials or user data and are removed after collecting the private record.
 
 API-001 and API-002 implementation acceptance is recorded separately. OPS-002
-activation remains unfinished: dashboard login, an executable recovery plan,
-cloud migration/deployment and real Sandbox lifecycle evidence are pending.
+activation remains unfinished: an executable recovery package, cloud
+migration/deployment and real Sandbox lifecycle evidence are pending.
 No production DDL or deployment was performed during this preparation. Temporary
-cloud probes and the local migration credential copy were removed; the Key Vault
-secret and existing application settings were not changed. No secret, token,
-private database URL or raw webhook payload belongs in this report.
+identity probes and the local migration credential copy were removed. Nonsecret
+controlled migration source/preflight output remains operator-private in Azure
+until rollout cleanup. The new Sandbox signing secret is stored in Key Vault;
+application settings have not changed. No secret, token, private database URL or
+raw webhook payload belongs in this report.
+
+## Controlled execution preparation
+
+OPS-003's local behavior report now passes215 historical core tests plus the
+preserved-data, new-email verification, restricted queue/Flare, daily-quota,
+pending-ZIP, private-ledger and cold-restart scenarios. One obsolete FK-only
+assertion is explicitly excluded and replaced with actual restrictive RLS denial
+and zero inserted rows. Independent source review and matching Linux artifacts
+remain required; no fallback was deployed.
+
+`controlled_migration.py` is an operator-only script, outside the application
+package. It defaults to read-only preflight and verifies the SHA256 of a complete
+git archive of accepted453ebec, source import location, database host, existing TLS
+and migration-admin restrictions. Each run extracts into a fresh exclusive
+directory, checks the Alembic graph head0021, and removes that directory. It
+retrieves the existing Key Vault migration
+credential through the API's existing managed identity, in memory only. The
+Alembic child gets a minimal migration-role environment; ordinary API/worker
+settings keep their restricted credentials. Only sanitized status and aggregate
+counts are written; raw exception/child output is discarded.
+
+Applying requires the explicit503 endpoint from `maintenance_server.py`, zero
+active background work, independently confirmed stopped worker and current backup
+metadata. The database snapshot is retaken after the maintenance check immediately
+before applying; a sanitized post-failure snapshot distinguishes old/new/unknown
+schema state without assuming rollback. `maintenance_startup.sh` unpacks the existing runtime for the controlled
+process while the maintenance server rejects all public requests. Original
+startup and `/ready` health check must be preserved and restored with the matching
+accepted application package. Never enable delivery before schema/runtime/secret
+reference checks pass. No operator script changes normal runtime or relaxes its
+readiness checks. OPS-003 prepares the separate validated recovery package.
+
+Python compilation, shell syntax and seven-method maintenance HTTP checks pass.
+The hardened preflight completed in Azure with its exact operator-script checksum,
+graph/import verification and temporary-source cleanup. No apply action was run.

@@ -44,13 +44,26 @@
     "private_current_archives_captured_and_verified": true,
     "email_verification_preserved": true,
     "runtime_roles_not_expanded": true,
-    "temporary_cloud_probes_removed": true,
+    "temporary_identity_probes_removed": true,
+    "nonsecret_exact_migration_source_staged": true,
+    "controlled_preflight_20261006_passed": true,
+    "migration_credential_read_only_in_process_memory": true,
     "local_migration_credential_copy_removed": true
   },
+  "sandbox_destination": {
+    "id": "ntfset_01m47zz283676cayy23388e71v",
+    "active": false,
+    "traffic_source": "platform",
+    "event_count": 8,
+    "url": "https://flare-api-vm-260914.azurewebsites.net/billing/paddle/webhook",
+    "secret_saved_and_privately_verified": true,
+    "local_plaintext_removed": true,
+    "api_secret_permissions_unchanged": ["get", "list"],
+    "api_key_vault_reference_applied": false
+  },
   "pending": [
-    "Operator login to the Paddle Sandbox account containing Flare Pro",
-    "Executable recovery plan for forward-only migration0021",
-    "Sandbox notification destination and server-only endpoint secret",
+    "Validated Linux recovery packages for forward-only migration0021 (OPS-003)",
+    "API-only Sandbox settings and signing-secret reference",
     "Controlled exact-source cloud migration and coordinated deployment",
     "Real Sandbox checkout, delivery and workspace entitlement lifecycle smoke"
   ],
