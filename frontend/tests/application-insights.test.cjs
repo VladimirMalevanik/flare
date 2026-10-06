@@ -596,3 +596,52 @@ test("server-side singleton access never reaches browser storage, cookie APIs or
   await flush();
   assert.equal(client.getSnapshot(), snapshot); assert.equal(imports, 0);
 });
+
+test("bounded analytics cookies cannot outlive the remaining consent period even when the SDK requests a year", () => {
+  const cookies = loadTs("../src/lib/telemetry/cookies.ts");
+  const now = Date.parse("2026-10-06T00:00:00Z");
+  const deadline = now + 2 * 24 * 60 * 60 * 1000;
+  for (const name of cookies.ANALYTICS_COOKIE_NAMES) {
+    for (const requested of ["anonymous; Max-Age=31536000", "anonymous; Expires=Wed, 06 Oct 2027 00:00:00 GMT", "anonymous"]) {
+      const assignment = cookies.boundedCookie(name, requested, now, deadline);
+      assert.match(assignment, /Max-Age=172800;/);
+      assert.equal(Date.parse(assignment.split("; Expires=")[1]), deadline);
+    }
+    assert.match(cookies.boundedCookie(name, "anonymous; Max-Age=600", now, deadline), /Max-Age=600;/);
+    assert.match(cookies.boundedCookie(name, "anonymous; Max-Age=31536000", deadline, deadline), /Max-Age=0;/);
+    assert.equal(cookies.boundedCookie(name, "anonymous", now, Number.NaN), null);
+    assert.equal(cookies.boundedCookie(name, "anonymous", now, Number.POSITIVE_INFINITY), null);
+  }
+});
+
+test("controller SDK cookies renewed on day 29 expire at the original consent deadline and do not renew the choice", async () => {
+  const start = Date.parse("2026-10-06T00:00:00Z");
+  const day = 24 * 60 * 60 * 1000;
+  const f = fixture({ now: start });
+  f.client.initialize(); f.client.trackPage("/"); f.client.setConsent("allowed"); await flush();
+  const originalChoice = f.entries.get(f.consent.CONSENT_KEY);
+  const deadline = f.consent.parseStoredConsent(originalChoice, start).expiresAt;
+  assert.equal(deadline, start + 30 * day);
+  const cookies = f.calls.rawConfigurations[0].cookieCfg;
+
+  f.setNow(start + 28 * day);
+  cookies.setCookie("ai_user_flare_site_analytics", "anonymous; Max-Age=31536000");
+  const day28 = f.calls.cookieWrites.at(-1);
+  assert.match(day28, /Max-Age=172800;/);
+  assert.equal(Date.parse(day28.split("; Expires=")[1]), deadline);
+
+  const day29 = start + 29 * day + 1234;
+  f.setNow(day29);
+  cookies.setCookie("ai_session_flare_site_analytics", "anonymous-session; Expires=Wed, 06 Oct 2027 00:00:00 GMT");
+  const renewed = f.calls.cookieWrites.at(-1);
+  const maxAge = Number(/Max-Age=([0-9]+);/.exec(renewed)[1]);
+  assert.equal(maxAge, Math.floor((deadline - day29) / 1000));
+  assert.ok(Date.parse(renewed.split("; Expires=")[1]) <= deadline);
+  assert.equal(f.entries.get(f.consent.CONSENT_KEY), originalChoice);
+
+  f.setNow(deadline);
+  const writes = f.calls.cookieWrites.length;
+  cookies.setCookie("ai_user_flare_site_analytics", "anonymous; Max-Age=31536000");
+  assert.equal(f.calls.cookieWrites.length, writes, "expiry closes the cookie gate even before a timer or navigation runs");
+  f.client.dispose();
+});

@@ -9,11 +9,13 @@ export function readOwnCookie(cookieHeader: string, name: string): string {
   return cookieHeader.split(";").map(part => part.trim()).find(part => part.startsWith(prefix))?.slice(prefix.length) ?? "";
 }
 
-export function boundedCookie(name: string, value: string, now: number): string | null {
+export function boundedCookie(name: string, value: string, now: number, consentExpiresAt?: number): string | null {
   if (!owned(name) || value.length > 1024 || !Number.isFinite(now)) return null;
+  if (consentExpiresAt !== undefined && !Number.isFinite(consentExpiresAt)) return null;
   const [payload, ...attributes] = value.split(";");
   if (!/^[A-Za-z0-9._~|%+=/:\-]{1,512}$/.test(payload)) return null;
-  let seconds = COOKIE_MAX_AGE_SECONDS;
+  let seconds = consentExpiresAt === undefined ? COOKIE_MAX_AGE_SECONDS
+    : Math.min(COOKIE_MAX_AGE_SECONDS, Math.floor((consentExpiresAt - now) / 1000));
   for (const attribute of attributes) {
     const separator = attribute.indexOf("=");
     const key = attribute.slice(0, separator).trim().toLowerCase();
@@ -35,13 +37,13 @@ export function deleteCookieAssignments(): string[] {
   return ANALYTICS_COOKIE_NAMES.map(name => `${name}=; Path=/; Secure; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`);
 }
 
-export function cookieOptions(isAllowed: () => boolean, documentLike: { cookie: string }, now = () => Date.now()) {
+export function cookieOptions(isAllowed: () => boolean, documentLike: { cookie: string }, now = () => Date.now(), consentExpiresAt?: () => number) {
   return {
     enabled: true, path: "/", disableCookieDefer: true,
     getCookie(name: string) { return isAllowed() ? readOwnCookie(documentLike.cookie, name) : ""; },
     setCookie(name: string, value: string) {
       if (!isAllowed()) return;
-      const assignment = boundedCookie(name, value, now());
+      const assignment = boundedCookie(name, value, now(), consentExpiresAt?.());
       if (assignment) documentLike.cookie = assignment;
     },
     delCookie(name: string) {

@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import { LegalPage, LegalSection } from "@/components/legal-page";
-import { AnalyticsPreferences } from "@/features/telemetry/analytics-preferences";
 
 export const metadata: Metadata = { title: "Privacy Policy — Flare" };
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy Policy" updated="October 6, 2026">
+    <LegalPage title="Privacy Policy" updated="September 17, 2026">
       <p>
         This Privacy Policy explains how Flare (“Flare,” “we,” “us,” or “our”)
         collects, uses, discloses, and safeguards information when you use our
@@ -126,24 +125,6 @@ export default function PrivacyPage() {
           analytics. You can control cookies through browser settings, but disabling the
           session cookie prevents authenticated features from working.
         </p>
-        <p>
-          If you allow optional visit analytics, Microsoft Azure Application Insights
-          receives page views with fixed section names, anonymous browser and session
-          identifiers, and general browser or device information. We do not send your
-          account identity, email, workspace content, page titles from your content,
-          URL query parameters, or referring URLs in these events. Microsoft processes
-          connection information to receive telemetry; IP masking remains enabled.
-        </p>
-        <p>
-          Optional analytics starts only after your separate choice. Its browser cookies
-          identify a browser and visit, not your Flare account. The anonymous browser
-          identifier and saved choice expire after 30 days. An analytics session expires
-          after 30 minutes of inactivity or 24 hours. You can reject analytics or withdraw your
-          choice below or in Settings at any time. Withdrawal stops future collection
-          and clears the analytics cookies; it does not delete events already received.
-          These Azure page-view events are configured for 30-day retention.
-        </p>
-        <AnalyticsPreferences />
       </LegalSection>
 
       <LegalSection title="9. Data security">

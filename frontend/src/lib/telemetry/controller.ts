@@ -28,7 +28,7 @@ export interface AnalyticsDependencies {
   cancelSchedule?: typeof clearTimeout;
 }
 
-export function sdkConfiguration(config: TelemetryConfig, isAllowed: () => boolean, cookieDocument: { cookie: string }, now: () => number) {
+export function sdkConfiguration(config: TelemetryConfig, isAllowed: () => boolean, cookieDocument: { cookie: string }, now: () => number, consentExpiresAt?: () => number) {
   return {
     connectionString: config.connectionString, samplingPercentage: 100, disableTelemetry: false,
     enableAutoRouteTracking: false, autoTrackPageVisitTime: false,
@@ -36,7 +36,7 @@ export function sdkConfiguration(config: TelemetryConfig, isAllowed: () => boole
     enableUnhandledPromiseRejectionTracking: false, disableDataLossAnalysis: true,
     isStorageUseDisabled: true, enableSessionStorageBuffer: false,
     loggingLevelTelemetry: 0, loggingLevelConsole: 0,
-    disableCookiesUsage: false, cookieCfg: cookieOptions(isAllowed, cookieDocument, now),
+    disableCookiesUsage: false, cookieCfg: cookieOptions(isAllowed, cookieDocument, now, consentExpiresAt),
     userCookiePostfix: COOKIE_POSTFIX, sessionCookiePostfix: COOKIE_POSTFIX,
     idLength: 22, sessionExpirationMs: 24 * 60 * 60 * 1000, sessionRenewalMs: 30 * 60 * 1000,
     featureOptIn: { SdkStats: { mode: 2 } },
@@ -133,7 +133,7 @@ export function createSiteAnalyticsController(deps: AnalyticsDependencies) {
     const attemptAllowed = () => attempt === generation && allowed();
     const pending = Promise.resolve().then(() => deps.loadSdk()).then(factory => {
       if (!attemptAllowed()) return;
-      const options = sdkConfiguration(config, attemptAllowed, deps.cookieDocument ?? { cookie: "" }, now);
+      const options = sdkConfiguration(config, attemptAllowed, deps.cookieDocument ?? { cookie: "" }, now, () => stored?.expiresAt ?? now());
       const next = factory.create(options);
       // Tests/factories can be reentrant; don't initialize after withdrawal.
       if (!attemptAllowed()) return;

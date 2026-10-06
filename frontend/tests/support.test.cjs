@@ -22,6 +22,7 @@ function load(relative, mocks = {}) {
       if (name === "@/i18n/provider") return require("./i18n-utils.cjs").i18nMock();
       if (name === "@/components/language-selector") return { LanguageSelector: "language-selector" };
       if (name === "@/components/select") return { Select: "custom-select" };
+      if (name === "@/features/telemetry/analytics-preferences") return { AnalyticsPreferences: () => null };
       if (name === "@/features/funny/funny-sounds") return { playFunnySound() {} };
       throw Error(`Unexpected import ${name}`);
     },
