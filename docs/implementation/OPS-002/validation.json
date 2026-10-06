@@ -67,7 +67,7 @@
     "ui_test_mode_active_platform_8_events_verified": true
   },
   "pending": [
-    "Owner action-time confirmation of prepared Sandbox Subscribe now, then real signed delivery, refresh/replay/cancellation and workspace entitlement lifecycle smoke"
+    "Immediate-cancellation \u2192 Free smoke explicitly deferred by owner to retain Sandbox Pro; no actual Sandbox canceled-event verification claimed"
   ],
   "production_migration_performed": true,
   "azure_deployment_performed": true,
@@ -276,9 +276,8 @@
     "temporary_logfiles_removed": true,
     "private_local_sanitized_evidence_preserved": true
   },
-  "real_owner_checkout_verified": false,
-  "real_signed_delivery_verified": false,
-  "workspace_pro_live_verified": false,
+  "real_owner_checkout_verified": true,
+  "real_signed_delivery_verified": true,
   "real_replay_cancellation_verified": false,
   "sandbox_checkout_preflight": {
     "date_utc": "2026-10-06",
@@ -293,8 +292,83 @@
     "quantity": 1,
     "trial_days_visible": 30,
     "only_official_fictitious_card_entered": true,
-    "final_submission_performed": false,
-    "action_time_confirmation_pending": true,
-    "automatic_ptxn_update_links_verified": false
+    "final_submission_performed": true,
+    "action_time_confirmation_pending": false,
+    "automatic_ptxn_update_links_verified": false,
+    "owner_completed_checkout_personally": true
+  },
+  "workspace_pro_sandbox_runtime_verified": true,
+  "real_replay_verified": true,
+  "real_cancellation_verified": false,
+  "genuine_sandbox_lifecycle": {
+    "date_utc": "2026-10-06",
+    "owner_checkout_success_visible": true,
+    "paddle_test_mode_visible": true,
+    "paddle_subscription_trialing_visible": true,
+    "created_and_trialing_delivered_first_attempt": true,
+    "pro_current_after_refresh": true,
+    "probe_script_sha256": "d8d95fe18bbf39cb5f8a78a1ba7bd66990eac9a37b95bd8da0ccff2b430a14ee",
+    "baseline_time_utc": "2026-10-06T10:13:28.732566+00:00",
+    "after_replay_time_utc": "2026-10-06T10:18:13.174865+00:00",
+    "readonly_check_count_each_snapshot": 20,
+    "readonly_checks_all_passed": true,
+    "restricted_admin_and_runtime_roles_unchanged": true,
+    "no_credential_plaintext_file_created": true,
+    "binding": {
+      "applied_event_count": 1,
+      "conflict_event_count": 0,
+      "consumed_binding_matches_owner_workspace": true,
+      "consumed_intent_count": 1,
+      "created_event_count": 1,
+      "created_event_within_intent_window": true,
+      "ledger_event_count": 2,
+      "linked_intent_count": 1,
+      "stale_event_count": 0,
+      "subscription_count": 1,
+      "trialing_event_count": 1,
+      "unlinked_event_count": 1
+    },
+    "trial_starts_at": "2026-10-06T10:03:52.344000+00:00",
+    "trial_ends_at": "2026-11-05T10:03:52.344000+00:00",
+    "access_until": "2026-11-05T10:03:52.344000+00:00",
+    "actual_trial_30_days": true,
+    "historical_unlinked_event_resolved_in_current_subscription": true,
+    "real_replay_delivered_first_attempt": true,
+    "replay_http_status": 200,
+    "replay_outcome": "conflict",
+    "replay_raw_envelope_fingerprint_limitation_observed": true,
+    "replay_comparison": {
+      "completed": true,
+      "method": "operator-local comparison of two verified read-only snapshots",
+      "before_time_utc": "2026-10-06T10:13:28.732566+00:00",
+      "after_time_utc": "2026-10-06T10:18:13.174865+00:00",
+      "checks": {
+        "subscription_unchanged": true,
+        "consumed_binding_unchanged": true,
+        "ledger_unchanged": true,
+        "workspace_entitlement_unchanged": true,
+        "runtime_subscriptions_unchanged": true,
+        "subscription_count_unchanged": true,
+        "consumed_intent_count_unchanged": true,
+        "workspace_pro_preserved": true
+      },
+      "check_count_each_snapshot": 20,
+      "no_raw_rows_exported": true,
+      "no_database_write_by_probe": true
+    },
+    "remote_guard_not_weakened": true,
+    "raw_rows_identifiers_and_private_digests_not_published": true,
+    "pro_confirmed_after_replay_browser_refresh": true,
+    "temporary_cloud_probe_files_removed": true,
+    "cancellation_prepared_now": true,
+    "cancellation_submitted": false,
+    "current_state": "Pro / Trialing",
+    "second_member_browser_session_verified": false,
+    "premium_quota_expanded": false,
+    "remote_compare_prior_load_or_validation_failed": true,
+    "remote_compare_prior_underlying_cause_confirmed": false,
+    "cancellation_owner_decision": "retain Sandbox Pro",
+    "cancellation_deferred_by_owner": true,
+    "cancellation_form_closed": true
   }
 }

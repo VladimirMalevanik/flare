@@ -2,9 +2,9 @@
 
 The owner authorized this rollout on existing Flare Azure resources. Paddle Live,
 new paid resources, security weakening and foreign unmerged PR43 are excluded.
-Migration, deployment and server configuration are verified. Real Sandbox
-subscription delivery and entitlement acceptance remain pending final Sandbox
-checkout confirmation. The owner is signed in, and the actual Checkout is open.
+Migration, deployment, genuine Sandbox checkout, signed subscription delivery,
+persisted workspace Pro and replay invariance are verified. The owner explicitly
+retained the test Pro trial, deferring immediate-cancellation verification.
 Package installation alone is not application readiness.
 
 ## Accepted release
@@ -105,8 +105,8 @@ error. The existing Sandbox default payment link was set to
 `https://flare4u.tech/settings`; its UI shows Approved and Test Mode. Retrying
 Buy opened the actual Paddle Sandbox overlay with Flare Pro, quantity 1 and a
 30-day free trial. Only the official fictitious Paddle card was entered.
-The final Subscribe now step is awaiting the owner's action-time confirmation;
-no completed checkout, signed event or Pro grant is claimed from opening the form.
+The owner completed Subscribe now personally. Paddle displayed its successful
+transaction result, and Flare confirmed Pro from the server.
 Automatic `_ptxn` payment-method-update/dunning links have not been verified;
 the current client initializes Paddle when Buy is clicked.
 
@@ -123,15 +123,60 @@ PADDLE_ENVIRONMENT=sandbox, PADDLE_PRO_PRICE_ID and a versioned Key Vault secret
 reference are configured. Azure reports that reference Resolved. Existing API
 secret rights remain get/list. No server signing secret goes to worker/frontend.
 
-## Remaining acceptance checks
+## Genuine Sandbox lifecycle verification
 
-1. Complete the prepared real Sandbox checkout in the owner's verified Flare
-   session. Verify server-bound checkout intent, trialing Pro persisted
-   through refresh, signed delivery, workspace-wide state and cancellation.
-   Never manually grant Pro or forge provider events to claim live verification.
-2. Replay the genuine event and verify unchanged state. Paddle changes
-   notification_id on replay; this release fingerprints the raw envelope and may
-   return a safe conflict/noop rather than duplicate. HTTP 200 alone is insufficient.
+On 2026-10-06 the owner completed the actual Test Mode checkout. Paddle lists
+one Flare Pro monthly subscription as Trialing. Both subscription.created and
+subscription.trialing were Delivered on their first attempt. Flare Settings shows
+Pro Current and "Pro is confirmed for this workspace" after a full browser refresh.
+
+A restricted, explicitly read-only cloud probe passed all 20 checks at
+10:13:28 UTC. It pinned accepted release 453 and imported its real BillingRepository
+and workspace_entitlement code. The existing API credential and migration
+administrator credential retained their exact role/TLS restrictions; the latter
+was fetched by the existing identity into process memory only. There was one
+subscription and one consumed checkout intent, bound to the same owner workspace
+and configured price. The created event was inside the intent validity window.
+The real item trial dates are 2026-10-06T10:03:52.344Z through
+2026-11-05T10:03:52.344Z, exactly 30 days; computed workspace plan is Pro with
+access bounded by that end date and no watermark conflict.
+
+The two-event ledger contains one applied and one historical unlinked outcome.
+The accepted SQL retains the trialing event's original unlinked outcome when it
+arrives before created binds the intent; created resolves its pending snapshot
+without rewriting that historical row. The consumed binding and current Pro state
+are independently verified. No membership error or currently unbound subscription
+is inferred from that history.
+
+The real created event was replayed through Paddle's UI. Its new notification was
+Delivered on attempt 1, with Response 200 and outcome conflict. This release hashes
+the raw envelope; Paddle changes notification_id on replay, so the existing
+event is safely acknowledged as conflict/noop. At 10:18:13 UTC a second read-only
+snapshot passed all 20 checks. Eight operator-local comparisons confirmed unchanged
+subscription, consumed binding, ledger, runtime workspace subscriptions, computed
+entitlement, subscription/intent counts and Pro. Pro also persisted through a
+browser refresh after replay. HTTP 200 alone was not treated as proof.
+
+The optional remote --compare-prior path failed while loading/validating its prior
+report. Its guard was not weakened; the exact underlying cause was not asserted.
+Comparison used the original private local
+baseline and a fresh successful snapshot with the same verified script/release;
+only equality booleans and dates are published, never raw rows or private digests.
+The probe script SHA256 is
+`d8d95fe18bbf39cb5f8a78a1ba7bd66990eac9a37b95bd8da0ccff2b430a14ee`.
+Both temporary cloud probe files were removed after collection (HTTP 200 each).
+
+## Owner-retained trial and verification limit
+
+Immediate cancellation of this Sandbox trial was prepared but was not submitted.
+The owner explicitly chose "retain my test Pro"; the cancellation form was closed.
+The canceled → Free smoke is deferred. A future authorized cancellation test must
+verify real signed canceled delivery, computed Free with no accessUntil, and
+persistence after refresh.
+Do not manually grant Pro or forge provider events to claim live verification.
+The currently verified state remains Pro/Trialing; full lifecycle acceptance is not
+claimed without that check. No second-member browser session or expanded
+premium quota is claimed tested.
 
 Temporary cloud scripts, archive, sanitized remote reports and source directories
 were removed after normal startup and the fresh worker SQL proof. Private local
