@@ -211,13 +211,14 @@ test('Settings, Sources, Vault, Flares, and Capture render Spanish without trans
 
 test('legal document body stays English and declares its own language', () => {
   const { LegalPage } = load('../src/components/legal-page.tsx', { './legal-chrome': { LegalChrome: 'legal-chrome' }, './brand-mark': { BrandMark: 'brand-mark' } });
-  for (const file of ['privacy', 'terms']) {
+  const opening = { privacy: 'This Privacy Policy explains', terms: 'These terms govern access', analytics: 'This notice explains' };
+  for (const file of ['privacy', 'terms', 'analytics']) {
     const { default: Page } = load(`../src/app/${file}/page.tsx`, { '@/components/legal-page': { LegalPage, LegalSection: 'section' } });
     const page = Page();
     const rendered = LegalPage(page.props);
     const article = nodes(rendered).find(node => node.type === 'article');
     assert.equal(article.props.lang, 'en');
-    assert.ok(text(article).includes(file === 'privacy' ? 'This Privacy Policy explains' : 'These terms govern access'));
+    assert.ok(text(article).includes(opening[file]));
   }
 });
 
@@ -273,7 +274,7 @@ test('visible JSX strings use i18n apart from legal copy, names, and technical n
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       const file = path.join(directory, entry.name);
       if (entry.isDirectory()) { scan(file); continue; }
-      if (!file.endsWith('.tsx') || /app\/(privacy|terms)\//.test(file)) continue;
+      if (!file.endsWith('.tsx') || /app\/(privacy|terms|analytics)\//.test(file)) continue;
       const source = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
       function check(value) {
         const normalized = value.replace(/\s+/g, ' ').trim();

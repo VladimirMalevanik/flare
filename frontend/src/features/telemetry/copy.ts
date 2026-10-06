@@ -8,7 +8,7 @@ const en = {
   blocked: "Your browser’s privacy signal keeps optional website analytics off.",
   storageError: "Your choice could not be saved. Analytics stays off in this tab.",
   retention: "Your choice and anonymous visitor cookie expire after 30 days. You can change your choice here at any time.",
-  privacy: "Privacy Policy", cancel: "Keep current choice",
+  privacy: "Analytics & cookies", cancel: "Keep current choice",
 };
 type Copy = { [Key in keyof typeof en]: string };
 const es: Copy = {
@@ -20,6 +20,6 @@ const es: Copy = {
   blocked: "La señal de privacidad de tu navegador mantiene la analítica opcional desactivada.",
   storageError: "No se pudo guardar tu elección. La analítica sigue desactivada en esta pestaña.",
   retention: "Tu elección y la cookie anónima de visitante caducan en 30 días. Puedes cambiar tu elección aquí en cualquier momento.",
-  privacy: "Política de privacidad", cancel: "Mantener elección actual",
+  privacy: "Analítica y cookies", cancel: "Mantener elección actual",
 };
 export const telemetryCopy: Record<Locale, Copy> = { en, es };

@@ -37,7 +37,7 @@ export function SiteAnalytics() {
       <div className={styles.actions}>
         <button type="button" className={styles.button} onClick={() => siteAnalytics.setConsent("allowed")}>{copy.allow}</button>
         <button type="button" className={styles.button} onClick={() => siteAnalytics.setConsent("rejected")}>{copy.reject}</button>
-        <Link className={styles.link} href="/privacy">{copy.privacy}</Link>
+        <Link className={styles.link} href="/analytics">{copy.privacy}</Link>
       </div>
       {snapshot.storageError && <p className={`${styles.note} ${styles.error}`} role="status">{copy.storageError}</p>}
     </section>

@@ -3,7 +3,7 @@ export interface SafePage { name: string; uri: string }
 export const CANONICAL_ORIGIN = "https://flare4u.tech";
 const pages: Readonly<Record<string, string>> = Object.freeze({
   "/": "Home", "/login": "Login", "/register": "Register", "/download": "Download",
-  "/privacy": "Privacy", "/terms": "Terms", "/verify-email": "Verify email",
+  "/privacy": "Privacy", "/analytics": "Analytics preferences", "/terms": "Terms", "/verify-email": "Verify email",
   "/legal-acceptance": "Legal acceptance", "/dashboard": "Dashboard",
   "/insights": "Insights", "/vault": "Vault", "/sources": "Sources", "/settings": "Settings",
   "/settings/import-guides/notion": "Notion import guide",

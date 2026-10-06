@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useI18n } from "@/i18n/provider";
 import { siteAnalytics } from "@/lib/telemetry/client";
@@ -24,6 +25,7 @@ export function AnalyticsPreferences({ compact = true }: { compact?: boolean }) 
         <p className={styles.description}>{copy.description}</p>
         <p className={styles.note}>{copy.retention}</p>
         <div className={styles.actions}>
+          <Link className={styles.link} href="/analytics">{copy.privacy}</Link>
           <button type="button" className={styles.button} disabled={snapshot.privacyBlocked} onClick={() => choose("allowed")}>{copy.allow}</button>
           <button type="button" className={styles.button} onClick={() => choose("rejected")}>{copy.reject}</button>
           <button type="button" className={styles.link} onClick={() => setOpen(false)}>{copy.cancel}</button>

@@ -9,7 +9,7 @@ authentication, database, worker and Paddle Sandbox flows stay independent.
 The pinned official `@microsoft/applicationinsights-web` 3.4.4 SDK is bundled
 locally and imported only after separate explicit analytics consent. Accept and
 reject have equal visibility. Change the choice in Settings → Data & Privacy or
-on `/privacy`. Global Privacy Control / Do Not Track keep collection off.
+on `/analytics`. Global Privacy Control / Do Not Track keep collection off.
 
 Only predefined static section routes become page views. A final fail-closed
 initializer accepts only `PageviewData`, reconstructs its envelope after SDK
@@ -100,11 +100,18 @@ set the public enabled build variable to `false`, build and deploy web again;
 changing only an App Service runtime variable cannot rewrite an existing browser
 bundle. Users can reject immediately without waiting for another deployment.
 
-## Validation progress
+## Validation
 
-Initial focused tests passed 26/26 and TypeScript/ESLint passed. The initial full
-frontend run exposed six existing harness imports requiring the new consent UI
-mock; no assertions are waived. Full suite, production build, actual SDK wire
-capture, immutable Linux artifact and live Azure receipt must be recorded before
-calling the rollout complete. No checkout or current test Pro cancellation is
-part of this task.
+Focused privacy/lifecycle tests: 30/30. Full frontend suite: 212/212, including the separate notice and legacy UI
+regression coverage. ESLint, TypeScript and a production build passed. Actual pinned
+SDK fake-transport serialization and isolated Chromium wire QA both passed; the
+latter verified 19 checks, six sanitized page views, no pre-consent/withdrawn
+sends, reload identity, owned-cookie bounds, SPA counts and DNT/GPC. All synthetic
+ingestion was intercepted; it is not proof of live Azure receipt.
+
+CI detected that editing the existing Privacy document would break its exact
+backend legal-acceptance identity. The reviewed document is restored unchanged;
+optional analytics uses a separate `/analytics` notice and explicit browser
+choice. Existing legal acceptance and backend remain compatible. Immutable Linux
+artifact and live Azure receipt are recorded after release. No checkout or
+current test Pro cancellation is part of this task.
