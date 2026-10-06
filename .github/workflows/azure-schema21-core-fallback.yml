@@ -1,0 +1,189 @@
+name: Build pinned schema-0021 core fallback
+
+on:
+  workflow_dispatch:
+
+# Build artifacts only. No releases, deployments, provider credentials or cloud access.
+permissions:
+  contents: read
+
+concurrency:
+  group: schema21-core-fallback-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build matching Linux API, worker and web fallback packages
+    runs-on: ubuntu-24.04
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      SOURCE_DIR: ${{ runner.temp }}/flare-schema21-core-sources
+      BUILD_DIR: ${{ runner.temp }}/flare-schema21-core-build
+      RUNTIME_DIR: ${{ runner.temp }}/flare-schema21-core-runtime
+      ARTIFACT_DIR: ${{ runner.temp }}/flare-schema21-core-artifacts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install PostgreSQL 17 and pgvector for a disposable Unix-only check
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y curl ca-certificates
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          printf '%s\n' \
+            'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main' \
+            | sudo tee /etc/apt/sources.list.d/flare-recovery-pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-17 postgresql-17-pgvector
+      - name: Check and export only the two pinned source commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          python backend/deploy/build_schema21_core_fallback.py --repository "$GITHUB_WORKSPACE" --self-test
+          python backend/deploy/build_schema21_core_fallback.py --repository "$GITHUB_WORKSPACE" --output "$SOURCE_DIR"
+          python backend/deploy/build_schema21_core_fallback.py --repository "$GITHUB_WORKSPACE" --output "$SOURCE_DIR" --verify
+          (cd "$SOURCE_DIR" && sha256sum -c schema21-core-fallback-manifest.json.sha256)
+          test ! -e "$SOURCE_DIR/backend/migrations"
+          test ! -e "$SOURCE_DIR/backend/app/api/billing.py"
+          test ! -e "$SOURCE_DIR/backend/app/api/import_packages.py"
+          cp -a "$SOURCE_DIR" "$BUILD_DIR"
+          mkdir -p "$ARTIFACT_DIR"
+          cp "$SOURCE_DIR/schema21-core-fallback-manifest.json" "$SOURCE_DIR/schema21-core-fallback-manifest.json.sha256" "$ARTIFACT_DIR/"
+      - name: Prove preservation and isolation on a fresh private PostgreSQL cluster
+        shell: bash
+        run: |
+          set -euo pipefail
+          check_venv="$RUNNER_TEMP/flare-schema21-core-check-venv"
+          python -m venv "$check_venv"
+          "$check_venv/bin/python" -m pip install "$BUILD_DIR/backend[dev]"
+          "$check_venv/bin/python" backend/scripts/check_schema21_core_fallback.py \
+            --pg-bin /usr/lib/postgresql/17/bin --report "$ARTIFACT_DIR/schema21-core-check.json"
+      - name: Install the legacy Python runtime without configuration secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          site_packages="$RUNTIME_DIR/antenv/lib/python3.12/site-packages"
+          mkdir -p "$site_packages" "$RUNTIME_DIR/antenv/bin"
+          python -m pip install --no-cache-dir --target "$site_packages" "$BUILD_DIR/backend"
+          cp -a "$SOURCE_DIR/backend/app" "$RUNTIME_DIR/app"
+          cat > "$RUNTIME_DIR/antenv/bin/python" <<'PYTHON_WRAPPER'
+          #!/bin/sh
+          set -eu
+          venv_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+          export PYTHONPATH="$venv_dir/lib/python3.12/site-packages${PYTHONPATH:+:$PYTHONPATH}"
+          exec python3 "$@"
+          PYTHON_WRAPPER
+          chmod +x "$RUNTIME_DIR/antenv/bin/python"
+          python - "$site_packages" "$RUNTIME_DIR/RUNTIME_DEPENDENCIES.txt" <<'PYTHON_DEPS'
+          from importlib.metadata import distributions
+          from pathlib import Path
+          import sys
+          dependencies = sorted(f"{item.metadata['Name']}=={item.version}" for item in distributions(path=[sys.argv[1]]))
+          Path(sys.argv[2]).write_text("\n".join(dependencies) + "\n")
+          PYTHON_DEPS
+      - name: Check portable runtime imports and the exact accepted DB boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q "$RUNTIME_DIR/app"
+          cmp "$SOURCE_DIR/backend/app/models/database.py" "$RUNTIME_DIR/app/models/database.py"
+          (cd "$RUNTIME_DIR" && FLARE_ENV=test EMAIL_VERIFICATION_REQUIRED=false \
+            ./antenv/bin/python -c 'import fastapi, psycopg, sqlalchemy, uvicorn; import app.main, app.workers.analysis_worker; from app.models.database import CURRENT_SCHEMA_REVISION; assert CURRENT_SCHEMA_REVISION == "0021"')
+          python backend/deploy/build_schema21_core_fallback.py --repository "$GITHUB_WORKSPACE" --output "$SOURCE_DIR" --verify
+      - name: Build the matching legacy frontend with its locked dependencies
+        shell: bash
+        env:
+          NEXT_PRIVATE_STANDALONE: "true"
+          NEXT_PUBLIC_API_URL: /api
+          NEXT_PUBLIC_DATA_PROVIDER: api
+          API_INTERNAL_URL: https://flare-api-vm-260914.azurewebsites.net
+        run: |
+          set -euo pipefail
+          cd "$BUILD_DIR/frontend"
+          npm ci
+          npm test
+          npm run lint
+          npx tsc --noEmit
+          npm run build
+      - name: Package identical core runtimes for API and worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar --sort=name --mtime='UTC 2026-10-06' --owner=0 --group=0 --numeric-owner \
+            --zstd -cf "$ARTIFACT_DIR/core-runtime.tar.zst" -C "$RUNTIME_DIR" .
+          tar --use-compress-program=unzstd -tf "$ARTIFACT_DIR/core-runtime.tar.zst" > "$ARTIFACT_DIR/core-runtime-files.txt"
+          test -s "$ARTIFACT_DIR/core-runtime-files.txt"
+          for component in api worker; do
+            package_dir="$RUNNER_TEMP/flare-schema21-core-$component-package"
+            mkdir -p "$package_dir"
+            cp "$ARTIFACT_DIR/core-runtime.tar.zst" "$package_dir/output.tar.zst"
+            cp "$SOURCE_DIR/backend/deploy/bootstrap_flare_api.sh" "$SOURCE_DIR/backend/deploy/bootstrap_flare_worker.sh" \
+              "$SOURCE_DIR/backend/deploy/ensure_ffprobe.py" "$package_dir/"
+            cp "$SOURCE_DIR/schema21-core-fallback-manifest.json" "$SOURCE_DIR/schema21-core-fallback-manifest.json.sha256" "$package_dir/"
+            printf '%s\n' "$GITHUB_SHA" > "$package_dir/RELEASE_SHA"
+            printf '%s\n' "$component" > "$package_dir/FALLBACK_COMPONENT"
+            printf '[config]\nSCM_DO_BUILD_DURING_DEPLOYMENT=false\n' > "$package_dir/.deployment"
+            chmod +x "$package_dir/bootstrap_flare_api.sh" "$package_dir/bootstrap_flare_worker.sh"
+            (cd "$package_dir" && zip -Xqr "$ARTIFACT_DIR/flare-schema21-core-$component.zip" .)
+            unzip -tq "$ARTIFACT_DIR/flare-schema21-core-$component.zip"
+          done
+          (cd "$ARTIFACT_DIR" && sha256sum flare-schema21-core-api.zip > flare-schema21-core-api.zip.sha256 \
+            && sha256sum flare-schema21-core-worker.zip > flare-schema21-core-worker.zip.sha256)
+      - name: Package Linux x64 standalone web with the same source manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_dir="$RUNNER_TEMP/flare-schema21-core-web-package"
+          mkdir -p "$package_dir/.next"
+          cp -a "$BUILD_DIR/frontend/.next/standalone/." "$package_dir/"
+          cp -a "$BUILD_DIR/frontend/.next/static" "$package_dir/.next/static"
+          cp -a "$SOURCE_DIR/frontend/public" "$package_dir/public"
+          cp "$SOURCE_DIR/schema21-core-fallback-manifest.json" "$SOURCE_DIR/schema21-core-fallback-manifest.json.sha256" "$package_dir/"
+          printf '%s\n' "$GITHUB_SHA" > "$package_dir/RELEASE_SHA"
+          printf 'web\n' > "$package_dir/FALLBACK_COMPONENT"
+          printf '[config]\nSCM_DO_BUILD_DURING_DEPLOYMENT=false\n' > "$package_dir/.deployment"
+          test -f "$package_dir/server.js"
+          test -f "$package_dir/.next/BUILD_ID"
+          test -d "$package_dir/node_modules"
+          while IFS= read -r -d '' module; do
+            description=$(file -b "$module")
+            case "$description" in
+              *ELF*x86-64*) ;;
+              *) echo "Unexpected native runtime module" >&2; exit 1 ;;
+            esac
+          done < <(find "$package_dir" -type f -name '*.node' -print0)
+          (cd "$package_dir" && zip -Xqr "$ARTIFACT_DIR/flare-schema21-core-web.zip" .)
+          unzip -tq "$ARTIFACT_DIR/flare-schema21-core-web.zip"
+          (cd "$ARTIFACT_DIR" && sha256sum flare-schema21-core-web.zip > flare-schema21-core-web.zip.sha256)
+      - name: Verify every archive checksum and original source manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python backend/deploy/build_schema21_core_fallback.py --repository "$GITHUB_WORKSPACE" --output "$SOURCE_DIR" --verify
+          (cd "$ARTIFACT_DIR" && sha256sum -c schema21-core-fallback-manifest.json.sha256 \
+            && sha256sum -c flare-schema21-core-api.zip.sha256 \
+            && sha256sum -c flare-schema21-core-worker.zip.sha256 \
+            && sha256sum -c flare-schema21-core-web.zip.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: azure-schema21-core-fallback-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/flare-schema21-core-artifacts/flare-schema21-core-*.zip
+            ${{ runner.temp }}/flare-schema21-core-artifacts/flare-schema21-core-*.zip.sha256
+            ${{ runner.temp }}/flare-schema21-core-artifacts/schema21-core-fallback-manifest.json
+            ${{ runner.temp }}/flare-schema21-core-artifacts/schema21-core-fallback-manifest.json.sha256
+            ${{ runner.temp }}/flare-schema21-core-artifacts/schema21-core-check.json
+          if-no-files-found: error
+          retention-days: 14
