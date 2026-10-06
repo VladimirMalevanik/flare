@@ -2,9 +2,9 @@
 
 > Этот файл генерирует `task-sync`; вручную его не редактируют.
 
-Сформировано: `2026-10-06T10:27:58Z`
-Последнее обновление работы: `2026-10-06T10:27:58Z`
-Снимок состояния: `sha256:1a6caf990396ae7868f4420cb127998cfa8460fd3a23332487e834840a06fff5`
+Сформировано: `2026-10-06T16:29:00Z`
+Последнее обновление работы: `2026-10-06T16:29:00Z`
+Снимок состояния: `sha256:efd6dbf2148ec7a457e5be027f98bea2450c483bc108c22278dab38c9a7551d0`
 
 ## Ближайшая цель
 
@@ -18,6 +18,7 @@
 2. `API-003` (на проверке) — Fix the six regressions confirmed by the read-only audit of c811bbd: voice write authorization before provider work and nonblocking persistence, consistent ZIP export, dashboard duplicate capture and recent-insight errors, bounded Analyze status requests. Add reproducing regressions and fix concrete closely related defects found during implementation. Preserve existing product semantics and quotas; no migrations, billing, provider-budget changes, production dependencies or deployment.. Условие: PR43 b8c24f9: six confirmed fixes plus related capture/deadline regressions. Exact product c8fb1db independently reviewed PASS; local full suites and Playwright recovery PASS. GitHub CI self-managed backend/migrations/voice-runtime SUCCESS; five checks QUEUED during confirmed Actions runner-assignment incident https://www.githubstatus.com/ (2026-10-05 19:11 UTC onward). Await remaining CI and human acceptance before product merge; localhost8413 running, foreign tasks/shared checkout preserved.
 3. `WEB-002` (на проверке) — Add a Subscription section to Settings with Free, Pro and Team descriptions; grey Current for the current Free tier and blue Buy actions. Connect Pro Buy to official Paddle.js Sandbox overlay using public env placeholders and price pri_01m3y1nvmgw2avt60bz87161c2, quantity 1, authenticated email and customData.userId. Enforce sandbox-only tokens, single initialization and checkout locking, localized recoverable errors, existing design/auth preservation and frontend checks. Team stays explicitly unconfigured until a separate Sandbox price exists. No Live, server API key, webhooks, entitlement/DB changes, portal, cancellation or deployment.. Условие: Owner requested merge and deployment on 2026-10-02. PR32 merged and deployed to https://flare4u.tech/settings; Paddle remains Sandbox. Actual signed-in checkout/trial/payment verification is pending a Flare session; no paid access or plan DB changes.
 4. `OPS-001` (на проверке) — Resolve production staging service/upload path, API-worker storage reachability, worker isolation/resources, storage identity/network/CORS, physical ZIP deletion/retention and monitoring/load-test environment. Publish dated redacted operator decisions/evidence; no provisioning. Contract: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#ops-001.. Условие: Review redacted runtime/staging decision and evidence record; Vova selection/acceptance and sanitized inventory remain pending. Do not mark done or authorize rollout from public probes.
+5. `OPS-004` (будем брать) — Owner-requested Azure Application Insights browser visit monitoring for Flare. Add minimal consent-aware or cookie-free sanitized manual page views using the official JavaScript SDK, exact CSP and public build configuration; reuse existing flare-dev-logs workspace, bounded ingestion and retention; validate, integrate and deploy only the frontend, then verify real browser telemetry and provide Azure usage queries. Preserve auth, Sandbox Paddle, first-party authoritative attribution and backend/worker/DB. No live billing, generic click warehouse, sensitive contents or credentials in telemetry, full URL query/referrer capture, or foreign PR merge.. Условие: User explicitly asked connect Application Insights on 2026-10-06 after read-only Azure/source verification. Select measurement eligibility with owner; inspect actual costs/caps and resource topology before provisioning. Own clean worktree and declared exact scope before edits; coordinate existing task semantics.
 
 ## В работе
 
