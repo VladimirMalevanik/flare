@@ -14,6 +14,7 @@ import { LanguageSelector } from "@/components/language-selector";
 import { Select } from "@/components/select";
 import { useI18n } from "@/i18n/provider";
 import { playFunnySound } from "@/features/funny/funny-sounds";
+import { AnalyticsPreferences } from "@/features/telemetry/analytics-preferences";
 import {
   dataErrorMessage,
   dataProvider,
@@ -453,6 +454,7 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
         subtitle={t("Preferences for future connected sources; no live ingestion is running.")}
         icon="settings"
       >
+        <AnalyticsPreferences compact />
         <SettingRow
           title={t("Exclude direct messages and private channels")}
           description={t("Keep connected context scoped to public team conversations.")}
