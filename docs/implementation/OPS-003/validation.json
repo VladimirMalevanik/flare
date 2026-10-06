@@ -1,0 +1,50 @@
+{
+  "accepted_database_file_sha256": "807d620448f0cfac3285cff36b6d8b98fa615bff120470c359b639ed581a77b8",
+  "accepted_database_sha": "453ebec4b6592d1e089a3f5d04da0f35a78a4f09",
+  "accepted_readiness_negative": true,
+  "behavior_log_sha256": "aa028600678ce0c004001d66756aab8e494e4d1a153c594218cfd4542e9f750b",
+  "billing_zip_privacy_ui_available": false,
+  "build_source_tests_passed": 3,
+  "cloud_mutations": false,
+  "core_test_files": [
+    "test_database.py",
+    "test_auth_api.py",
+    "test_email_verification.py",
+    "test_items_api.py",
+    "test_imports_api.py",
+    "test_export_api.py",
+    "test_analysis_runs.py",
+    "test_analysis_jobs.py",
+    "test_flare_runs.py",
+    "test_daily_analysis_schedule_integration.py",
+    "test_analysis_worker.py"
+  ],
+  "excluded_historical_cases": [
+    "test_database.py::test_cross_tenant_parent_reference_is_rejected (FK-only expectation obsolete; replaced by explicit import_gate RLS denial and zero inserted rows)"
+  ],
+  "historical_cases_deselected": 1,
+  "historical_core_tests_passed": 215,
+  "historical_skipped": 0,
+  "implementation_sha256": {
+    ".github/workflows/azure-schema21-core-fallback.yml": "ca20dfdfb1b058e14f9e01d16a09db9b260a6d3c69cb4de57acae0647f417746",
+    "backend/deploy/build_schema21_core_fallback.py": "a660ab8b389c90f507a4ca9ac7ae748f1fae2dc3acda0f301d2a27f9c9fb1c59",
+    "backend/scripts/check_schema21_core_fallback.py": "1a69c48aac160266efc37e05b099407b4e2b164423b1c7eefe0a6ea9f885824a"
+  },
+  "legacy_core_sha": "8679d075ea973d2d8ca63e178591fb520642412e",
+  "linux_archive_build": "pending manual workflow and owner acceptance",
+  "migration_principal": "NOSUPERUSER CREATEROLE BYPASSRLS (fixture only)",
+  "pending_zip_invisible": true,
+  "pg_cleanup": "Both disposable clusters stopped and their temporary directories removed by finally/TemporaryDirectory",
+  "postgres_major": 17,
+  "preserved_0018_upgrade": true,
+  "production_deployment": "not performed",
+  "provider_calls": false,
+  "same_schema_restart": true,
+  "schema_revision": "0021",
+  "source_manifest_sha256": "6cd6c29d92bf1be5f7163cfc359649deea9ca1ab9e5011b5b49b1b9184776c63",
+  "sources_sha256": "a7f2b9db1d56d3c649d21bf0107f3d6e2f3e59c8634840469d946f4c17414b3e",
+  "status": "passed",
+  "stored_fake_provider_flare": true,
+  "warning": "Existing FastAPI StarletteDeprecationWarning for httpx TestClient",
+  "worker_fixture_environment": "test_independent_worker_process runs with explicit FLARE_PROCESS_ROLE=worker; legacy assertion unchanged"
+}
