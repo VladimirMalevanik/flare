@@ -67,7 +67,7 @@
     "ui_test_mode_active_platform_8_events_verified": true
   },
   "pending": [
-    "Real verified owner Flare login, Sandbox checkout, signed delivery, refresh/replay/cancellation and workspace entitlement lifecycle smoke"
+    "Owner action-time confirmation of prepared Sandbox Subscribe now, then real signed delivery, refresh/replay/cancellation and workspace entitlement lifecycle smoke"
   ],
   "production_migration_performed": true,
   "azure_deployment_performed": true,
@@ -279,5 +279,22 @@
   "real_owner_checkout_verified": false,
   "real_signed_delivery_verified": false,
   "workspace_pro_live_verified": false,
-  "real_replay_cancellation_verified": false
+  "real_replay_cancellation_verified": false,
+  "sandbox_checkout_preflight": {
+    "date_utc": "2026-10-06",
+    "verified_owner_session_observed": true,
+    "settings_current_free_observed": true,
+    "initial_sdk_error": "transaction_default_checkout_url_not_set",
+    "sandbox_default_payment_link": "https://flare4u.tech/settings",
+    "sandbox_default_payment_link_approved": true,
+    "real_paddle_overlay_opened": true,
+    "test_mode_visible": true,
+    "pro_product_visible": true,
+    "quantity": 1,
+    "trial_days_visible": 30,
+    "only_official_fictitious_card_entered": true,
+    "final_submission_performed": false,
+    "action_time_confirmation_pending": true,
+    "automatic_ptxn_update_links_verified": false
+  }
 }

@@ -3,8 +3,9 @@
 The owner authorized this rollout on existing Flare Azure resources. Paddle Live,
 new paid resources, security weakening and foreign unmerged PR43 are excluded.
 Migration, deployment and server configuration are verified. Real Sandbox
-subscription delivery and entitlement acceptance remain pending the owner
-Flare login. Package installation alone is not application readiness.
+subscription delivery and entitlement acceptance remain pending final Sandbox
+checkout confirmation. The owner is signed in, and the actual Checkout is open.
+Package installation alone is not application readiness.
 
 ## Accepted release
 
@@ -98,6 +99,17 @@ Paddle Sandbox product Flare Pro has the configured active USD 12/month price
 `pri_01m3y1nvmgw2avt60bz87161c2` and 30-day trial. Public frontend settings
 match Sandbox; no token is reproduced in this report.
 
+The verified owner signed into the deployed Flare Settings page on 2026-10-06.
+The first Buy action exposed Paddle's `transaction_default_checkout_url_not_set`
+error. The existing Sandbox default payment link was set to
+`https://flare4u.tech/settings`; its UI shows Approved and Test Mode. Retrying
+Buy opened the actual Paddle Sandbox overlay with Flare Pro, quantity 1 and a
+30-day free trial. Only the official fictitious Paddle card was entered.
+The final Subscribe now step is awaiting the owner's action-time confirmation;
+no completed checkout, signed event or Pro grant is claimed from opening the form.
+Automatic `_ptxn` payment-method-update/dunning links have not been verified;
+the current client initializes Paddle when Buy is clicked.
+
 Owner-confirmed destination `ntfset_01m47zz283676cayy23388e71v` points at
 `https://flare-api-vm-260914.azurewebsites.net/billing/paddle/webhook`, Platform
 traffic/API1, with exactly subscription.created, updated, trialing, activated,
@@ -113,8 +125,8 @@ secret rights remain get/list. No server signing secret goes to worker/frontend.
 
 ## Remaining acceptance checks
 
-1. Use a fresh browser tab on the deployed 453ebec web and the owner's verified
-   Flare login for a real Sandbox checkout. Verify server-bound checkout intent, trialing Pro persisted
+1. Complete the prepared real Sandbox checkout in the owner's verified Flare
+   session. Verify server-bound checkout intent, trialing Pro persisted
    through refresh, signed delivery, workspace-wide state and cancellation.
    Never manually grant Pro or forge provider events to claim live verification.
 2. Replay the genuine event and verify unchanged state. Paddle changes
