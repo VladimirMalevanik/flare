@@ -95,6 +95,23 @@ report. There are no Azure logins, server keys, provider tokens, deployment jobs
 or automatic migration commands. Linux artifact build and checksum acceptance
 remain necessary before OPS-002 may treat this as a usable recovery candidate.
 
+### Dispatch context correction
+
+The first actual GitHub dispatch after PR44 merge failed HTTP422; run
+`37430202138` rejected `runner.temp` in job-level `env` at lines20–23. The earlier
+YAML parsing and Bash syntax checks did not validate GitHub context availability.
+GitHub permits `runner` at step scope, not `jobs.<job_id>.env`: see the
+[official context table](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability).
+
+The correction keeps only `PYTHONDONTWRITEBYTECODE` in job-level `env`. The first
+Bash step writes the four paths from `$RUNNER_TEMP` into `$GITHUB_ENV`; subsequent
+steps inherit them. Actionlint1.7.7 from its official checksum-verified release
+reproduced all four original context errors and accepts the corrected workflow.
+All ten Bash steps parse, and an execution of the initialization step verifies
+the exact four environment records, including paths containing whitespace.
+This is a workflow-only change; prior 215-test behavior evidence is preserved,
+not claimed rerun. A successful real Linux build is still required.
+
 ## Temporary limitations and recovery procedure
 
 This restores core service only. Billing/Pro, ZIP import management and new

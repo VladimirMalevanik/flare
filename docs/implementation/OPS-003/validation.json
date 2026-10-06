@@ -26,7 +26,7 @@
   "historical_core_tests_passed": 215,
   "historical_skipped": 0,
   "implementation_sha256": {
-    ".github/workflows/azure-schema21-core-fallback.yml": "ca20dfdfb1b058e14f9e01d16a09db9b260a6d3c69cb4de57acae0647f417746",
+    ".github/workflows/azure-schema21-core-fallback.yml": "5fd92de0f98ab316195ccf2dfb11b304cd7d98f9453cf17ded1796297ddbd85c",
     "backend/deploy/build_schema21_core_fallback.py": "a660ab8b389c90f507a4ca9ac7ae748f1fae2dc3acda0f301d2a27f9c9fb1c59",
     "backend/scripts/check_schema21_core_fallback.py": "1a69c48aac160266efc37e05b099407b4e2b164423b1c7eefe0a6ea9f885824a"
   },
@@ -46,5 +46,19 @@
   "status": "passed",
   "stored_fake_provider_flare": true,
   "warning": "Existing FastAPI StarletteDeprecationWarning for httpx TestClient",
-  "worker_fixture_environment": "test_independent_worker_process runs with explicit FLARE_PROCESS_ROLE=worker; legacy assertion unchanged"
+  "worker_fixture_environment": "test_independent_worker_process runs with explicit FLARE_PROCESS_ROLE=worker; legacy assertion unchanged",
+  "workflow_context_correction": {
+    "actual_linux_artifact_build": "pending operator branch dispatch and acceptance",
+    "bash_steps_parsed": 10,
+    "behavior_suite_rerun": false,
+    "environment_step_executed": "Exact four GITHUB_ENV records verified including whitespace in RUNNER_TEMP",
+    "optional_external_analyzers": "shellcheck/pyflakes disabled; semantic expression validation enabled",
+    "original_dispatch_http_status": 422,
+    "original_errors": "runner context unavailable in job env lines20\u201323",
+    "original_invalid_run": "37430202138",
+    "semantic_fixed": "Corrected workflow accepted (exit0)",
+    "semantic_negative": "Original workflow rejected with four context errors (exit1)",
+    "validator": "actionlint1.7.7 official checksum-verified darwin/arm64 release",
+    "validator_archive_sha256": "2693315b9093aeacb4ebd91a993fea54fc215057bf0da2659056b4bc033873db"
+  }
 }
