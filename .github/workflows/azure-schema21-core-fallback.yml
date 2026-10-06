@@ -17,11 +17,17 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       PYTHONDONTWRITEBYTECODE: "1"
-      SOURCE_DIR: ${{ runner.temp }}/flare-schema21-core-sources
-      BUILD_DIR: ${{ runner.temp }}/flare-schema21-core-build
-      RUNTIME_DIR: ${{ runner.temp }}/flare-schema21-core-runtime
-      ARTIFACT_DIR: ${{ runner.temp }}/flare-schema21-core-artifacts
     steps:
+      - name: Initialize build directories in the runner environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            "SOURCE_DIR=$RUNNER_TEMP/flare-schema21-core-sources" \
+            "BUILD_DIR=$RUNNER_TEMP/flare-schema21-core-build" \
+            "RUNTIME_DIR=$RUNNER_TEMP/flare-schema21-core-runtime" \
+            "ARTIFACT_DIR=$RUNNER_TEMP/flare-schema21-core-artifacts" \
+            >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
