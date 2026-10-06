@@ -2,9 +2,9 @@
 
 > Этот файл генерирует `task-sync`; вручную его не редактируют.
 
-Сформировано: `2026-10-06T06:47:15Z`
-Последнее обновление работы: `2026-10-06T06:47:15Z`
-Снимок состояния: `sha256:d36aa3cc037e6a05c83169796dd8a4289260f2326d319cfc7f3d7845d2e3b0cf`
+Сформировано: `2026-10-06T06:48:51Z`
+Последнее обновление работы: `2026-10-06T06:48:51Z`
+Снимок состояния: `sha256:358f081d78e03406ca4d780653f860769440cbca44eaac5f52ff6e239a3c41fa`
 
 ## Ближайшая цель
 
@@ -14,14 +14,14 @@
 
 ## Ближайшие шаги (не более пяти)
 
-1. `OPS-002` (в работе) — Activate workspace-wide Paddle Sandbox billing from reviewed PR36 on existing Flare Azure resources. Verify updated integration checks, coordinate merge, record backup/PITR and rollback boundaries, apply migration0021 through a controlled full checkout, deploy matching API/worker/web artifacts, save only Sandbox notification secret using existing server secret mechanism, and verify real Sandbox lifecycle. No Live, new paid resources, security weakening, foreign feature branches or premium quota changes.. Сейчас: Continue owner-authorized Sandbox activation after confirmed Paddle login: verify catalog, prepare notification destination, validate recovery gate, coordinate exact-SHA Azure migration and deployment.
+1. `OPS-002` (в работе) — Activate workspace-wide Paddle Sandbox billing from reviewed PR36 on existing Flare Azure resources. Verify updated integration checks, coordinate merge, record backup/PITR and rollback boundaries, apply migration0021 through a controlled full checkout, deploy matching API/worker/web artifacts, save only Sandbox notification secret using existing server secret mechanism, and verify real Sandbox lifecycle. No Live, new paid resources, security weakening, foreign feature branches or premium quota changes.. Сейчас: Continue Sandbox activation using verified release453ebec; authenticated Flare catalog confirms correct active Pro price and30-daytrial. Prepare platform-event destination; accepted runtime tree unchanged. Recovery validation and cloud rollout remain required.
 2. `API-003` (на проверке) — Fix the six regressions confirmed by the read-only audit of c811bbd: voice write authorization before provider work and nonblocking persistence, consistent ZIP export, dashboard duplicate capture and recent-insight errors, bounded Analyze status requests. Add reproducing regressions and fix concrete closely related defects found during implementation. Preserve existing product semantics and quotas; no migrations, billing, provider-budget changes, production dependencies or deployment.. Условие: PR43 b8c24f9: six confirmed fixes plus related capture/deadline regressions. Exact product c8fb1db independently reviewed PASS; local full suites and Playwright recovery PASS. GitHub CI self-managed backend/migrations/voice-runtime SUCCESS; five checks QUEUED during confirmed Actions runner-assignment incident https://www.githubstatus.com/ (2026-10-05 19:11 UTC onward). Await remaining CI and human acceptance before product merge; localhost8413 running, foreign tasks/shared checkout preserved.
 3. `WEB-002` (на проверке) — Add a Subscription section to Settings with Free, Pro and Team descriptions; grey Current for the current Free tier and blue Buy actions. Connect Pro Buy to official Paddle.js Sandbox overlay using public env placeholders and price pri_01m3y1nvmgw2avt60bz87161c2, quantity 1, authenticated email and customData.userId. Enforce sandbox-only tokens, single initialization and checkout locking, localized recoverable errors, existing design/auth preservation and frontend checks. Team stays explicitly unconfigured until a separate Sandbox price exists. No Live, server API key, webhooks, entitlement/DB changes, portal, cancellation or deployment.. Условие: Owner requested merge and deployment on 2026-10-02. PR32 merged and deployed to https://flare4u.tech/settings; Paddle remains Sandbox. Actual signed-in checkout/trial/payment verification is pending a Flare session; no paid access or plan DB changes.
 4. `OPS-001` (на проверке) — Resolve production staging service/upload path, API-worker storage reachability, worker isolation/resources, storage identity/network/CORS, physical ZIP deletion/retention and monitoring/load-test environment. Publish dated redacted operator decisions/evidence; no provisioning. Contract: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#ops-001.. Условие: Review redacted runtime/staging decision and evidence record; Vova selection/acceptance and sanitized inventory remain pending. Do not mark done or authorize rollout from public probes.
 
 ## В работе
 
-- `OPS-002` (в работе) — Activate workspace-wide Paddle Sandbox billing from reviewed PR36 on existing Flare Azure resources. Verify updated integration checks, coordinate merge, record backup/PITR and rollback boundaries, apply migration0021 through a controlled full checkout, deploy matching API/worker/web artifacts, save only Sandbox notification secret using existing server secret mechanism, and verify real Sandbox lifecycle. No Live, new paid resources, security weakening, foreign feature branches or premium quota changes.. Сейчас: Continue owner-authorized Sandbox activation after confirmed Paddle login: verify catalog, prepare notification destination, validate recovery gate, coordinate exact-SHA Azure migration and deployment.; владелец: Vova / Codex / OPS-002
+- `OPS-002` (в работе) — Activate workspace-wide Paddle Sandbox billing from reviewed PR36 on existing Flare Azure resources. Verify updated integration checks, coordinate merge, record backup/PITR and rollback boundaries, apply migration0021 through a controlled full checkout, deploy matching API/worker/web artifacts, save only Sandbox notification secret using existing server secret mechanism, and verify real Sandbox lifecycle. No Live, new paid resources, security weakening, foreign feature branches or premium quota changes.. Сейчас: Continue Sandbox activation using verified release453ebec; authenticated Flare catalog confirms correct active Pro price and30-daytrial. Prepare platform-event destination; accepted runtime tree unchanged. Recovery validation and cloud rollout remain required.; владелец: Vova / Codex / OPS-002
 
 ## На проверке
 
@@ -39,4 +39,4 @@
 
 ## Предупреждения
 
-- OPS-002: ещё не записаны опубликованная ветка и область файлов.
+Нет.
