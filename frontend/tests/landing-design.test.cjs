@@ -9,7 +9,7 @@ function fixture() {
   const state = [];
   let cursor = 0;
   const exports = {};
-  const source = fs.readFileSync(path.join(__dirname, '../src/app/page.tsx'), 'utf8');
+  const source = fs.readFileSync(path.join(__dirname, '../src/features/landing/landing-page.tsx'), 'utf8');
   const code = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
   }).outputText;

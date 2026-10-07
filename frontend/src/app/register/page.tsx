@@ -1,2 +1,7 @@
 import { AuthForm } from "@/features/auth/auth-form";
-export default function RegisterPage() { return <AuthForm register />; }
+import { redirectSignedInUser } from "@/lib/auth/server";
+
+export default async function RegisterPage() {
+  await redirectSignedInUser();
+  return <AuthForm register />;
+}

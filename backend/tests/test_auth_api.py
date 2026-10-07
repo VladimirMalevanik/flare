@@ -119,11 +119,41 @@ def test_production_cookie_and_dev_rejection(auth):
         _, response = register(client)
         assert 'Secure' in response.headers['set-cookie']
         assert '__Host-flare_session=' in response.headers['set-cookie']
+        assert 'Max-Age=2592000' in response.headers['set-cookie']
         assert client.get('/auth/me').status_code == 200
     settings.dev_mode = True
     with pytest.raises(RuntimeError, match='Production cannot'):
         with TestClient(create_app(settings)):
             pass
+
+
+def test_persistent_cookie_restores_account_in_reopened_browser(auth):
+    settings = Settings(
+        database_url=os.environ['DATABASE_URL'], cors_origins=['https://flare.test'],
+        email_verification_required=False,
+    )
+    with TestClient(create_app(settings), base_url='https://flare.test',
+                    headers={'Origin': 'https://flare.test'}) as first_browser:
+        _, response = register(first_browser)
+        assert 'Max-Age=2592000' in response.headers['set-cookie']
+        assert 'HttpOnly' in response.headers['set-cookie']
+        assert 'Secure' in response.headers['set-cookie']
+        assert 'SameSite=lax' in response.headers['set-cookie']
+        assert 'Domain=' not in response.headers['set-cookie']
+        original = first_browser.get('/auth/me').json()
+        saved_cookies = first_browser.cookies
+    # A new HTTP client represents reopening a browser with its persisted cookie jar.
+    with TestClient(create_app(settings), base_url='https://flare.test',
+                    headers={'Origin': 'https://flare.test'}, cookies=saved_cookies) as reopened:
+        restored = reopened.get('/auth/me')
+        assert restored.status_code == 200
+        assert restored.json() == original
+        assert 'set-cookie' not in restored.headers  # No sliding extension.
+        token = reopened.cookies.get('__Host-flare_session')
+        assert reopened.post('/auth/logout').status_code == 204
+        assert reopened.get('/auth/me').status_code == 401
+        reopened.cookies.set('__Host-flare_session', token)
+        assert reopened.get('/auth/me').status_code == 401
 
 
 def test_bad_cookie_never_falls_back_to_dev(auth):

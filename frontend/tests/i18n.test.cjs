@@ -143,7 +143,7 @@ test('shared LanguageSelector exposes supported locales and switches through the
 test('landing selectors and translated demo retain tab, filter, and evidence state', () => {
   const h = hooks();
   let locale = 'en';
-  const { default: Home } = load('../src/app/page.tsx', { react: h.react, '@/i18n/provider': { useI18n: () => i18nMock(locale).useI18n() } });
+  const { default: Home } = load('../src/features/landing/landing-page.tsx', { react: h.react, '@/i18n/provider': { useI18n: () => i18nMock(locale).useI18n() } });
   let tree = h.render(Home);
   assert.ok(text(tree).includes('Your notes go quiet.'));
   const all = nodes(tree);

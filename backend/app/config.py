@@ -18,8 +18,9 @@ class Settings:
     cors_origins: list[str]
     environment: str = "production"
     import_staging_root: str | None = None
-    session_lifetime_seconds: int = 604800
-    session_idle_seconds: int = 86400
+    # Persistent sign-in has a fixed 30-day ceiling; activity never extends it.
+    session_lifetime_seconds: int = 2_592_000
+    session_idle_seconds: int = 2_592_000
     dev_mode: bool = False
     dev_workspace_id: UUID | None = None
     dev_user_id: str | None = None
@@ -159,8 +160,8 @@ def load_settings() -> Settings:
         import_staging_root=os.getenv("FLARE_IMPORT_STAGING_ROOT"),
         database_url=os.getenv("DATABASE_URL"),
         environment=environment,
-        session_lifetime_seconds=int(os.getenv("SESSION_LIFETIME_SECONDS", "604800")),
-        session_idle_seconds=int(os.getenv("SESSION_IDLE_SECONDS", "86400")),
+        session_lifetime_seconds=int(os.getenv("SESSION_LIFETIME_SECONDS", "2592000")),
+        session_idle_seconds=int(os.getenv("SESSION_IDLE_SECONDS", "2592000")),
         cors_origins=[origin.strip() for origin in origins.split(",") if origin.strip()],
         dev_mode=os.getenv("FLARE_DEV_MODE", "false").strip().lower() == "true",
         dev_workspace_id=_optional_uuid("FLARE_DEV_WORKSPACE_ID"),

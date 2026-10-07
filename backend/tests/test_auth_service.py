@@ -74,10 +74,44 @@ def test_duplicate_email_rolls_back_workspace(auth):
         assert conn.execute('SELECT count(*) FROM workspaces').fetchone()[0] == before
 
 
-@pytest.mark.parametrize('update', ["expires_at=now()-interval '1 second'", "last_seen_at=now()-interval '2 days'"])
+@pytest.mark.parametrize('update', ["expires_at=now()-interval '1 second'", "last_seen_at=now()-interval '31 days'"])
 def test_session_expiration(auth, update):
     _, token = account(auth)
     with auth.database.connection() as conn:
         conn.execute(f'UPDATE auth_sessions SET {update} WHERE token_hash=%s', (token_digest(token),))
     with pytest.raises(InvalidCredentials):
         auth.current(token)
+
+
+@pytest.mark.parametrize('days_away', [2, 29])
+def test_returning_user_keeps_session_without_extending_absolute_expiry(auth, days_away):
+    _, token = account(auth)
+    with auth.database.connection() as conn:
+        original = conn.execute(
+            'SELECT expires_at FROM auth_sessions WHERE token_hash=%s',
+            (token_digest(token),),
+        ).fetchone()['expires_at']
+        conn.execute(
+            "UPDATE auth_sessions SET last_seen_at=now() - %s * interval '1 day' WHERE token_hash=%s",
+            (days_away, token_digest(token)),
+        )
+    assert auth.current(token).email_verified
+    with auth.database.connection() as conn:
+        stored = conn.execute(
+            'SELECT expires_at,last_seen_at,now() AS now FROM auth_sessions WHERE token_hash=%s',
+            (token_digest(token),),
+        ).fetchone()
+    assert stored['expires_at'] == original
+    assert (stored['now'] - stored['last_seen_at']).total_seconds() < 10
+
+
+def test_explicit_shorter_idle_policy_still_expires(auth):
+    _, token = account(auth)
+    with auth.database.connection() as conn:
+        conn.execute(
+            "UPDATE auth_sessions SET last_seen_at=now()-interval '2 hours' WHERE token_hash=%s",
+            (token_digest(token),),
+        )
+    shorter_policy = AuthService(auth.database, lifetime=2_592_000, idle_seconds=3600)
+    with pytest.raises(InvalidCredentials):
+        shorter_policy.current(token)
