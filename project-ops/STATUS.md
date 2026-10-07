@@ -2,9 +2,9 @@
 
 > Этот файл генерирует `task-sync`; вручную его не редактируют.
 
-Сформировано: `2026-10-07T09:00:47Z`
-Последнее обновление работы: `2026-10-07T09:00:47Z`
-Снимок состояния: `sha256:55e6369ec4a63428cef0c6767263e7fa98987c5f7a1bc825d016ad462350e5f8`
+Сформировано: `2026-10-07T09:13:32Z`
+Последнее обновление работы: `2026-10-07T09:13:32Z`
+Снимок состояния: `sha256:682b1449c3b40f6d7c240df9362618ca6601b9f923e91642d0aa26b31233ce17`
 
 ## Ближайшая цель
 
@@ -14,7 +14,7 @@
 
 ## Ближайшие шаги (не более пяти)
 
-1. `WEB-006` (в работе) — Simplify authenticated sidebar footer: language selection only in Settings, add a settings gear beside profile name, remove Funny mode and sounds rows from Settings and activate the existing mode only through ten presses of the new gear. Preserve existing navigation, themes, capture/Analyze behavior and team scopes. No dependencies, backend, main product merge or deployment.. Сейчас: Product a6751f7 published; frontend215 tests and lint pass. Validate build and desktop/mobile interaction before review.
+1. `WEB-006` (в работе) — Simplify authenticated sidebar footer: language selection only in Settings, add a settings gear beside profile name, remove Funny mode and sounds rows from Settings and activate the existing mode only through ten presses of the new gear. Preserve existing navigation, themes, capture/Analyze behavior and team scopes. No dependencies, backend, main product merge or deployment.. Сейчас: PR48 draft at4a899ea ready for human review; product4902654 validated: frontend215/lint, complete CI and Linux artifact, desktop/mobile Playwright. Previewlocalhost8415/settings.
 2. `API-004` (на проверке) — Fix owner-reported repeated Flare sign-in: persist a bounded secure session across browser restarts and return already authenticated users to their workspace. Preserve logout, revocation, verification/legal gates, cross-workspace access and billing. Add meaningful backend/frontend/browser regressions; integrate and deploy the scoped fix on existing Azure services with readiness and rollback verification. No new paid resources, secrets in source, migrations or unrelated feature changes.. Условие: Review PR47 b15f86d finite30day policy, preserved auth gates, mechanical landing extraction and actual HTTP QA; exactCI allgreen. ExistingAPI supports env policy. Merge and rollout requested by owner; no worker/schema change.
 3. `OPS-002` (на проверке) — Activate workspace-wide Paddle Sandbox billing from reviewed PR36 on existing Flare Azure resources. Verify updated integration checks, coordinate merge, record backup/PITR and rollback boundaries, apply migration0021 through a controlled full checkout, deploy matching API/worker/web artifacts, save only Sandbox notification secret using existing server secret mechanism, and verify real Sandbox lifecycle. No Live, new paid resources, security weakening, foreign feature branches or premium quota changes.. Условие: Review PR42 rollout evidence at6051c42: Azure schema0021 release453 ready; genuine Paddle Sandbox checkout and workspace Pro persisted; real Replay leaves subscription/binding/ledger/plan unchanged. Owner retained current test Pro. Immediate-cancellation acceptance explicitly deferred and activation_complete remains false.
 4. `API-003` (на проверке) — Fix the six regressions confirmed by the read-only audit of c811bbd: voice write authorization before provider work and nonblocking persistence, consistent ZIP export, dashboard duplicate capture and recent-insight errors, bounded Analyze status requests. Add reproducing regressions and fix concrete closely related defects found during implementation. Preserve existing product semantics and quotas; no migrations, billing, provider-budget changes, production dependencies or deployment.. Условие: PR43 b8c24f9: six confirmed fixes plus related capture/deadline regressions. Exact product c8fb1db independently reviewed PASS; local full suites and Playwright recovery PASS. GitHub CI self-managed backend/migrations/voice-runtime SUCCESS; five checks QUEUED during confirmed Actions runner-assignment incident https://www.githubstatus.com/ (2026-10-05 19:11 UTC onward). Await remaining CI and human acceptance before product merge; localhost8413 running, foreign tasks/shared checkout preserved.
@@ -22,7 +22,7 @@
 
 ## В работе
 
-- `WEB-006` (в работе) — Simplify authenticated sidebar footer: language selection only in Settings, add a settings gear beside profile name, remove Funny mode and sounds rows from Settings and activate the existing mode only through ten presses of the new gear. Preserve existing navigation, themes, capture/Analyze behavior and team scopes. No dependencies, backend, main product merge or deployment.. Сейчас: Product a6751f7 published; frontend215 tests and lint pass. Validate build and desktop/mobile interaction before review.; владелец: Fedor / Codex / WEB-006
+- `WEB-006` (в работе) — Simplify authenticated sidebar footer: language selection only in Settings, add a settings gear beside profile name, remove Funny mode and sounds rows from Settings and activate the existing mode only through ten presses of the new gear. Preserve existing navigation, themes, capture/Analyze behavior and team scopes. No dependencies, backend, main product merge or deployment.. Сейчас: PR48 draft at4a899ea ready for human review; product4902654 validated: frontend215/lint, complete CI and Linux artifact, desktop/mobile Playwright. Previewlocalhost8415/settings.; владелец: Fedor / Codex / WEB-006
 
 ## На проверке
 
