@@ -6,7 +6,7 @@ const path = require("node:path");
 const read = (relative) => fs.readFileSync(path.join(__dirname, relative), "utf8");
 
 test("public landing page exposes product, account, and legal routes", () => {
-  const source = read("../src/app/page.tsx");
+  const source = read("../src/features/landing/landing-page.tsx");
   for (const route of ["/register", "/login", "/privacy", "/terms"]) {
     assert.match(source, new RegExp(`href=[{]?\"${route.replace("/", "\\/")}\"`));
   }
@@ -33,7 +33,7 @@ test("macOS download page points both architectures at stable release assets", (
 });
 
 test("landing keeps Mac downloads out of public navigation and calls to action", () => {
-  const source = read("../src/app/page.tsx");
+  const source = read("../src/features/landing/landing-page.tsx");
   assert.doesNotMatch(source, /href="\/download"/);
   assert.doesNotMatch(source, /Download for Mac/);
 });
