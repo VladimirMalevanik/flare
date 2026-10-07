@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "./icons";
 import { WorkspaceProvider, useWorkspace } from "./workspace-context";
 import { Capture } from "@/features/capture/capture";
@@ -10,7 +10,6 @@ import { dataProvider } from "@/lib/data";
 import { Dialog } from "./dialog";
 import { BrandMark } from "./brand-mark";
 import { useI18n } from "@/i18n/provider";
-import { LanguageSelector } from "@/components/language-selector";
 const navigation = [
   { href: "/insights", label: "flares", icon: "insights" },
   { href: "/vault", label: "vault", icon: "vault" },
@@ -28,7 +27,8 @@ function Shell({ children }: { children: ReactNode }) {
   const { t, message } = useI18n();
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
-  const { dark, setTheme, openCapture, revision, notice, profile } =
+  const settingsPresses = useRef(0);
+  const { dark, setTheme, openCapture, revision, notice, profile, funnyMode, setFunnyMode } =
     useWorkspace();
   const initials =
     profile.name
@@ -92,7 +92,6 @@ function Shell({ children }: { children: ReactNode }) {
         </nav>
       </div>
       <div className="sidebar-footer">
-        <div className="sidebar-language"><span>{t("language")}</span><LanguageSelector /></div>
         <label className="theme-row">
           <Icon name="moon" />
           <span>{t("darkMode")}</span>
@@ -104,13 +103,33 @@ function Shell({ children }: { children: ReactNode }) {
             aria-label={t("darkMode")}
           />
         </label>
-        <Link href="/settings" className="profile">
-          <span className="avatar">{initials}</span>
-          <span>
-            {profile.name || t("unnamedProfile")}
-            <small>{profile.role || t("noRole")}</small>
-          </span>
-        </Link>
+        <div className="profile-row">
+          <Link href="/settings" className="profile" onClick={() => setDrawer(false)}>
+            <span className="avatar">{initials}</span>
+            <span className="profile-copy">
+              {profile.name || t("unnamedProfile")}
+              <small>{profile.role || t("noRole")}</small>
+            </span>
+          </Link>
+          <Link
+            href="/settings"
+            className="button icon-button profile-settings"
+            aria-label={t("settings")}
+            title={t("settings")}
+            data-funny-sound="off"
+            onClick={(event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              setDrawer(false);
+              settingsPresses.current += 1;
+              if (settingsPresses.current === 10) {
+                settingsPresses.current = 0;
+                setFunnyMode(!funnyMode);
+              }
+            }}
+          >
+            <Icon name="settings" />
+          </Link>
+        </div>
       </div>
     </>
   );

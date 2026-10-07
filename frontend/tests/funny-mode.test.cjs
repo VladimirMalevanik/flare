@@ -370,7 +370,7 @@ test('a changed daily cycle clears an armed/old result and a failed status resum
 });
 
 test('Funny mode and mute persist across a remount; disabling and cross-tab changes cancel the ritual', async () => {
-  const storage = new Map(), listeners = new Map();
+  const storage = new Map([['flare-funny-mode-v1', true]]), listeners = new Map();
   let stops = 0;
   const document = { documentElement: { dataset: {} } };
   const mount = () => {
@@ -398,7 +398,7 @@ test('Funny mode and mute persist across a remount; disabling and cross-tab chan
   tree = await first.render();
   assert.equal(tree.props.value.funnyRitual.phase, 'idle');
   assert.equal(document.documentElement.dataset.funnyMode, 'false');
-  storage.set('flare-funny-mode-v1', true);
+  storage.set('flare-funny-mode-v2', true);
   listeners.get('storage')();
   tree = await first.render();
   assert.equal(tree.props.value.funnyMode, true);
