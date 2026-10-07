@@ -119,6 +119,7 @@ function Shell({ children }: { children: ReactNode }) {
             data-funny-sound="off"
             onClick={(event) => {
               if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              if (pathname === "/settings") event.preventDefault();
               setDrawer(false);
               settingsPresses.current += 1;
               if (settingsPresses.current === 10) {

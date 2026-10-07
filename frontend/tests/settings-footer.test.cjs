@@ -50,7 +50,7 @@ function harness() {
   } };
 }
 const gear = tree => nodes(tree).find(node => node.props?.className === 'button icon-button profile-settings');
-const click = (tree, modifiers = {}) => gear(tree).props.onClick(modifiers);
+const click = (tree, modifiers = {}) => gear(tree).props.onClick({ preventDefault() {}, ...modifiers });
 
 test('profile gear opens Settings, retains its label and counts only its own ordinary activations', () => {
   const h = harness();
@@ -70,7 +70,10 @@ test('profile gear opens Settings, retains its label and counts only its own ord
   click(tree);
   assert.deepEqual(h.calls, [true]);
   tree = h.render();
-  for (let i = 0; i < 9; i++) { click(tree); tree = h.render(); }
+  let prevented = 0;
+  click(tree, { preventDefault() { prevented++; } });
+  assert.equal(prevented, 1);
+  for (let i = 0; i < 8; i++) { click(tree); tree = h.render(); }
   assert.deepEqual(h.calls, [true]);
   click(tree);
   assert.deepEqual(h.calls, [true, false]);
