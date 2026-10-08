@@ -81,7 +81,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       updateTheme(selected);
       setDark(selected === "dark" || (selected === "system" && media.matches));
       updateCompact(readLocal<boolean>("flare-compact", false) === true);
-      const storedFunnyMode = readLocal<boolean>("flare-funny-mode-v1", false) === true;
+      const storedFunnyMode = readLocal<boolean>("flare-funny-mode-v2", false) === true;
       const storedFunnySounds = readLocal<boolean>("flare-funny-sounds-v1", true) !== false;
       updateFunnyMode(storedFunnyMode);
       updateFunnySounds(storedFunnySounds);
@@ -130,7 +130,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setFunnyRitual((current) => ({ ...INITIAL_FUNNY_RITUAL, requestId: current.requestId }));
     }
     try {
-      writeLocal("flare-funny-mode-v1", value);
+      writeLocal("flare-funny-mode-v2", value);
     } catch {
       setNotice("Funny mode changed for this visit. Browser storage is unavailable.");
     }
