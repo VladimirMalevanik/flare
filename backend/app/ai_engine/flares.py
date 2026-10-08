@@ -22,6 +22,7 @@ def normalized(value: str) -> str:
 
 FILLER = re.compile(r'(?i)(it (?:is important to note|seems)|you may want|great opportunity|as an ai|as a language model|interesting insight|unlock|game.chang|важно отметить|кажется,|как языковая модель)')
 GENERIC = re.compile(r'(?i)^(?:improve communication|focus on priorities|consider testing with users|prioritize tasks|communicate better|улучшить коммуникацию|сосредоточиться на приоритетах)[.! ]*$')
+EXPLICIT_DECISION = re.compile(r'(?i)\b(decided|chose|selected|решили|выбрали)\b')
 NEGATIVE_GOAL = re.compile(r'(?i)\b(no (?:longer (?:a |our |the )?)?goal|not (?:a |our |the )?goal|cancelled|canceled|abandoned|dropped|deprioritized|deprioritised)\b')
 # Bounded lexical linkage, not similarity inference. MVP/core and Analyze/analysis
 # are the two explicit product vocabulary aliases; no general synonym inference.
@@ -132,14 +133,14 @@ def validate_candidates(candidates: FlareCandidates, analysis: TextAnalysis,
         quotes = ' '.join(e.quote for e in c.evidence)
         if c.type == 'Reminder':
             anchors = ' '.join(e.quote for e in c.evidence if set(e.supports) & {'commitment','constraint'})
-            if not re.search(r'(?i)\b(committed|promised|agreed|decided|must|required|обязались|решили|договорились|должны)\b|\brevisit\b.{1,100}\b(after|when)\b', anchors):
+            decision = EXPLICIT_DECISION.search(anchors)
+            if not decision and not re.search(r'(?i)\b(committed|promised|agreed|must|required|обязались|договорились|должны)\b|\brevisit\b.{1,100}\b(after|when)\b', anchors):
                 continue
             if not roles & {'commitment','constraint'}:
                 continue
             # A concrete decision remains useful durable context and can be surfaced
             # once without an artificial "today" sentence. Other commitments still
             # need evidence that their trigger or deadline is currently relevant.
-            decision = re.search(r'(?i)\b(decided|chose|selected|решили|выбрали)\b', anchors)
             if not decision:
                 if 'relevance' not in roles:
                     continue
