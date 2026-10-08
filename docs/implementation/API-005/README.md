@@ -27,15 +27,19 @@ rewrite, extra provider call, or automatic rerun.
 - Audited product baseline: `93b3f858f902157fb198a483816538db79658f67`.
 - New decision cases against the original validator: six expected failures
   (`chose`, `selected`, `выбрали`, each with commitment or constraint support).
-- Focused detector/context-selection suite after the final identity change:
-  **126 passed**, local Python 3.12, mock transports, no provider calls.
+- Queue-compatible detector/context-selection suite: **127 passed**, local
+  Python 3.12, mock transports, no provider calls. The two pinned legacy identity
+  cases cover default and changed limits; unrelated revision guards still reject.
 - Exact-source and quote mutations still fail; other commitments still require
   current relevance support; valid empty results remain valid.
 - Independent read-only review of the cue fix found no actionable defect.
-- Full self-managed PostgreSQL 17 backend suite: **1027 passed**; focused pipeline
-  suite: **186 passed**, including persistence, RLS, retry/atomicity and daily
+- Earlier tested tree `6ff35ba`: full self-managed PostgreSQL 17 backend suite
+  **1027 passed** and focused pipeline **186 passed**, including persistence,
+  RLS, retry/atomicity and daily
   scheduling. Schema `0021`, migration preservation probes and pip check passed.
   Only the task's disposable database was used and subsequently stopped.
+- Queue-compatible tree `88f4ad8`: focused PostgreSQL pipeline **187 passed**.
+  Full backend and exact-head CI are rechecked before release.
 - `git diff --check` passed.
 
 ## Production correlation and rollout boundary
