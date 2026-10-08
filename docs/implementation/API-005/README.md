@@ -13,10 +13,12 @@ checks. Exact source/quote validation and relevance requirements for other
 commitments remain intact. This does not require every collection of notes to
 produce a Flare; weak facts and intentions may still correctly return zero.
 
-Generation identity now includes `flare-validation-v2`. Generation rows are
-deduplicated by parent analysis and generation revision, so a future eligible
-daily run must not reuse a completed-empty result from the previous validator.
-Prompt and response schema provenance remain `flare-v7` / `flare-v1`.
+Generation identity remains compatible with the deployed worker. This corrects
+the decision behavior already promised by `flare-v7`; prompt, schema, model and
+limits remain unchanged. Public manual and scheduled daily runs allocate fresh
+request keys and parent analysis jobs, so a future eligible run invokes generation
+without reusing the earlier parent's completed-empty result. Keeping the existing
+identity also preserves compatibility for work queued before deployment.
 Existing completed daily runs remain immutable; there is no quota reset, data
 rewrite, extra provider call, or automatic rerun.
 
@@ -47,14 +49,16 @@ account and result details were requested from the owner.
 Azure worker state was Running and its release marker was
 `453ebec4b6592d1e089a3f5d04da0f35a78a4f09`. Limited GET-only log inspection
 returned no stage counters. Running state does not prove generation is healthy.
-Automatic approval review rejected an interactive API SSH shell because its
-capabilities are not confined to read-only diagnostics. Explicit owner approval
-for diagnostic READ ONLY queries is pending. No workaround, database writes,
-secret disclosure, restart, merge, or deployment is claimed here.
+The owner confirmed the affected account and read-only diagnostics. Automatic
+approval review still rejected an interactive API SSH shell because its capabilities
+are not confined to reading. Direct PostgreSQL connectivity timed out; no firewall
+rule was changed. Incident-specific database attribution remains unavailable.
+The owner separately requested deployment on 2026-10-08. No SSH workaround,
+database writes, secret disclosure, quota reset or incident-specific success is claimed.
 
-Rollout must coordinate API and worker generation revisions and check pending
-work before switching them. A new eligible daily run can use the new revision;
-earlier completed run results are retained unchanged.
+Rollout uses matching tested API and worker artifacts with the unchanged generation
+identity. Jobs already queued remain compatible; earlier completed daily results
+remain immutable. This avoids depending on an unobservable global queue drain.
 
 ## Remaining separately reproduced limitation
 

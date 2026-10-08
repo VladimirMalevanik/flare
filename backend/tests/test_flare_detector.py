@@ -23,6 +23,19 @@ SOURCES = [Evidence(source_id=S1, content='Our goal is to ship the MVP in two we
 EMPTY = TextAnalysis(observations=[])
 
 
+@pytest.mark.parametrize('limits,expected', [
+    ((1024, 32000, 5, 32000), 'flare-v1:441e7ec80b5de0191fe0d1783f40bf911de96da32894babf304f6ccc4835a11a'),
+    ((512, 24000, 3, 20000), 'flare-v1:4d623eb5906635c7cd0689031efa8b3e5f0cbd950ed205a83e438b966cdc27e9'),
+])
+def test_decision_correction_preserves_deployed_queue_identity(limits, expected):
+    # Pinned identities from release453: pending jobs must remain executable
+    # across this correction to the decision rules already in flare-v7.
+    completion, request_bytes, sources, input_bytes = limits
+    flare = FlareSettings(completion, request_bytes)
+    ai = replace(AISettings(), max_sources=sources, max_input_bytes=input_bytes)
+    assert flare.revision(ai) == expected
+
+
 def candidate():
     return {'type':'Recommendation', 'title':'Complete the core loop',
             'statement':'Telegram work would expand scope before the core flow is ready.',
