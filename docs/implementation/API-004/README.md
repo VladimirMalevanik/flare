@@ -16,7 +16,7 @@ Email verification and current legal acceptance are checked before that redirect
 Anonymous visitors keep the existing landing and forms. The interactive landing
 component was moved mechanically without changing its design or content.
 
-Entry routes make no API call when there is no recognized session cookie.
+During server rendering, entry routes make no API call when there is no recognized session cookie.
 An invalid or expired session shows the public page; a missing membership never
 loops into Vault. A backend outage with a presented session uses the existing
 retry error screen instead of pretending the user signed out.
@@ -27,6 +27,12 @@ Previously expired/revoked sessions are not restored. Existing sessions retain
 their original absolute expiry; after signing in again the new cookie and database
 session receive the thirty-day lifetime. Clearing browser data, incognito mode or
 a different browser still requires sign-in.
+
+Public entry pages also recheck the session when mounted, restored, focused or
+made visible in the browser. This returns an already signed-in user from a stale
+login form to their account. These bounded client checks do not read the HttpOnly
+cookie and leave anonymous forms usable. See [browser-return.md](browser-return.md)
+for the October 8 regression and its verification limits.
 
 ## Validation
 

@@ -60,16 +60,30 @@ function page(relative, server) {
     '@/lib/auth/server': server,
     '@/features/landing/landing-page': { default: 'landing' },
     '@/features/auth/auth-form': { AuthForm: 'auth' },
-    'react/jsx-runtime': { jsx: (type, props) => ({ type, props }) },
+    '@/components/auth-entry-session': { AuthEntrySession: 'auth-entry-session' },
+    'react/jsx-runtime': {
+      Fragment: 'fragment',
+      jsx: (type, props) => ({ type, props }),
+      jsxs: (type, props) => ({ type, props }),
+    },
   }).default;
+}
+
+function assertEntryPage(result, type, register = false) {
+  assert.equal(result.type, 'fragment');
+  const children = Array.from(result.props.children);
+  assert.equal(children.filter(child => child.type === 'auth-entry-session').length, 1,
+    'restored entry pages must mount one browser-session recheck');
+  const content = children.find(child => child.type === type);
+  assert.ok(content, 'the original public page remains available');
+  if (register) assert.equal(content.props.register, true);
 }
 
 for (const [relative, type] of entryPages) {
   test(`${relative}: guests see the existing page without an API dependency`, async () => {
     const h = harness({ cookie: 'flare-locale=es; ai_user_flare_site_analytics=anonymous' });
     const result = await page(relative, h.server)();
-    assert.equal(result.type, type);
-    if (relative.includes('register')) assert.equal(result.props.register, true);
+    assertEntryPage(result, type, relative.includes('register'));
     assert.equal(h.requests.length, 0);
   });
 
@@ -93,7 +107,7 @@ for (const [relative, type] of entryPages) {
   for (const status of [401, 403]) {
     test(`${relative}: ${status} never loops into a protected account`, async () => {
       const h = harness({ status });
-      assert.equal((await page(relative, h.server)()).type, type);
+      assertEntryPage(await page(relative, h.server)(), type, relative.includes('register'));
     });
   }
 
