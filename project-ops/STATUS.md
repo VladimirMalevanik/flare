@@ -2,9 +2,9 @@
 
 > Этот файл генерирует `task-sync`; вручную его не редактируют.
 
-Сформировано: `2026-10-08T11:41:36Z`
-Последнее обновление работы: `2026-10-08T11:41:36Z`
-Снимок состояния: `sha256:fa89bab706a22fa90e4725417d8ce0b461653dd034dc178bc61f8f10bf9b116b`
+Сформировано: `2026-10-08T11:42:25Z`
+Последнее обновление работы: `2026-10-08T11:42:25Z`
+Снимок состояния: `sha256:3d6e359a9895678b8f7ae55d92f6b3c97eeecb96f9ea41e1e0f77b0d32d5dc31`
 
 ## Ближайшая цель
 
@@ -14,7 +14,7 @@
 
 ## Ближайшие шаги (не более пяти)
 
-1. `API-004` (в работе) — Fix owner-reported repeated Flare sign-in: persist a bounded secure session across browser restarts and return already authenticated users to their workspace. Preserve logout, revocation, verification/legal gates, cross-workspace access and billing. Add meaningful backend/frontend/browser regressions; integrate and deploy the scoped fix on existing Azure services with readiness and rollback verification. No new paid resources, secrets in source, migrations or unrelated feature changes.. Сейчас: Revalidate restored public entry pages using existing session; preserve 30-day secure cookie and account checks. Add lifecycle regressions and deploy scoped frontend fix after validation.
+1. `API-004` (в работе) — Fix owner-reported repeated Flare sign-in: persist a bounded secure session across browser restarts and return already authenticated users to their workspace. Preserve logout, revocation, verification/legal gates, cross-workspace access and billing. Add meaningful backend/frontend/browser regressions; integrate and deploy the scoped fix on existing Azure services with readiness and rollback verification. No new paid resources, secrets in source, migrations or unrelated feature changes.. Сейчас: Add bounded client recheck on restored public entry pages; validate account gates, lifecycle events, expired/logout and transient failure behavior; frontend-only rollout.
 2. `API-005` (на проверке) — Investigate the owner-reported completed-empty Analyze over four notes and fix reproduced generation defects with regression evidence. Preserve exact evidence grounding, once-daily workspace allowance, provider request limits, billing and authorization. Use bounded read-only production diagnostics without exposing note contents or credentials; no quota resets or new paid resources. Coordinate any rollout using existing approved resources only after tests.. Условие: PR49 merged9663c9bc856898de62668465341a899c557b64c6 and deployed to existing Azure API+worker2026-10-08. APIdeploymentaaa55854-a447-4135-b6f9-5c65cbb6480a andworkerdeployment898d4aff-f21f-470a-b35a-7b4536b9941f both status4complete. Final15/15 GET smoke PASS; web remains510c973, session policy preserved. Queue-compatible generation identity unchanged453. Incident-specific cause remains unattributed; separate Stage2envelope defect still unresolved. Keepreview for eligible owner-run acceptance and remaining investigation.
 3. `WEB-006` (на проверке) — Simplify authenticated sidebar footer: language selection only in Settings, add a settings gear beside profile name, remove Funny mode and sounds rows from Settings and activate the existing mode only through ten presses of the new gear. Preserve existing navigation, themes, capture/Analyze behavior and team scopes. No dependencies, backend, main product merge or deployment.. Условие: Draft PR48 at4a899ea; simplified sidebar footer and removed visible Funny preferences. Product4902654 verified, own localhost8415/settings available. Await owner acceptance; no product main merge or deployment.
 4. `OPS-002` (на проверке) — Activate workspace-wide Paddle Sandbox billing from reviewed PR36 on existing Flare Azure resources. Verify updated integration checks, coordinate merge, record backup/PITR and rollback boundaries, apply migration0021 through a controlled full checkout, deploy matching API/worker/web artifacts, save only Sandbox notification secret using existing server secret mechanism, and verify real Sandbox lifecycle. No Live, new paid resources, security weakening, foreign feature branches or premium quota changes.. Условие: Review PR42 rollout evidence at6051c42: Azure schema0021 release453 ready; genuine Paddle Sandbox checkout and workspace Pro persisted; real Replay leaves subscription/binding/ledger/plan unchanged. Owner retained current test Pro. Immediate-cancellation acceptance explicitly deferred and activation_complete remains false.
@@ -22,7 +22,7 @@
 
 ## В работе
 
-- `API-004` (в работе) — Fix owner-reported repeated Flare sign-in: persist a bounded secure session across browser restarts and return already authenticated users to their workspace. Preserve logout, revocation, verification/legal gates, cross-workspace access and billing. Add meaningful backend/frontend/browser regressions; integrate and deploy the scoped fix on existing Azure services with readiness and rollback verification. No new paid resources, secrets in source, migrations or unrelated feature changes.. Сейчас: Revalidate restored public entry pages using existing session; preserve 30-day secure cookie and account checks. Add lifecycle regressions and deploy scoped frontend fix after validation.; владелец: Vova / release coordinator
+- `API-004` (в работе) — Fix owner-reported repeated Flare sign-in: persist a bounded secure session across browser restarts and return already authenticated users to their workspace. Preserve logout, revocation, verification/legal gates, cross-workspace access and billing. Add meaningful backend/frontend/browser regressions; integrate and deploy the scoped fix on existing Azure services with readiness and rollback verification. No new paid resources, secrets in source, migrations or unrelated feature changes.. Сейчас: Add bounded client recheck on restored public entry pages; validate account gates, lifecycle events, expired/logout and transient failure behavior; frontend-only rollout.; владелец: Vova / release coordinator
 
 ## На проверке
 
@@ -43,4 +43,4 @@
 
 ## Предупреждения
 
-- API-004: ещё не записаны опубликованная ветка и область файлов.
+Нет.
