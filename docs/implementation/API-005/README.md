@@ -30,6 +30,10 @@ rewrite, extra provider call, or automatic rerun.
 - Exact-source and quote mutations still fail; other commitments still require
   current relevance support; valid empty results remain valid.
 - Independent read-only review of the cue fix found no actionable defect.
+- Full self-managed PostgreSQL 17 backend suite: **1027 passed**; focused pipeline
+  suite: **186 passed**, including persistence, RLS, retry/atomicity and daily
+  scheduling. Schema `0021`, migration preservation probes and pip check passed.
+  Only the task's disposable database was used and subsequently stopped.
 - `git diff --check` passed.
 
 ## Production correlation and rollout boundary
