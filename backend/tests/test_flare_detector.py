@@ -64,13 +64,40 @@ def test_one_strong_source_can_suffice(text,kind,roles):
     assert len(validated([c],[Evidence(source_id=S1,content=text)]).flares)==1
 
 
-def test_explicit_decision_can_be_a_durable_reminder_without_today_filler():
-    text = 'We decided to use PostgreSQL for the MVP database.'
+@pytest.mark.parametrize('text', [
+    'We decided to use PostgreSQL for the MVP database.',
+    'We chose PostgreSQL for the MVP database.',
+    'We selected PostgreSQL for the MVP database.',
+    'Мы решили использовать PostgreSQL для базы проекта.',
+    'Мы выбрали PostgreSQL для базы проекта.',
+])
+@pytest.mark.parametrize('supports', [['commitment'], ['constraint']])
+def test_explicit_decision_can_be_a_durable_reminder_without_today_filler(text, supports):
+    c = candidate()
+    c.update(type='Reminder', action=None, evidence=[
+        {'source_id': S1, 'quote': text, 'supports': supports},
+    ])
+    assert len(validated([c], [Evidence(source_id=S1, content=text)]).flares) == 1
+
+
+@pytest.mark.parametrize('text', [
+    'We chose PostgreSQL for the MVP database.',
+    'We selected PostgreSQL for the MVP database.',
+    'Мы выбрали PostgreSQL для базы проекта.',
+])
+@pytest.mark.parametrize('mutation', ['source', 'quote'])
+def test_explicit_decision_does_not_bypass_exact_evidence(text, mutation):
     c = candidate()
     c.update(type='Reminder', action=None, evidence=[
         {'source_id': S1, 'quote': text, 'supports': ['commitment']},
     ])
-    assert len(validated([c], [Evidence(source_id=S1, content=text)]).flares) == 1
+    reference = c['evidence'][0]
+    if mutation == 'source':
+        reference['source_id'] = S2
+    else:
+        reference['quote'] = text.replace('PostgreSQL', 'SQLite')
+    with pytest.raises(ValueError):
+        validated([c], [Evidence(source_id=S1, content=text)])
 
 
 def test_evidenced_problem_can_produce_a_linked_recommendation_without_fake_goal():
@@ -302,6 +329,20 @@ def test_historical_commitment_is_not_present_relevance(text):
     c = candidate()
     c.update(type='Reminder', action=None, evidence=[
         {'source_id': S1, 'quote': text, 'supports': ['commitment', 'relevance']}])
+    assert validated([c], [Evidence(source_id=S1, content=text)]).flares == []
+
+
+@pytest.mark.parametrize('text', [
+    'We committed to review the contract tomorrow.',
+    'We promised to review the contract tomorrow.',
+    'We agreed to review the contract tomorrow.',
+    'Мы договорились проверить договор завтра.',
+])
+def test_other_commitments_still_require_relevance_support(text):
+    c = candidate()
+    c.update(type='Reminder', action=None, evidence=[
+        {'source_id': S1, 'quote': text, 'supports': ['commitment']},
+    ])
     assert validated([c], [Evidence(source_id=S1, content=text)]).flares == []
 
 
