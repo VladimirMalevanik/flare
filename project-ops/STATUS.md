@@ -2,9 +2,9 @@
 
 > Этот файл генерирует `task-sync`; вручную его не редактируют.
 
-Сформировано: `2026-10-08T09:57:27Z`
-Последнее обновление работы: `2026-10-08T09:57:27Z`
-Снимок состояния: `sha256:8a19c3bce7c179728834e3a7b1640a51dde2bb2e3375e19eb88021c11d3a301d`
+Сформировано: `2026-10-08T11:07:09Z`
+Последнее обновление работы: `2026-10-08T11:07:09Z`
+Снимок состояния: `sha256:f2fc794373be4ccdba5813e298a37971a224fc5e5bba078034497ba02c0cda8f`
 
 ## Ближайшая цель
 
@@ -14,7 +14,7 @@
 
 ## Ближайшие шаги (не более пяти)
 
-1. `API-005` (в работе) — Investigate the owner-reported completed-empty Analyze over four notes and fix reproduced generation defects with regression evidence. Preserve exact evidence grounding, once-daily workspace allowance, provider request limits, billing and authorization. Use bounded read-only production diagnostics without exposing note contents or credentials; no quota resets or new paid resources. Coordinate any rollout using existing approved resources only after tests.. Сейчас: Reproduce and fix concrete empty-result validation defects; correlate production outcomes with bounded read-only evidence.
+1. `API-005` (в работе) — Investigate the owner-reported completed-empty Analyze over four notes and fix reproduced generation defects with regression evidence. Preserve exact evidence grounding, once-daily workspace allowance, provider request limits, billing and authorization. Use bounded read-only production diagnostics without exposing note contents or credentials; no quota resets or new paid resources. Coordinate any rollout using existing approved resources only after tests.. Сейчас: Preserve queue-compatible generation identity, validate and deploy owner-authorized decision cue fix
 2. `WEB-006` (на проверке) — Simplify authenticated sidebar footer: language selection only in Settings, add a settings gear beside profile name, remove Funny mode and sounds rows from Settings and activate the existing mode only through ten presses of the new gear. Preserve existing navigation, themes, capture/Analyze behavior and team scopes. No dependencies, backend, main product merge or deployment.. Условие: Draft PR48 at4a899ea; simplified sidebar footer and removed visible Funny preferences. Product4902654 verified, own localhost8415/settings available. Await owner acceptance; no product main merge or deployment.
 3. `OPS-002` (на проверке) — Activate workspace-wide Paddle Sandbox billing from reviewed PR36 on existing Flare Azure resources. Verify updated integration checks, coordinate merge, record backup/PITR and rollback boundaries, apply migration0021 through a controlled full checkout, deploy matching API/worker/web artifacts, save only Sandbox notification secret using existing server secret mechanism, and verify real Sandbox lifecycle. No Live, new paid resources, security weakening, foreign feature branches or premium quota changes.. Условие: Review PR42 rollout evidence at6051c42: Azure schema0021 release453 ready; genuine Paddle Sandbox checkout and workspace Pro persisted; real Replay leaves subscription/binding/ledger/plan unchanged. Owner retained current test Pro. Immediate-cancellation acceptance explicitly deferred and activation_complete remains false.
 4. `API-003` (на проверке) — Fix the six regressions confirmed by the read-only audit of c811bbd: voice write authorization before provider work and nonblocking persistence, consistent ZIP export, dashboard duplicate capture and recent-insight errors, bounded Analyze status requests. Add reproducing regressions and fix concrete closely related defects found during implementation. Preserve existing product semantics and quotas; no migrations, billing, provider-budget changes, production dependencies or deployment.. Условие: PR43 b8c24f9: six confirmed fixes plus related capture/deadline regressions. Exact product c8fb1db independently reviewed PASS; local full suites and Playwright recovery PASS. GitHub CI self-managed backend/migrations/voice-runtime SUCCESS; five checks QUEUED during confirmed Actions runner-assignment incident https://www.githubstatus.com/ (2026-10-05 19:11 UTC onward). Await remaining CI and human acceptance before product merge; localhost8413 running, foreign tasks/shared checkout preserved.
@@ -22,7 +22,7 @@
 
 ## В работе
 
-- `API-005` (в работе) — Investigate the owner-reported completed-empty Analyze over four notes and fix reproduced generation defects with regression evidence. Preserve exact evidence grounding, once-daily workspace allowance, provider request limits, billing and authorization. Use bounded read-only production diagnostics without exposing note contents or credentials; no quota resets or new paid resources. Coordinate any rollout using existing approved resources only after tests.. Сейчас: Reproduce and fix concrete empty-result validation defects; correlate production outcomes with bounded read-only evidence.; владелец: Vova / Codex / API-005
+- `API-005` (в работе) — Investigate the owner-reported completed-empty Analyze over four notes and fix reproduced generation defects with regression evidence. Preserve exact evidence grounding, once-daily workspace allowance, provider request limits, billing and authorization. Use bounded read-only production diagnostics without exposing note contents or credentials; no quota resets or new paid resources. Coordinate any rollout using existing approved resources only after tests.. Сейчас: Preserve queue-compatible generation identity, validate and deploy owner-authorized decision cue fix; владелец: Vova / release coordinator
 
 ## На проверке
 
