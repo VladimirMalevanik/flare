@@ -2,9 +2,9 @@
 
 > Этот файл генерирует `task-sync`; вручную его не редактируют.
 
-Сформировано: `2026-10-08T14:21:04Z`
-Последнее обновление работы: `2026-10-08T14:21:04Z`
-Снимок состояния: `sha256:3fa3ddefc13d41b6069266277a56103323e0d8d36ea1d81d572cd9cc5a50ea42`
+Сформировано: `2026-10-08T14:25:09Z`
+Последнее обновление работы: `2026-10-08T14:25:09Z`
+Снимок состояния: `sha256:d182c0c028b0b79fb3779aa981c38fe27623b0e9e69863fe4f526af4aee42c81`
 
 ## Ближайшая цель
 
@@ -14,7 +14,7 @@
 
 ## Ближайшие шаги (не более пяти)
 
-1. `API-005` (в работе) — Investigate the owner-reported completed-empty Analyze over four notes and fix reproduced generation defects with regression evidence. Preserve exact evidence grounding, once-daily workspace allowance, provider request limits, billing and authorization. Use bounded read-only production diagnostics without exposing note contents or credentials; no quota resets or new paid resources. Coordinate any rollout using existing approved resources only after tests.. Сейчас: Correlate today Ilyas completed-empty run, reproduce decision omission and declare bounded generation/telemetry regression scope.
+1. `API-005` (в работе) — Investigate the owner-reported completed-empty Analyze over four notes and fix reproduced generation defects with regression evidence. Preserve exact evidence grounding, once-daily workspace allowance, provider request limits, billing and authorization. Use bounded read-only production diagnostics without exposing note contents or credentials; no quota resets or new paid resources. Coordinate any rollout using existing approved resources only after tests.. Сейчас: Diagnose confirmed Ilyas run through fixed read-only Cloud Shell SQL; reproduce and fix explicit-decision omission with strict grounding and daily replay regressions.
 2. `API-004` (на проверке) — Fix owner-reported repeated Flare sign-in: persist a bounded secure session across browser restarts and return already authenticated users to their workspace. Preserve logout, revocation, verification/legal gates, cross-workspace access and billing. Add meaningful backend/frontend/browser regressions; integrate and deploy the scoped fix on existing Azure services with readiness and rollback verification. No new paid resources, secrets in source, migrations or unrelated feature changes.. Условие: PR50 merged at a6046adc24ab6dd3d22ae7a9c4d752c49cd07a13. Exact merged CI37773350056 and Linux artifact37773350042 succeeded. Azure web deployment03b00bcb-5bb3-4e97-8519-30bd09f73a24 completed with status4; an explicit restart was needed to serve the new build. Final17/17 GET smoke passed; the real signed-in browser login entry opens Vault without credentials. API/worker9663 and thirty-day policy unchanged. Actual owner Yandex Browser process-restart acceptance remains pending; keep review.
 3. `OPS-002` (на проверке) — Activate workspace-wide Paddle Sandbox billing from reviewed PR36 on existing Flare Azure resources. Verify updated integration checks, coordinate merge, record backup/PITR and rollback boundaries, apply migration0021 through a controlled full checkout, deploy matching API/worker/web artifacts, save only Sandbox notification secret using existing server secret mechanism, and verify real Sandbox lifecycle. No Live, new paid resources, security weakening, foreign feature branches or premium quota changes.. Условие: Review PR42 rollout evidence at6051c42: Azure schema0021 release453 ready; genuine Paddle Sandbox checkout and workspace Pro persisted; real Replay leaves subscription/binding/ledger/plan unchanged. Owner retained current test Pro. Immediate-cancellation acceptance explicitly deferred and activation_complete remains false.
 4. `API-003` (на проверке) — Fix the six regressions confirmed by the read-only audit of c811bbd: voice write authorization before provider work and nonblocking persistence, consistent ZIP export, dashboard duplicate capture and recent-insight errors, bounded Analyze status requests. Add reproducing regressions and fix concrete closely related defects found during implementation. Preserve existing product semantics and quotas; no migrations, billing, provider-budget changes, production dependencies or deployment.. Условие: PR43 b8c24f9: six confirmed fixes plus related capture/deadline regressions. Exact product c8fb1db independently reviewed PASS; local full suites and Playwright recovery PASS. GitHub CI self-managed backend/migrations/voice-runtime SUCCESS; five checks QUEUED during confirmed Actions runner-assignment incident https://www.githubstatus.com/ (2026-10-05 19:11 UTC onward). Await remaining CI and human acceptance before product merge; localhost8413 running, foreign tasks/shared checkout preserved.
@@ -22,7 +22,7 @@
 
 ## В работе
 
-- `API-005` (в работе) — Investigate the owner-reported completed-empty Analyze over four notes and fix reproduced generation defects with regression evidence. Preserve exact evidence grounding, once-daily workspace allowance, provider request limits, billing and authorization. Use bounded read-only production diagnostics without exposing note contents or credentials; no quota resets or new paid resources. Coordinate any rollout using existing approved resources only after tests.. Сейчас: Correlate today Ilyas completed-empty run, reproduce decision omission and declare bounded generation/telemetry regression scope.; владелец: Vova / release coordinator
+- `API-005` (в работе) — Investigate the owner-reported completed-empty Analyze over four notes and fix reproduced generation defects with regression evidence. Preserve exact evidence grounding, once-daily workspace allowance, provider request limits, billing and authorization. Use bounded read-only production diagnostics without exposing note contents or credentials; no quota resets or new paid resources. Coordinate any rollout using existing approved resources only after tests.. Сейчас: Diagnose confirmed Ilyas run through fixed read-only Cloud Shell SQL; reproduce and fix explicit-decision omission with strict grounding and daily replay regressions.; владелец: Vova / release coordinator
 
 ## На проверке
 
@@ -42,4 +42,4 @@
 
 ## Предупреждения
 
-- API-005: ещё не записаны опубликованная ветка и область файлов.
+Нет.
