@@ -1,0 +1,66 @@
+# API-005 — explicit decision reminders
+
+Owner report, 2026-10-08: generating from four saved records twice showed no
+Flares. This report is not yet attributed to a particular completed database run.
+
+## Reproduced defect and change
+
+The `flare-v7` prompt explicitly permits a durable Reminder for
+`decided/chose/selected/решили/выбрали`. The validator checked a narrower
+commitment expression first, silently dropping the latter three cues before
+reaching its decision check. One shared decision expression now governs both
+checks. Exact source/quote validation and relevance requirements for other
+commitments remain intact. This does not require every collection of notes to
+produce a Flare; weak facts and intentions may still correctly return zero.
+
+Generation identity now includes `flare-validation-v2`. Generation rows are
+deduplicated by parent analysis and generation revision, so a future eligible
+daily run must not reuse a completed-empty result from the previous validator.
+Prompt and response schema provenance remain `flare-v7` / `flare-v1`.
+Existing completed daily runs remain immutable; there is no quota reset, data
+rewrite, extra provider call, or automatic rerun.
+
+## Evidence
+
+- Audited product baseline: `93b3f858f902157fb198a483816538db79658f67`.
+- New decision cases against the original validator: six expected failures
+  (`chose`, `selected`, `выбрали`, each with commitment or constraint support).
+- Focused detector/context-selection suite after the final identity change:
+  **126 passed**, local Python 3.12, mock transports, no provider calls.
+- Exact-source and quote mutations still fail; other commitments still require
+  current relevance support; valid empty results remain valid.
+- Independent read-only review of the cue fix found no actionable defect.
+- `git diff --check` passed.
+
+## Production correlation and rollout boundary
+
+Read-only browser inspection showed an authenticated owner workspace with four
+saved records (three notes and one file), zero available Flares, and today's
+Analyze action available. No Analyze action was submitted, note changed, or
+account switched. This may be a different collection from the reported incident;
+account and result details were requested from the owner.
+
+Azure worker state was Running and its release marker was
+`453ebec4b6592d1e089a3f5d04da0f35a78a4f09`. Limited GET-only log inspection
+returned no stage counters. Running state does not prove generation is healthy.
+Automatic approval review rejected an interactive API SSH shell because its
+capabilities are not confined to read-only diagnostics. Explicit owner approval
+for diagnostic READ ONLY queries is pending. No workaround, database writes,
+secret disclosure, restart, merge, or deployment is claimed here.
+
+Rollout must coordinate API and worker generation revisions and check pending
+work before switching them. A new eligible daily run can use the new revision;
+earlier completed run results are retained unchanged.
+
+## Remaining separately reproduced limitation
+
+Context selection bounds the extraction request, while generation carries the
+same evidence plus analysis under its own 32,000-byte ceiling. Four 6,500-byte
+synthetic notes and one short valid observation can fit extraction but exceed
+generation. That case fails with `invalid_request`; it is not a completed-empty
+result. This patch does not increase request limits or truncate pinned evidence.
+A complete fix needs an enforced analysis-output byte allowance and selection
+that reserves the full generation envelope before pinning; checking an empty
+analysis alone is insufficient. Preserve all pinned counterevidence and exact
+quotes. Incident correlation must distinguish this failure from valid empty
+output and from the corrected decision filter.

@@ -6,6 +6,11 @@ import os
 from app.config import AISettings
 from app.ai_engine.flare_prompts import PROMPT_VERSION, SCHEMA_VERSION
 
+# Generation is deduplicated independently of the deployed worker release.
+# Include validator changes so eligible future runs do not reuse an older
+# completed result produced by different candidate acceptance rules.
+VALIDATION_VERSION = 'flare-validation-v2'
+
 
 @dataclass(frozen=True)
 class FlareSettings:
@@ -21,7 +26,7 @@ class FlareSettings:
     def revision(self, ai: AISettings) -> str:
         self.validate()
         ai.validate()
-        values = [PROMPT_VERSION, SCHEMA_VERSION, ai.model, ai.reasoning_effort,
+        values = [PROMPT_VERSION, SCHEMA_VERSION, VALIDATION_VERSION, ai.model, ai.reasoning_effort,
                   self.max_completion_tokens, self.max_request_bytes, ai.max_sources, ai.max_input_bytes]
         return 'flare-v1:' + sha256(json.dumps(values).encode()).hexdigest()
 

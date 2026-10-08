@@ -280,6 +280,18 @@ def test_prompt_revision_changes_generation_identity(monkeypatch):
     assert current != settings.revision(ai)
 
 
+def test_validator_revision_changes_generation_identity_without_changing_prompt(monkeypatch):
+    import app.ai_engine.flare_config as config
+    settings, ai = FlareSettings(), AISettings()
+    current = settings.revision(ai)
+    original_prompt = config.PROMPT_VERSION
+    original_schema = config.SCHEMA_VERSION
+    monkeypatch.setattr(config, 'VALIDATION_VERSION', 'different-validation-version')
+    assert settings.revision(ai) != current
+    assert config.PROMPT_VERSION == original_prompt
+    assert config.SCHEMA_VERSION == original_schema
+
+
 @pytest.mark.parametrize('finish', ['length','tool_calls','content_filter'])
 def test_incomplete_output_invalid(finish):
     def handler(_):
