@@ -6,6 +6,7 @@ import os
 from app.config import AISettings
 from app.ai_engine.flare_prompts import PROMPT_VERSION, SCHEMA_VERSION
 
+
 @dataclass(frozen=True)
 class FlareSettings:
     max_completion_tokens: int = 1024
