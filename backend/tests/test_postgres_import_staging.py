@@ -399,15 +399,16 @@ def test_pg17_restricted_admin_ownership_grants_preserved_and_rollback(monkeypat
     from psycopg.conninfo import make_conninfo
     bootstrap = make_conninfo(os.environ['TEST_DATABASE_URL'], dbname='template1')
     database, role = 'staging_' + uuid4().hex, 'staging_admin_' + uuid4().hex
+    admin_password = uuid4().hex  # Disposable role, also works with CI's SCRAM TCP.
     with psycopg.connect(bootstrap, autocommit=True) as c:
         if c.execute('SELECT rolsuper FROM pg_roles WHERE rolname=current_user').fetchone() != (True,):
             pytest.skip('Disposable bootstrap superuser required')
         assert int(c.execute('SHOW server_version_num').fetchone()[0])//10000 == 17
         source = psycopg.conninfo.conninfo_to_dict(os.environ['TEST_DATABASE_URL'])['dbname']
         c.execute(sql.SQL('CREATE DATABASE {} TEMPLATE {}').format(sql.Identifier(database), sql.Identifier(source)))
-        c.execute(sql.SQL('CREATE ROLE {} LOGIN NOSUPERUSER NOCREATEDB CREATEROLE INHERIT NOBYPASSRLS').format(sql.Identifier(role)))
+        c.execute(sql.SQL('CREATE ROLE {} LOGIN NOSUPERUSER NOCREATEDB CREATEROLE INHERIT NOBYPASSRLS PASSWORD {}').format(sql.Identifier(role), sql.Literal(admin_password)))
     cloned_bootstrap = make_conninfo(bootstrap, dbname=database)
-    admin = make_conninfo(cloned_bootstrap, user=role)
+    admin = make_conninfo(cloned_bootstrap, user=role, password=admin_password)
     spec = importlib.util.spec_from_file_location('staging_migration', Path(__file__).resolve().parents[1]/'migrations/versions/0022_postgres_import_staging.py')
     migration = importlib.util.module_from_spec(spec); spec.loader.exec_module(migration)
     class Op:

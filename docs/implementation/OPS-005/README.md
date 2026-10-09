@@ -83,6 +83,14 @@ UTC daily allowance preservation. The separate restricted-administrator checker
 passed 28 ownership/rejection/rollback cases and repeat upgrade to 0022.
 Frontend: 256 tests passed; lint and production build passed. Cancellation tests
 cover opening, deadline expiry, repeated client cancellation and bounded lock waits.
+Actual production-built Next→API→PG upload checks passed for an exact 8MiB ZIP
+both immediately and paced over 34.239 seconds; the reconstructed 32 blocks matched
+the request SHA-256. An actual 8MiB+1 PUT failed with HTTP413 `compressed_bytes`,
+cleared its upload token and was retired by the cleanup consumer. This loopback
+fixture used explicit test identity and did not finalize or run Analyze; it is not
+Azure or browser drag/drop acceptance. Linux CI exposed a SCRAM-specific missing
+password in the disposable administrator fixture; the test now creates a random
+test-only password and overrides the bootstrap DSN password for that new role.
 Production rollout and live smoke are still pending. No production import success
 is claimed yet.
 The deterministic synthetic fixture contains 12 supported text files (.md,
