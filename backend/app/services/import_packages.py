@@ -17,11 +17,22 @@ async def _storage_call(function, *args):
     operation = asyncio.create_task(asyncio.to_thread(function, *args))
     try:
         return await asyncio.shield(operation)
-    except asyncio.CancelledError:
-        try:
-            await asyncio.shield(operation)
-        finally:
-            raise
+    except asyncio.CancelledError as cancelled:
+        # A timeout and a client disconnect can cancel the request repeatedly.
+        # Every cancellation must still wait for this bounded thread: otherwise
+        # opening/sealing could finish after teardown has already raced it.
+        while not operation.done():
+            try:
+                await asyncio.shield(operation)
+            except asyncio.CancelledError:
+                continue
+            except BaseException:
+                break
+        # Retrieve a failed result, but preserve the original cancellation as
+        # the reason for teardown. The synchronous operation is now settled.
+        if not operation.cancelled():
+            operation.exception()
+        raise cancelled
 
 
 class ImportPackageService:

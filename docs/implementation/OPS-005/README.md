@@ -38,7 +38,9 @@ No open database transaction spans client streaming or decoder execution.
 
 Payload blocks are at most 256KiB. SQL independently limits objects to 8MiB,
 live declared reservations to 64MiB globally, and newly admitted archive bytes to
-128MiB per rolling hour. These are ceilings, not a paid storage reservation.
+128MiB per rolling hour and 128 upload admissions per hour. A workspace can
+create at most 120 package sessions per hour. Content-free receipts and retirement
+fences are retained; the time window expiry does not delete those rows. These are ceilings, not a paid storage reservation.
 Workspace admission, archive inspection and package publication bounds remain
 independent. Payload deletion does not remove content-free receipts/tombstones.
 Churn caps bound archive WAL production; operator monitoring must still track
@@ -50,6 +52,10 @@ up to the existing 7-day backup window. This is not immediate irreversible erasu
 from all backups. Do not shorten production backup retention for this feature.
 
 ## Runtime policy and rollout
+
+Next external rewrites explicitly allow 150 seconds, covering the API’s 120-second
+streaming deadline and bounded 3-second pool/2-second lock/5-second SQL operations;
+this stays below Azure’s 240-second request ceiling.
 
 See backend/.env.import-production.example for every explicit admission, ZIP,
 parser, process, retry and cleanup limit. The API can be disabled independently
@@ -70,7 +76,15 @@ occurs, while keeping bounded cleanup running.
 
 ## Acceptance evidence
 
-Pending implementation and tests. No production import success is claimed yet.
+Integrated checks on 2026-10-09: PostgreSQL 17 self-managed full suite 1127 passed;
+managed-role full suite 1125 passed, 2 profile-specific skips. Both checked the
+0021→0022 preservation snapshot, existing-user email-verification backfill and
+UTC daily allowance preservation. The separate restricted-administrator checker
+passed 28 ownership/rejection/rollback cases and repeat upgrade to 0022.
+Frontend: 256 tests passed; lint and production build passed. Cancellation tests
+cover opening, deadline expiry, repeated client cancellation and bounded lock waits.
+Production rollout and live smoke are still pending. No production import success
+is claimed yet.
 The deterministic synthetic fixture contains 12 supported text files (.md,
 .markdown, .txt, .csv) and 1 unsupported PNG. Full acceptance requires a dedicated
 verified test account, real picker/drop/progress/report, 12 files opened in Vault,

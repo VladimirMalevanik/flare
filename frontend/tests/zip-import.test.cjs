@@ -188,3 +188,9 @@ test('failed-only report scans past added-only pages and keeps an All view', asy
  assert.match(text(app.render()),/unsupported.png/);assert.doesNotMatch(text(app.render()),/ok.md/);
  await app.click('All');assert.match(text(app.render()),/ok.md/);
 });
+
+test('same-origin ZIP forwarding keeps the bounded upload deadline', () => {
+ const config=fs.readFileSync(path.join(__dirname,'../next.config.ts'),'utf8');
+ assert.match(config,/proxyTimeout:\s*150_000/);
+ assert.match(config,/source:\s*"\/api\/:path\*"/);
+});

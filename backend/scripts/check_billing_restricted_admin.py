@@ -15,6 +15,7 @@ import tempfile
 import psycopg
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
+from app.models.database import CURRENT_SCHEMA_REVISION
 
 
 class DatabaseOp:
@@ -229,7 +230,7 @@ def main():
             run(migrate+['head'], env=env, cwd=backend)
             with psycopg.connect(admin) as connection:
                 safe_result(connection)
-                assert connection.execute('SELECT version_num FROM alembic_version').fetchone() == ('0021',)
+                assert connection.execute('SELECT version_num FROM alembic_version').fetchone() == (CURRENT_SCHEMA_REVISION,)
             with psycopg.connect(bootstrap) as connection:
                 for table in migration.TABLES:
                     assert connection.execute('SELECT relrowsecurity,relforcerowsecurity FROM pg_class WHERE oid=%s::regclass', ('public.'+table,)).fetchone() == (True,True)
@@ -238,7 +239,7 @@ def main():
                 for role in ('flare_app','flare_worker','flare_onboarding'):
                     assert connection.execute("SELECT pg_has_role(%s,'flare_billing_executor','SET'),pg_has_role(%s,'flare_billing_executor','USAGE')", (role,role)).fetchone() == (False,False)
             checks += 1
-            print(f'PASS: {checks} PG17 restricted-admin migration/cleanup/rejection/rollback cases;0018→0021 and repeat upgrade; no runtime role expansion', flush=True)
+            print(f'PASS: {checks} PG17 restricted-admin migration/cleanup/rejection/rollback cases;0018→{CURRENT_SCHEMA_REVISION} and repeat upgrade; no runtime role expansion', flush=True)
             if args.billing_tests:
                 env.update(DATABASE_URL=f'postgresql://flare_app@/postgres?host={root}',
                     TEST_DATABASE_URL=f'postgresql://fixture_bootstrap@/postgres?host={root}',
