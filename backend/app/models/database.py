@@ -14,7 +14,23 @@ from psycopg_pool import ConnectionPool
 from pwdlib import PasswordHash
 
 
-CURRENT_SCHEMA_REVISION = "0021"
+CURRENT_SCHEMA_REVISION = "0022"
+IMPORT_STAGING_TABLES = ("import_staging_blocks", "import_staging_health")
+# These are private tables, rather than member-readable tenant projections. The
+# API and worker get only their exact capabilities; even a column SELECT grant
+# on the payload would violate the staging boundary.
+IMPORT_STAGING_FUNCTIONS = {
+    "import_staging_upload(text,uuid,text,integer,bytea)": ("flare_app",),
+    "import_staging_read(text,uuid,uuid,bigint,integer)": ("flare_worker",),
+    "import_staging_size(text,uuid,uuid,bigint)": ("flare_worker",),
+    "import_staging_retire(text,uuid)": ("flare_worker",),
+    "import_staging_heartbeat(text)": ("flare_worker",),
+    "import_staging_ready()": ("flare_app",),
+    "import_staging_probe()": ("flare_app", "flare_worker"),
+    "_import_staging_upload_guard(text,uuid)": (),
+    "_import_staging_job_guard(text,uuid,uuid,bigint)": (),
+    "guard_import_staging_seal()": (),
+}
 TENANT_TABLES = (
     "workspaces",
     "workspace_members",
@@ -169,11 +185,62 @@ def _connection_is_ready(connection: Connection) -> bool:
     if billing_safe != (True,):
         return False
 
+    if not _import_staging_is_safe(connection):
+        return False
+
     extension = connection.execute(
         "SELECT 1 FROM pg_extension "
         "WHERE extname IN ('vector', 'pgvector') AND to_regtype('vector') IS NOT NULL"
     ).fetchone()
     return extension is not None
+
+
+def _import_staging_is_safe(connection: Connection) -> bool:
+    """Require private staging payloads and narrowly owned capabilities."""
+    tables = ["public." + table for table in IMPORT_STAGING_TABLES]
+    private_tables = connection.execute(
+        """SELECT count(*) = %s AND bool_and(c.relrowsecurity AND c.relforcerowsecurity
+               AND NOT has_table_privilege('public', c.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+               AND NOT has_table_privilege('flare_app', c.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+               AND NOT has_table_privilege('flare_worker', c.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+               AND NOT has_any_column_privilege('public', c.oid, 'SELECT,INSERT,UPDATE,REFERENCES')
+               AND NOT has_any_column_privilege('flare_app', c.oid, 'SELECT,INSERT,UPDATE,REFERENCES')
+               AND NOT has_any_column_privilege('flare_worker', c.oid, 'SELECT,INSERT,UPDATE,REFERENCES'))
+           FROM pg_class c WHERE c.oid = ANY(%s::regclass[])""",
+        (len(tables), tables),
+    ).fetchone()
+    if private_tables != (True,):
+        return False
+
+    signatures = ["public." + signature for signature in IMPORT_STAGING_FUNCTIONS]
+    safe_owners = connection.execute(
+        """SELECT count(*) = %s AND bool_and(coalesce(p.prosecdef
+               AND p.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']
+               AND r.rolname IN ('flare_owner','flare_job_executor')
+               AND NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole
+               AND (r.rolname='flare_owner' OR NOT r.rolcanlogin)
+               AND NOT EXISTS(SELECT 1 FROM pg_auth_members WHERE member=r.oid), false))
+           FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
+           WHERE p.oid = ANY(%s::regprocedure[])""",
+        (len(signatures), signatures),
+    ).fetchone()
+    if safe_owners != (True,):
+        return False
+
+    grants = connection.execute(
+        """SELECT bool_and(
+               has_function_privilege('flare_app', signature, 'EXECUTE') = app_allowed
+               AND has_function_privilege('flare_worker', signature, 'EXECUTE') = worker_allowed
+               AND NOT has_function_privilege('public', signature, 'EXECUTE'))
+           FROM unnest(%s::text[], %s::boolean[], %s::boolean[])
+             AS capabilities(signature, app_allowed, worker_allowed)""",
+        (
+            signatures,
+            ["flare_app" in roles for roles in IMPORT_STAGING_FUNCTIONS.values()],
+            ["flare_worker" in roles for roles in IMPORT_STAGING_FUNCTIONS.values()],
+        ),
+    ).fetchone()
+    return grants == (True,)
 
 
 class Database:

@@ -16,6 +16,7 @@ from uuid import uuid4
 import psycopg
 from psycopg.conninfo import make_conninfo
 
+from app.models.database import CURRENT_SCHEMA_REVISION
 
 def assert_head_preserved(tables, before, after):
     """Keep every original row/column, allowing the explicit 0015 legacy fence.
@@ -164,7 +165,7 @@ def main(*, verify_analysis_runs=False):
                 with psycopg.connect(dsn) as conn:
                     assert conn.execute('SELECT count(*) FROM analysis_runs').fetchone() == (0,)
                     assert_head_preserved(tables, preserved, snapshot(conn))
-                    assert conn.execute('SELECT version_num FROM alembic_version').fetchone() == ('0021',)
+                    assert conn.execute('SELECT version_num FROM alembic_version').fetchone() == (CURRENT_SCHEMA_REVISION,)
                     assert conn.execute('SELECT count(*) FROM github_connection_states').fetchone() == (0,)
                     assert conn.execute('SELECT count(*) FROM github_connections').fetchone() == (0,)
                     assert conn.execute('SELECT count(*) FROM activity_events').fetchone() == (0,)
@@ -194,7 +195,7 @@ def main(*, verify_analysis_runs=False):
                     assert not conn.execute(
                         "SELECT has_table_privilege('flare_worker','analysis_chunk_selection_history','SELECT')"
                     ).fetchone()[0]
-                print(f'PASS ({args.provider}): 0007 -> 0021; original content/completed history preserved; explicit 0015 legacy generation fence; repeat upgrade; email, GitHub, analytics, import provenance, daily-analysis RLS, legal acceptance and worker isolation')
+                print(f'PASS ({args.provider}): 0007 -> {CURRENT_SCHEMA_REVISION}; original content/completed history preserved; explicit 0015 legacy generation fence; repeat upgrade; email, GitHub, analytics, import provenance, daily-analysis RLS, legal acceptance and worker isolation')
             print(f'PASS ({args.provider}): 0005 -> 0006; eleven tables preserved; historical ordinals preserved; repeat startup; legacy identity/RLS; old-parent enqueue; atomic handoff')
         finally:
             run([binary('pg_ctl'), '-D', data, '-m', 'fast', '-w', 'stop'])

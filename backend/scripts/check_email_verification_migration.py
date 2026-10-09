@@ -6,6 +6,7 @@ from uuid import UUID
 
 import psycopg
 
+from app.models.database import CURRENT_SCHEMA_REVISION
 USER_ID = "auth:00000000-0000-4000-8000-000000000008"
 WORKSPACE_ID = UUID("00000000-0000-4000-8000-000000000008")
 EMAIL = "email-verification-migration@test.invalid"
@@ -43,7 +44,7 @@ def main() -> None:
         # CI upgrades through the current repository head after preparing the
         # pre-0008 fixture. Keep this assertion aligned with the linear chain so
         # the check also detects a stale or branched migration result.
-        assert revision == ("0021",), revision
+        assert revision == (CURRENT_SCHEMA_REVISION,), revision
         verified = connection.execute(
             "SELECT email_verified_at IS NOT NULL FROM public.auth_users WHERE id=%s",
             (USER_ID,),
@@ -53,7 +54,7 @@ def main() -> None:
         connection.execute(
             "DELETE FROM public.workspaces WHERE id=%s", (WORKSPACE_ID,)
         )
-        print("PASS: 0007 -> 0021; 0008 existing-user backfill preserved")
+        print(f"PASS: 0007 -> {CURRENT_SCHEMA_REVISION}; 0008 existing-user backfill preserved")
 
 
 if __name__ == "__main__":
