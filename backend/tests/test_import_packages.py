@@ -483,3 +483,120 @@ def test_duplicate_history_keeps_canonical_receipt_and_one_publication(env):
         assert len(client.get(f'/imports/packages/{canonical_id}/entries').json()['entries']) == 2
         assert len(client.get('/items').json()) == 1
         assert len(client.get('/imports/packages/publications').json()['publications']) == 1
+
+
+@pytest.mark.parametrize('kind', ['notion', 'obsidian'])
+def test_postgres_twelve_files_report_replay_and_cleanup(env, kind):
+    """The production adapter through the real API/worker publication gate."""
+    from pathlib import Path
+    from app.import_staging.postgres import PostgresStagedObjects
+    e, _, jobs = env
+    values = {}
+    for line in Path(__file__).parents[1].joinpath('.env.import-production.example').read_text().splitlines():
+        if line.startswith('FLARE_IMPORT_') and '=' in line:
+            name, value = line.split('=', 1)
+            field = name.removeprefix('FLARE_IMPORT_').lower()
+            if field in ImportPolicy.__dataclass_fields__:
+                values[field] = int(value)
+    policy = ImportPolicy(**values)
+    policy.validate_postgres()
+    storage = PostgresStagedObjects(e.runtime_url)
+    worker_storage = PostgresStagedObjects(jobs.url)
+    worker_storage.heartbeat('jobs')
+    worker_storage.heartbeat('cleanup')
+    contents = {
+        f'folder/note-{i:02d}{(".md", ".markdown", ".txt", ".csv")[i % 4]}':
+        (f'number,text\n{i},synthetic ZIP test\n' if i % 4 == 3 else f'# Note {i}\nExact text Привет 👋\n')
+        for i in range(12)
+    }
+    raw = archive_bytes([*contents.items(), ('image.png', b'unsupported synthetic image')])
+    with e.client(import_storage=storage, import_policy=policy) as client:
+        assert client.get('/imports/packages/capabilities').json() == {
+            'available': True, 'maxUploadBytes': policy.compressed_bytes,
+        }
+        id = enqueue(client, raw, kind)
+        assert client.get('/items').json() == []
+        processor = ImportProcessor(jobs, worker_storage)
+        assert processor.process_one() == 'completed'
+        report = client.get(f'/imports/packages/{id}').json()
+        assert (report['status'], report['entry_count'], report['published_count'], report['skipped_count']) == (
+            'completed_with_skips', 13, 12, 1,
+        )
+        entries = client.get(f'/imports/packages/{id}/entries').json()['entries']
+        assert next(entry for entry in entries if entry['path'] == 'image.png')['skip_reason'] == 'unsupported_format'
+        items = client.get('/items').json()
+        assert len(items) == 12
+        for item in items:
+            detail = client.get(f'/items/{item["id"]}').json()
+            assert detail['content'] == contents[item['relativePath']]
+        assert enqueue(client, raw, kind) == id
+        assert len(client.get('/items').json()) == 12
+        assert len(client.get('/imports/packages/publications').json()['publications']) == 1
+        for _ in range(3):
+            processor.cleanup_one()
+        assert admin(e, '''SELECT count(*) FROM import_staging_blocks b
+            JOIN import_objects o ON o.key=b.key WHERE o.workspace_id=%s''',
+            (next(iter(e.workspace_ids)),)) == [(0,)]
+        assert admin(e, 'SELECT DISTINCT status FROM import_objects WHERE workspace_id=%s',
+                     (next(iter(e.workspace_ids)),)) == [('deleted',)]
+        assert admin(e, 'SELECT count(*) FROM analysis_jobs WHERE workspace_id=%s',
+                     (next(iter(e.workspace_ids)),)) == [(0,)]
+        assert admin(e, 'SELECT count(*) FROM analysis_daily_quotas WHERE workspace_id=%s',
+                     (next(iter(e.workspace_ids)),)) == [(0,)]
+
+
+def test_upload_context_io_runs_outside_event_loop_and_settles_cancellation():
+    import asyncio
+    import threading
+    from contextlib import contextmanager
+    from app.services.import_packages import ImportPackageService
+    event_thread = threading.get_ident()
+    entered, writing, release = threading.Event(), threading.Event(), threading.Event()
+    events = []
+
+    class Repository:
+        identity = None
+        def action(self, action, *args):
+            events.append(action)
+            if action == 'upload_claim':
+                return {'key': 'test', 'token': 'test', 'fileSize': 4,
+                        'policy': ImportPolicy().__dict__}
+        def get(self, *args):
+            return {}
+
+    class Storage:
+        @contextmanager
+        def writer(self, key):
+            assert threading.get_ident() != event_thread
+            entered.set()
+            try:
+                yield self
+            finally:
+                assert not writing.is_set(), 'close raced an unfinished thread write'
+                events.append('closed')
+        def write(self, block):
+            assert threading.get_ident() != event_thread
+            writing.set()
+            assert release.wait(2)
+            writing.clear()
+
+    async def stream():
+        yield b'test'
+
+    async def run():
+        svc = ImportPackageService(Repository(), Storage(), ImportPolicy())
+        task = asyncio.create_task(svc.upload(uuid4(), stream()))
+        for _ in range(100):
+            if writing.is_set():
+                break
+            await asyncio.sleep(0.005)
+        assert entered.is_set() and writing.is_set()
+        task.cancel()
+        await asyncio.sleep(0)
+        assert 'closed' not in events
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert events[-2:] == ['closed', 'upload_abort']
+        assert 'upload_done' not in events
+    asyncio.run(run())

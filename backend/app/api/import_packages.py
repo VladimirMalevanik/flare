@@ -59,7 +59,13 @@ def publications(svc: Annotated[ImportPackageService,Depends(service)],after: in
 
 @router.get('/capabilities')
 def capabilities(svc: Annotated[ImportPackageService,Depends(service)]):
-    return {'available':svc.storage is not None,'maxUploadBytes':svc.policy.compressed_bytes if svc.storage is not None else None}
+    available = svc.storage is not None
+    if available and hasattr(svc.storage, 'ready'):
+        try:
+            available = svc.storage.ready()
+        except OSError:
+            available = False
+    return {'available':available,'maxUploadBytes':svc.policy.compressed_bytes if available else None}
 
 
 @router.get('/{package_id}')
