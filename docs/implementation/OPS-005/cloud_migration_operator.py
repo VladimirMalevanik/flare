@@ -46,6 +46,9 @@ def authority(c):
         AND NOT has_schema_privilege('flare_job_executor','public','CREATE')""").fetchone()[0]
     permissions = c.execute("""SELECT
         has_schema_privilege(current_user,'public','CREATE'),
+        ((SELECT rolsuper FROM pg_roles WHERE rolname=current_user)
+          OR pg_has_role(current_user,(SELECT nspowner FROM pg_namespace WHERE nspname='public'),'USAGE')
+          OR has_schema_privilege(current_user,'public','CREATE WITH GRANT OPTION')),
         bool_and((SELECT rolsuper FROM pg_roles WHERE rolname=current_user)
           OR pg_has_role(current_user,c.relowner,'USAGE')),
         ((SELECT rolsuper FROM pg_roles WHERE rolname=current_user)
@@ -56,7 +59,8 @@ def authority(c):
                 AND member=current_user::regrole AND grantor=current_user::regrole)))
         FROM pg_class c WHERE c.oid IN ('public.import_objects'::regclass,'public.import_packages'::regclass,'public.alembic_version'::regclass)""").fetchone()
     return {'executorSafe':safe,'schemaCreate':permissions[0],
-            'existingTableOwnership':permissions[1],'executorTransferAuthority':permissions[2]}, executor
+            'schemaGrantAuthority':permissions[1],'existingTableOwnership':permissions[2],
+            'executorTransferAuthority':permissions[3]}, executor
 
 
 def az(args):
