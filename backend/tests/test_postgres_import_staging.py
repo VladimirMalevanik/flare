@@ -28,6 +28,12 @@ class Fixture:
         self.database = Database(os.environ['DATABASE_URL'])
         self.database.open()
         self.tenants = []
+        with psycopg.connect(self.admin_url) as c:
+            # Prior API fixtures may have stamped the shared singleton. Isolate
+            # this fixture, then restore content-free state instead of deleting
+            # another fixture's readiness evidence on teardown.
+            self.health = c.execute('SELECT mode,touched_at FROM import_staging_health FOR UPDATE').fetchall()
+            c.execute('DELETE FROM import_staging_health')
 
     def sql(self, query, parameters=()):
         with psycopg.connect(self.admin_url) as c:
@@ -75,6 +81,8 @@ class Fixture:
             c.execute('DELETE FROM auth_users WHERE id=ANY(%s)', (users,))
             c.execute('DELETE FROM workspaces WHERE id=ANY(%s)', (ids,))
             c.execute('DELETE FROM import_staging_health')
+            for mode, touched_at in self.health:
+                c.execute('INSERT INTO import_staging_health(mode,touched_at) VALUES(%s,%s)', (mode, touched_at))
 
 
 @pytest.fixture
@@ -327,7 +335,9 @@ def test_cleanup_expired_token_retry_and_write_lock_timeout(db):
     # A blocked object operation stops at the adapter's fixed two-second lock limit.
     with psycopg.connect(db.admin_url) as locked:
         locked.execute('SELECT key FROM import_objects WHERE key=%s FOR UPDATE', (claim['key'],))
+        started = time.monotonic()
         with pytest.raises(OSError, match='^storage_unavailable$'): storage._upload('append', 0, b'zip')
+        assert 1.5 <= time.monotonic()-started < 4, 'Storage lock exceeded its fixed two-second bound'
     assert db.sql('SELECT count(*) FROM import_staging_blocks WHERE key=%s', (claim['key'],)) == [(0,)]
     storage._upload('append', 0, b'zip')
     repo.action('cancel', package)
@@ -368,7 +378,7 @@ def test_tiny_upload_churn_and_workspace_session_caps_retain_metadata(db):
         package = repo.action('create', payload={'requestKey': str(uuid4()), 'sourceKind': 'obsidian',
                       'fileName': 'tiny.zip', 'fileSize': 1, 'policy': asdict(ImportPolicy())})['id']
         repo.action('cancel', package)
-    with pytest.raises(psycopg.errors.RaiseException, match='concurrency_limit'):
+    with pytest.raises(ImportPackageError, match='concurrency_limit'):
         repo.action('create', payload={'requestKey': str(uuid4()), 'sourceKind': 'obsidian',
                     'fileName': 'tiny.zip', 'fileSize': 1, 'policy': asdict(ImportPolicy())})
     assert db.sql('SELECT count(*) FROM import_packages WHERE workspace_id=%s', (identity.workspace_id,)) == [(120,)]
@@ -381,6 +391,8 @@ def test_tiny_upload_churn_and_workspace_session_caps_retain_metadata(db):
 @pytest.mark.integration
 def test_pg17_restricted_admin_ownership_grants_preserved_and_rollback(monkeypatch):
     """Clone the disposable baseline; exercise real NOSUPERUSER CREATEROLE DDL."""
+    if os.getenv('FLARE_DATABASE_PROVIDER', 'self-managed') != 'self-managed':
+        pytest.skip('Self-managed flare_job_executor ownership fixture; managed uses flare_owner')
     if not os.getenv('TEST_DATABASE_URL'):
         pytest.skip('Disposable PostgreSQL bootstrap required')
     from psycopg import sql
@@ -458,3 +470,70 @@ def test_pg17_restricted_admin_ownership_grants_preserved_and_rollback(monkeypat
         with psycopg.connect(bootstrap, autocommit=True) as c:
             c.execute(sql.SQL('DROP DATABASE {}').format(sql.Identifier(database)))
             c.execute(sql.SQL('DROP ROLE {}').format(sql.Identifier(role)))
+
+
+@pytest.mark.parametrize('interruption', ['cancel', 'deadline', 'repeated_cancel'])
+def test_upload_cancellation_open_waits_for_io_then_closes_before_abort(interruption):
+    """Opening is synchronous too; cancellation must not leave its context alive."""
+    import asyncio
+    from app.services.import_packages import ImportPackageService
+    entered, release, closed = threading.Event(), threading.Event(), threading.Event()
+    event_thread = threading.get_ident()
+    events = []
+    class Repository:
+        identity = None
+        def action(self, action, *args):
+            events.append(action)
+            if action == 'upload_claim':
+                return {'key': 'synthetic', 'token': 'synthetic', 'fileSize': 3,
+                        'policy': asdict(replace(ImportPolicy(), upload_seconds=1))}
+        def get(self, *args): pytest.fail('Cancelled upload read a completed package')
+    class Storage:
+        def writer(self, key): return self
+        def __enter__(self):
+            assert threading.get_ident() != event_thread
+            entered.set()
+            assert release.wait(5)
+            events.append('opened')
+            return self
+        def __exit__(self, *error):
+            assert threading.get_ident() != event_thread
+            events.append('closed'); closed.set()
+        def write(self, block): pytest.fail('Cancelled opening consumed body')
+    async def stream():
+        events.append('body')
+        yield b'zip'
+    async def run():
+        storage = Storage()
+        task = asyncio.create_task(ImportPackageService(Repository(), storage, ImportPolicy()).upload(uuid4(), stream()))
+        try:
+            for _ in range(100):
+                if entered.is_set(): break
+                await asyncio.sleep(0.005)
+            assert entered.is_set()
+            if interruption == 'deadline':
+                await asyncio.sleep(1.05)
+            else:
+                task.cancel()
+                await asyncio.sleep(0.01)
+                if interruption == 'repeated_cancel':
+                    task.cancel()
+                    await asyncio.sleep(0.01)
+            assert not task.done(), 'Cancellation escaped while writer opening was still active'
+            assert 'closed' not in events and 'upload_abort' not in events
+            release.set()
+            with pytest.raises(TimeoutError if interruption == 'deadline' else asyncio.CancelledError):
+                await task
+            assert closed.is_set()
+            assert events == ['upload_claim', 'opened', 'closed', 'upload_abort']
+        finally:
+            release.set()
+            await asyncio.gather(task, return_exceptions=True)
+            # Unwind a failed implementation's orphan only after recording the
+            # failure; a fake manager must not leak into executor shutdown.
+            for _ in range(100):
+                if 'opened' in events: break
+                await asyncio.sleep(0.005)
+            if 'opened' in events and not closed.is_set():
+                await asyncio.to_thread(storage.__exit__, asyncio.CancelledError, None, None)
+    asyncio.run(run())
