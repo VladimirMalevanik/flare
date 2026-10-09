@@ -48,7 +48,7 @@ class ImportPackageService:
     async def upload(self, package_id, stream):
         if not self.storage:
             raise ImportPackageError('storage_unavailable')
-        claim = await asyncio.to_thread(self.repo.action, 'upload_claim', package_id)
+        claim = await _storage_call(self.repo.action, 'upload_claim', package_id)
         policy = ImportPolicy(**claim['policy'])
         count, digest = 0, hashlib.sha256()
         try:
@@ -90,11 +90,11 @@ class ImportPackageService:
                     raise
                 else:
                     await _storage_call(close_writer, None, None, None)
-                await asyncio.to_thread(self.repo.action, 'upload_done', package_id,
+                await _storage_call(self.repo.action, 'upload_done', package_id,
                     {'token':claim['token'],'bytes':count,'hash':digest.hexdigest()})
         except BaseException:
             # Object was recorded before writing. Even a disconnect/crash leaves
             # a durable cleanup obligation, including incomplete .part files.
-            await asyncio.shield(asyncio.to_thread(self.repo.action,'upload_abort',package_id,{'token':claim['token']}))
+            await _storage_call(self.repo.action,'upload_abort',package_id,{'token':claim['token']})
             raise
         return await asyncio.to_thread(self.repo.get, package_id)

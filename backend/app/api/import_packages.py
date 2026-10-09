@@ -42,18 +42,20 @@ def handle(error):
 def create(payload: CreatePackage, svc: Annotated[ImportPackageService,Depends(service)]):
     try:
         return svc.create(source_kind=payload.sourceKind,file_name=payload.fileName,file_size=payload.fileSize,request_key=payload.requestKey)
-    except (ImportPackageError,MembershipRequiredError,WritePermissionRequiredError) as e: handle(e)
+    except (ImportPackageError,MembershipRequiredError,WritePermissionRequiredError,OSError) as e: handle(e)
 
 
 @router.get('')
 def list_packages(svc: Annotated[ImportPackageService,Depends(service)]):
-    return svc.repo.list()
+    try: return svc.repo.list()
+    except OSError as e: handle(e)
 
 
 @router.get('/publications')
 def publications(svc: Annotated[ImportPackageService,Depends(service)],after: int=Query(0,ge=0),limit: int=Query(50,ge=1,le=100)):
     limit=min(limit,svc.policy.report_page)
-    rows=svc.repo.publications(after,limit)
+    try: rows=svc.repo.publications(after,limit)
+    except OSError as e: handle(e)
     return {'publications':rows,'nextCursor':rows[-1]['id'] if len(rows)==limit else None}
 
 
@@ -71,7 +73,7 @@ def capabilities(svc: Annotated[ImportPackageService,Depends(service)]):
 @router.get('/{package_id}')
 def get(package_id: UUID, svc: Annotated[ImportPackageService,Depends(service)]):
     try: return svc.repo.get(package_id)
-    except ImportPackageError as e: handle(e)
+    except (ImportPackageError,OSError) as e: handle(e)
 
 
 @router.get('/{package_id}/entries')
@@ -80,7 +82,7 @@ def entries(package_id: UUID,svc: Annotated[ImportPackageService,Depends(service
         limit=min(limit,svc.policy.report_page)
         rows=svc.repo.entries(package_id,after,limit)
         return {'entries':rows,'nextCursor':rows[-1]['ordinal'] if len(rows)==limit else None}
-    except ImportPackageError as e: handle(e)
+    except (ImportPackageError,OSError) as e: handle(e)
 
 
 @router.put('/{package_id}/upload')
@@ -96,4 +98,4 @@ def action(package_id: UUID,action: Literal['finalize','cancel','retry'],svc: An
     try:
         result=svc.repo.action(action,package_id)
         return svc.repo.get(UUID(result['id']))
-    except (ImportPackageError,MembershipRequiredError,WritePermissionRequiredError) as e: handle(e)
+    except (ImportPackageError,MembershipRequiredError,WritePermissionRequiredError,OSError) as e: handle(e)

@@ -30,6 +30,7 @@ IMPORT_STAGING_FUNCTIONS = {
     "_import_staging_upload_guard(text,uuid)": (),
     "_import_staging_job_guard(text,uuid,uuid,bigint)": (),
     "guard_import_staging_seal()": (),
+    "guard_import_staging_package_rate()": (),
 }
 TENANT_TABLES = (
     "workspaces",
@@ -292,10 +293,18 @@ class Database:
         identity: WorkspaceIdentity,
         *,
         write: bool = False,
+        timeout: float | None = None,
+        statement_timeout_ms: int | None = None,
+        lock_timeout_ms: int | None = None,
     ) -> Iterator[Connection]:
         """Select one workspace locally, verify membership, then yield a transaction."""
-        with self._pool.connection() as connection:
+        with self._pool.connection(timeout=timeout) as connection:
             with connection.transaction():
+                for name, value in (('statement_timeout', statement_timeout_ms), ('lock_timeout', lock_timeout_ms)):
+                    if value is not None:
+                        if type(value) is not int or value <= 0:
+                            raise ValueError('Transaction deadlines must be positive integers')
+                        connection.execute('SELECT set_config(%s,%s,true)', (name, str(value)))
                 connection.execute(
                     "SELECT set_config('app.workspace_id', %s, true), set_config('app.user_id', %s, true)",
                     (str(identity.workspace_id), identity.user_id),
