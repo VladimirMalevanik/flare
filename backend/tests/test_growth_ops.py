@@ -4,10 +4,16 @@ import json
 import os
 from pathlib import Path
 from uuid import uuid4
+import importlib.util
 
 import psycopg
 import pytest
-from scripts.growth_ops import OperatorError, REVISION, configure, maintenance, read_policy, report, utc_time, validate_policy
+_spec = importlib.util.spec_from_file_location("growth_ops", Path(__file__).resolve().parents[1] / "scripts/growth_ops.py")
+ops = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(ops)
+OperatorError, REVISION = ops.OperatorError, ops.REVISION
+configure, maintenance, read_policy, report = ops.configure, ops.maintenance, ops.read_policy, ops.report
+utc_time, validate_policy = ops.utc_time, ops.validate_policy
 from app.services.attribution_service import AttributionService
 from app.services.item_service import ItemService
 from test_acquisition import growth, enabled_growth_policy  # noqa: F401
@@ -99,7 +105,6 @@ def test_incomplete_maintenance_cannot_claim_exhaustion():
         def transaction(self):
             from contextlib import nullcontext
             return nullcontext()
-    import scripts.growth_ops as ops
     from unittest.mock import patch
     with patch.object(ops, "restricted_role"):
         with pytest.raises(OperatorError, match="budget exhausted"):

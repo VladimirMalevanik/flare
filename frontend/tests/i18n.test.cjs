@@ -27,6 +27,7 @@ function load(relative, mocks = {}, globals = {}) {
     if (name === '@/components/dialog') return { Dialog: 'dialog' };
     if (name === '@/features/telemetry/site-analytics') return { SiteAnalytics: () => null };
     if (name === '@/features/telemetry/analytics-preferences') return { AnalyticsPreferences: () => null };
+    if (name === '@/features/acquisition/preferences') return { AcquisitionPreferences: () => null };
     if (name === '@/features/funny/funny-state') return loadPure('../src/features/funny/funny-state.ts');
     if (name === '@/features/funny/funny-sounds') return { playFunnySound() {}, speakFunnyLine() {}, stopFunnySounds() {} };
     if (name === '@/features/funny/funny-effects') return { FunnyEffects: 'funny-effects' };
@@ -121,7 +122,9 @@ test('switching locale persists one long-lived cookie, updates document language
     });
     const root = await RootLayout({ children });
     assert.equal(root.props.lang, cookieValue === 'es' ? 'es' : 'en');
-    assert.equal(root.props.children.props.children[1].props.initialLocale, root.props.lang);
+    const localized = nodes(root).find(node => node.type === 'i18n-provider');
+    assert.equal(localized.props.initialLocale, root.props.lang);
+    assert.ok(nodes(localized).some(node => node.type === 'acquisition-capture'));
   }
 });
 
@@ -211,8 +214,8 @@ test('Settings, Sources, Vault, Flares, and Capture render Spanish without trans
 
 test('legal document body stays English and declares its own language', () => {
   const { LegalPage } = load('../src/components/legal-page.tsx', { './legal-chrome': { LegalChrome: 'legal-chrome' }, './brand-mark': { BrandMark: 'brand-mark' } });
-  const opening = { privacy: 'This Privacy Policy explains', terms: 'These terms govern access', analytics: 'This notice explains' };
-  for (const file of ['privacy', 'terms', 'analytics']) {
+  const opening = { privacy: 'This Privacy Policy explains', terms: 'These terms govern access', analytics: 'This notice explains', measurement: 'Optional link measurement helps' };
+  for (const file of ['privacy', 'terms', 'analytics', 'measurement']) {
     const { default: Page } = load(`../src/app/${file}/page.tsx`, { '@/components/legal-page': { LegalPage, LegalSection: 'section' } });
     const page = Page();
     const rendered = LegalPage(page.props);
@@ -274,7 +277,7 @@ test('visible JSX strings use i18n apart from legal copy, names, and technical n
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       const file = path.join(directory, entry.name);
       if (entry.isDirectory()) { scan(file); continue; }
-      if (!file.endsWith('.tsx') || /app\/(privacy|terms|analytics)\//.test(file)) continue;
+      if (!file.endsWith('.tsx') || /app\/(privacy|terms|analytics|measurement)\//.test(file)) continue;
       const source = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
       function check(value) {
         const normalized = value.replace(/\s+/g, ' ').trim();
