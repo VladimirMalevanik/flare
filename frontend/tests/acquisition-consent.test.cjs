@@ -70,3 +70,23 @@ test('failed account withdrawal is reported and anonymous notice withdrawal is s
     assert.equal(await m.withdrawAcquisition('/api','optional'),status===401);
   }
 });
+test('account settings do not mistake auth-boundary tab consent reset for account measurement status',()=>{
+  const compile=file=>ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;
+  const copies={};vm.runInNewContext(compile('src/features/acquisition/copy.ts'),{exports:copies});
+  for(const choice of ['allowed','unset','rejected']) {
+    const exports={};const jsx=(type,props)=>({type,props});
+    const mocks={
+      'react':{useState:v=>[v,()=>{}]},'react/jsx-runtime':{jsx,jsxs:jsx},'next/link':{default:'a'},
+      '@/i18n/provider':{useI18n:()=>({locale:'en'})},'@/lib/auth/session':{apiBaseUrl:'/api'},
+      '@/lib/auth/acquisition':{acquisitionChoice:()=>choice},'./copy':copies,
+      './use-policy':{useAcquisitionPolicy:()=>policy,useAcquisitionPrivacy:()=>false},
+      '@/features/telemetry/telemetry.module.css':{default:{}},
+    };
+    vm.runInNewContext(compile('src/features/acquisition/preferences.tsx'),{exports,require:n=>mocks[n]});
+    const tree=exports.AcquisitionPreferences({account:true});
+    const flatten=node=>typeof node==='string'?node:Array.isArray(node)?node.map(flatten).join(' '):node?.props?flatten(node.props.children):'';
+    const text=flatten(tree);
+    assert.match(text,/You can remove your account’s measurement data below/);
+    assert.doesNotMatch(text,/Link measurement stays off until you allow it|Link measurement is allowed for this tab/);
+  }
+});

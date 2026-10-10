@@ -29,6 +29,8 @@ imports to the same services; coordinate the release instead of overwriting it.
 - The Settings action is account-scoped, not a workspace-wide opt-out. Existing
   ownership and Origin checks remain intact. An expired session is reported as a
   failure rather than falsely claiming account deletion.
+  Settings does not infer server account status from tab consent, which is reset
+  at the login/register boundary. Only a successful withdrawal reports removal.
 - Reports count registrations and ordered product outcomes. They cannot provide
   total clicks or an all-visitor conversion rate. Small cohorts and missing
   observations remain explicit. Do not reinterpret a hidden bucket as zero.
@@ -113,6 +115,25 @@ Already downloaded exports cannot be recalled after withdrawal.
 
 ## Readiness
 
-Implementation and tests are being validated on a fresh local PostgreSQL cluster
-on port 58473. All data are synthetic. Approval, production deployment, approved
-reporting access, cleanup schedule and real-site smoke remain release gates.
+Validation uses a fresh local PostgreSQL cluster on port 58473; all accounts and
+data are synthetic. Checks completed:
+
+- 262 frontend tests and lint pass locally, including consent independence,
+  unknown revision/retention rejection, privacy signals, storage failure, pending
+  touch withdrawal ordering, expired-session handling and honest account status.
+- 146 acquisition/funnel/analytics/auth PostgreSQL checks pass locally. Operator
+  tests also run from the repository root, matching CI's collection mode.
+- Full CI on `da8fa5f`: 1,043 backend checks in self-managed mode; 1,042 checks and
+  one provider-specific skip in Yandex mode; frontend tests/lint/build green.
+- Standalone package from `c2025db`, workflow38053721548, builds successfully.
+  Browser checks on localhost8417/8418 confirm separate Azure rejection/UTM
+  acceptance, bounded `fedor` labels without extra email query values, decline,
+  public-to-register navigation and successful account withdrawal. PostgreSQL
+  confirms withdrawn eligibility and cleared campaign labels. Desktop and390px
+  views fit; no simultaneous fixed notices. Account status wording was then
+  corrected and covered by the additional frontend regression.
+
+Final PR checks/build must be green on the accepted head before rollout; older
+artifact source is validation evidence, not authorization to deploy that archive.
+Approval, production deployment, approved reporting access, cleanup schedule and
+real-site smoke remain release gates. Production collection has not been enabled.

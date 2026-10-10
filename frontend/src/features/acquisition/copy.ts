@@ -1,6 +1,8 @@
 import type { Locale } from "@/i18n/config";
 const en = {
   title: "Help us understand which links work",
+  settingsTitle: "Link measurement",
+  accountStatus: "You can remove your account’s measurement data below.",
   description: "Allow Flare to connect the campaign label on this link with your registration and use of Flare? We use it to compare our X accounts. Saved notes and full link addresses are excluded.",
   allow: "Allow link measurement", reject: "No thanks", details: "What we measure",
   allowed: "Link measurement is allowed for this tab.",
@@ -17,6 +19,8 @@ const en = {
 type Copy = { [Key in keyof typeof en]: string };
 const es: Copy = {
   title: "Ayúdanos a saber qué enlaces funcionan",
+  settingsTitle: "Medición de enlaces",
+  accountStatus: "Puedes eliminar los datos de medición de tu cuenta aquí.",
   description: "¿Permites que Flare vincule la etiqueta de campaña de este enlace con tu registro y uso de Flare? La usamos para comparar nuestras cuentas de X. No incluimos notas guardadas ni direcciones completas de enlaces.",
   allow: "Permitir medición de enlaces", reject: "No, gracias", details: "Qué medimos",
   allowed: "La medición de enlaces está permitida en esta pestaña.",
