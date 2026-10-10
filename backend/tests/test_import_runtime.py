@@ -180,7 +180,8 @@ def test_processor_uses_immutable_job_and_cleanup_bindings(monkeypatch):
     raw = b'synthetic bounded object'
     job = {'id': 'synthetic-package', 'object_key': 'server-key', 'policy': asdict(ImportPolicy()),
            'file_size': len(raw), 'archive_hash': hashlib.sha256(raw).hexdigest()}
-    obj = {'key': 'server-key', 'cleanup_token': 'synthetic-cleanup-lease'}
+    obj = {'package_id': '4bbe56ec-3cbd-4368-9bfd-d65f1b4d631a', 'key': 'server-key',
+           'cleanup_token': 'synthetic-cleanup-lease'}
     calls = []
     class Jobs:
         def claim(self, limit): return job
@@ -287,7 +288,7 @@ label = sys.argv[2]
 if '--mode' in sys.argv: label += ':' + sys.argv[sys.argv.index('--mode') + 1]
 def record(event):
     with open(os.environ['TEST_EVENTS'], 'a') as stream:
-        stream.write(json.dumps({{'event':event,'label':label,'pid':os.getpid()}}) + '\\n')
+        stream.write(json.dumps({{'event':event,'label':label,'pid':os.getpid(),'runtime_mode':os.stat(os.getcwd()).st_mode & 0o777}}) + '\\n')
 def stop(*args):
     record('stopped')
     sys.exit(0)
@@ -312,6 +313,8 @@ while True: time.sleep(0.02)
 for value in "$@"; do target=$value; done
 mkdir -p "$target/antenv/bin"
 cp "$TEST_FAKE_PYTHON" "$target/antenv/bin/python"
+# GNU tar can restore a packaged '.' directory's mode over mktemp's 0700.
+chmod 755 "$target"
 ''')
     tar.chmod(0o700)
     environment = {**os.environ, 'PATH': f'{commands}:{os.defpath}', 'FLARE_IMPORT_ENABLED': str(enabled).lower(),
@@ -332,6 +335,7 @@ cp "$TEST_FAKE_PYTHON" "$target/antenv/bin/python"
         expected_status = 0 if exit_child == 'signal-supervisor' else (exit_status or 1)
         assert process.returncode == expected_status, (stdout, stderr)
         events = [json.loads(line) for line in log.read_text().splitlines()]
+        assert all(event['runtime_mode'] == 0o700 for event in events)
         started = {event['label'] for event in events if event['event'] == 'started'}
         expected = {'app.workers.health_server', 'app.workers.analysis_worker'}
         if enabled: expected |= {'app.workers.import_worker:jobs', 'app.workers.import_worker:cleanup'}
@@ -341,3 +345,101 @@ cp "$TEST_FAKE_PYTHON" "$target/antenv/bin/python"
         if process.poll() is None:
             os.killpg(process.pid, signal.SIGKILL)
             process.communicate()
+
+
+
+def test_cleanup_receipt_is_scoped_content_free_and_emitted_after_both_commits(caplog):
+    obj = {'package_id': '4bbe56ec-3cbd-4368-9bfd-d65f1b4d631a',
+           'key': '4bbe56ec3cbd43689bfdd65f1b4d631a-0192a6df2c504a339b731f4301017a23',
+           'cleanup_token': 'synthetic-private-cleanup-token',
+           'workspace_id': 'synthetic-private-workspace'}
+    calls = []
+    class Jobs:
+        def cleanup(self, action='claim', key=None, token=None):
+            calls.append(action)
+            if action == 'claim': return obj
+            if action == 'done': calls.append('completion-committed')
+    class Storage:
+        def delete(self, key): calls.append('retirement-committed')
+    def log_receipt(message, package_ref, object_ref):
+        assert calls[-2:] == ['done', 'completion-committed']
+        assert calls.index('retirement-committed') < calls.index('completion-committed')
+        calls.append('receipt')
+        import logging
+        logging.getLogger('cleanup-receipt-test').info(message, package_ref, object_ref)
+    from unittest.mock import patch
+    caplog.set_level('INFO')
+    with patch.object(import_worker.logging, 'info', side_effect=log_receipt):
+        assert import_worker.ImportProcessor(Jobs(), Storage()).cleanup_one() == 'deleted'
+    expected_package = hashlib.sha256(('flare-import-package-v1:' + obj['package_id']).encode('ascii')).hexdigest()
+    expected_object = hashlib.sha256(('flare-import-object-v1:' + obj['key']).encode('ascii')).hexdigest()
+    assert f'cleanup_committed package_ref={expected_package} object_ref={expected_object}' in caplog.text
+    assert calls[-1] == 'receipt'
+    assert all(str(value) not in caplog.text for value in obj.values())
+
+
+@pytest.mark.parametrize('failure', ['storage', 'lease', 'commit'])
+def test_cleanup_receipt_is_absent_when_delete_lease_or_commit_fails(caplog, failure):
+    obj = {'package_id': '4bbe56ec-3cbd-4368-9bfd-d65f1b4d631a',
+           'key': '4bbe56ec3cbd43689bfdd65f1b4d631a-0192a6df2c504a339b731f4301017a23',
+           'cleanup_token': 'synthetic-private-cleanup-token'}
+    class Jobs:
+        def cleanup(self, action='claim', key=None, token=None):
+            if action == 'claim': return obj
+            if action == 'done':
+                if failure == 'lease': raise import_worker.ImportPackageError('lease_lost')
+                if failure == 'commit': raise import_worker.psycopg.OperationalError('synthetic-private-commit-detail')
+    class Storage:
+        def delete(self, key):
+            if failure == 'storage': raise OSError('synthetic-private-storage-detail')
+    caplog.set_level('INFO')
+    processor = import_worker.ImportProcessor(Jobs(), Storage())
+    if failure == 'commit':
+        with pytest.raises(import_worker.psycopg.OperationalError): processor.cleanup_one()
+    else:
+        assert processor.cleanup_one() == ('cleanup_retry' if failure == 'storage' else 'lease_lost')
+    assert 'cleanup_committed' not in caplog.text
+    assert 'synthetic-private' not in caplog.text
+    assert obj['key'] not in caplog.text and obj['package_id'] not in caplog.text
+
+
+def test_cleanup_completion_transaction_commits_before_receipt(caplog):
+    # Exercise the real jobs capability wrapper: a SELECT result alone does not
+    # mean success when the connection's context-manager commit then fails.
+    obj = {'package_id': '4bbe56ec-3cbd-4368-9bfd-d65f1b4d631a',
+           'key': '4bbe56ec3cbd43689bfdd65f1b4d631a-0192a6df2c504a339b731f4301017a23',
+           'cleanup_token': 'synthetic-private-cleanup-token'}
+    class Connection:
+        action = None
+        def __enter__(self): return self
+        def execute(self, sql, parameters):
+            self.action = parameters[2]
+            return self
+        def fetchone(self): return {'result': obj if self.action == 'claim' else {'ok': True}}
+        def __exit__(self, *args):
+            if self.action == 'done': raise import_worker.psycopg.OperationalError('synthetic-private-commit-detail')
+    jobs = object.__new__(import_worker.ImportWorkerJobs)
+    jobs.connection = Connection
+    storage = types.SimpleNamespace(delete=lambda key: None)
+    caplog.set_level('INFO')
+    with pytest.raises(import_worker.psycopg.OperationalError):
+        import_worker.ImportProcessor(jobs, storage).cleanup_one()
+    assert 'cleanup_committed' not in caplog.text and 'synthetic-private' not in caplog.text
+
+
+def test_cleanup_receipt_distinguishes_upload_attempts_in_same_package(caplog):
+    package_id = '4bbe56ec-3cbd-4368-9bfd-d65f1b4d631a'
+    keys = ['4bbe56ec3cbd43689bfdd65f1b4d631a-' + suffix * 32 for suffix in ('1', '2')]
+    class Jobs:
+        def __init__(self, key): self.key = key
+        def cleanup(self, action='claim', key=None, token=None):
+            return {'package_id': package_id, 'key': self.key, 'cleanup_token': 'synthetic-private-token'} if action == 'claim' else None
+    caplog.set_level('INFO')
+    for key in keys:
+        assert import_worker.ImportProcessor(Jobs(key), types.SimpleNamespace(delete=lambda value: None)).cleanup_one() == 'deleted'
+    receipts = [record.message for record in caplog.records if 'cleanup_committed' in record.message]
+    assert len(receipts) == 2
+    package_ref = hashlib.sha256(('flare-import-package-v1:' + package_id).encode('ascii')).hexdigest()
+    assert all('package_ref=' + package_ref in message for message in receipts)
+    assert receipts[0] != receipts[1]
+    assert all(key not in caplog.text for key in keys) and package_id not in caplog.text

@@ -31,7 +31,9 @@ cleanup() {
 
 trap cleanup EXIT
 trap 'exit 0' INT TERM
-tar --use-compress-program=unzstd -xf /home/site/wwwroot/output.tar.zst -C "$runtime_dir"
+tar --no-same-owner --no-same-permissions --use-compress-program=unzstd -xf /home/site/wwwroot/output.tar.zst -C "$runtime_dir"
+# Extraction can restore the archive root's mode over mktemp's private mode.
+chmod 700 "$runtime_dir"
 cd "$runtime_dir"
 export FLARE_WORKER_HEARTBEAT_DIR="$runtime_dir/heartbeats"
 mkdir -p "$FLARE_WORKER_HEARTBEAT_DIR"

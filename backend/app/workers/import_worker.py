@@ -153,6 +153,12 @@ class ImportProcessor:
             storage = self.storage.for_cleanup(obj) if hasattr(self.storage, 'for_cleanup') else self.storage
             storage.delete(obj['key'])
             self.jobs.cleanup('done',obj['key'],obj['cleanup_token'])
+            # Both the physical retirement and token-fenced completion have
+            # committed. Opaque references distinguish upload attempts without
+            # exposing object keys, cleanup tokens, account or file metadata.
+            package_ref = hashlib.sha256(('flare-import-package-v1:' + str(obj['package_id'])).encode('ascii')).hexdigest()
+            object_ref = hashlib.sha256(('flare-import-object-v1:' + obj['key']).encode('ascii')).hexdigest()
+            logging.info('import_worker cleanup_committed package_ref=%s object_ref=%s', package_ref, object_ref)
             return 'deleted'
         except OSError:
             self.jobs.cleanup('retry',obj['key'],obj['cleanup_token'])
