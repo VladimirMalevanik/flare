@@ -1,0 +1,72 @@
+const {test} = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const ts = require('typescript');
+const vm = require('node:vm');
+const policy = {enabled:true,revision:'x-launch-2026-10-v1',noticeId:'measurement-x-v1',eligibility:'explicit-opt-in',cookieSeconds:604800};
+function load(extra={}) {
+  const storage = new Map();
+  const sandbox = {URL,AbortSignal,navigator:{},window:{location:{href:'https://flare.invalid/?utm_source=x&utm_medium=organic_social&utm_campaign=launch_2026_10&utm_content=fedor&ref=fedor&email=private'}},document:{referrer:'https://t.co/private'},
+    sessionStorage:{getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},...extra};
+  const consent={};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/telemetry/consent.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:consent});
+  const exports={};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/auth/acquisition.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:()=>consent,...sandbox});
+  return {m:exports,storage,sandbox};
+}
+test('collection stays off before opt-in and after rejecting; Azure consent is independent',async()=>{
+  const calls=[];
+  const {m,storage}=load({fetch:async(u,o)=>{calls.push([u,o]);return {ok:true,json:async()=>policy}}});
+  storage.set('flare-site-analytics-consent-v1','allowed');
+  await m.captureAcquisition('/api');assert.equal(calls.length,1);
+  assert.equal(m.chooseAcquisition(policy,false),true);
+  await m.captureAcquisition('/api');assert.equal(calls.length,2);
+  assert.equal(m.chooseAcquisition(policy,true),true);
+  await m.captureAcquisition('/api');
+  assert.equal(calls.filter(c=>c[0].endsWith('/touch')).length,1);
+  const payload=JSON.parse(calls.at(-1)[1].body);
+  assert.equal(payload.touch.ref,'fedor');assert.equal(payload.touch.referrer_domain,'t.co');assert.equal(payload.touch.email,undefined);
+  assert.deepEqual([...storage.keys()],['flare-site-analytics-consent-v1','flare_measurement_opt_in']);
+  assert.equal(storage.get(m.consentKey),policy.revision);
+});
+test('unknown notices, changed revisions and changed retention never enable collection',async()=>{
+  for(const changed of [{revision:'other'},{noticeId:'other'},{cookieSeconds:86400},{eligibility:'implicit'},{enabled:'true'}]) {
+    const calls=[];const {m}=load({fetch:async u=>{calls.push(u);return {ok:true,json:async()=>({...policy,...changed})}}});
+    m.chooseAcquisition(policy,true);await m.captureAcquisition('/api');assert.equal(calls.length,1);
+  }
+});
+test('privacy signals suppress even previously allowed collection',async()=>{
+  for(const navigator of [{globalPrivacyControl:true},{doNotTrack:'1'},{msDoNotTrack:'yes'}]) {
+    let calls=0;const {m,storage}=load({navigator,fetch:async()=>{calls++;return {ok:true,json:async()=>policy}}});
+    storage.set(m.consentKey,policy.revision);
+    await m.captureAcquisition('/api');assert.equal(calls,0);
+    assert.equal(m.chooseAcquisition(policy,true),false);
+    assert.equal(storage.has(m.consentKey),false);
+  }
+});
+test('storage failure fails closed and reset does not change Azure consent',async()=>{
+  const {m}=load({sessionStorage:{getItem(){throw Error('blocked')},setItem(){throw Error('blocked')},removeItem(){throw Error('blocked')}}});
+  assert.equal(m.chooseAcquisition(policy,true),false);
+  m.resetAcquisitionConsent();
+  const normal=load();normal.storage.set('flare-site-analytics-consent-v1','allowed');normal.m.chooseAcquisition(policy,true);normal.m.resetAcquisitionConsent();
+  assert.equal(normal.storage.get('flare-site-analytics-consent-v1'),'allowed');
+});
+test('withdrawal waits for an in-flight touch and clears anonymous and account measurement',async()=>{
+  const calls=[];let finish;
+  const {m,storage}=load({fetch:async url=>{calls.push(url);if(url.endsWith('/touch'))await new Promise(r=>finish=r);return {ok:true,json:async()=>policy}}});
+  m.chooseAcquisition(policy,true);
+  const touch=m.captureAcquisition('/api',policy);
+  await Promise.resolve();
+  const removal=m.withdrawAcquisition('/api',true);
+  assert.equal(storage.has(m.consentKey),false);
+  assert.deepEqual(calls,['/api/acquisition/touch']);
+  finish();await touch;assert.equal(await removal,true);
+  assert.deepEqual(calls,['/api/acquisition/touch','/api/acquisition/forget','/api/analytics/withdraw']);
+});
+test('failed account withdrawal is reported and anonymous notice withdrawal is supported',async()=>{
+  for(const status of [401,403,500]) {
+    const {m}=load({fetch:async url=>({ok:!url.endsWith('/withdraw'),status})});
+    assert.equal(await m.withdrawAcquisition('/api',true),false);
+    assert.equal(await m.withdrawAcquisition('/api','optional'),status===401);
+  }
+});

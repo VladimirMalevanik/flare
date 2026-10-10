@@ -1,0 +1,28 @@
+{
+  "revision": "x-launch-2026-10-v1",
+  "notice_id": "measurement-x-v1",
+  "eligibility": "explicit-opt-in",
+  "cleanup_owner": "Vova / scheduled growth cleanup",
+  "lookback_seconds": 604800,
+  "cookie_seconds": 604800,
+  "raw_seconds": 604800,
+  "linked_seconds": 7776000,
+  "fact_seconds": 7776000,
+  "global_hour": 1000,
+  "network_hour": 100,
+  "reference_limit": 20,
+  "visitor_limit": 10000,
+  "budget_limit": 10000,
+  "deadline_ms": 500,
+  "min_cohort": 5,
+  "report_window_days": 30,
+  "report_calendar": "UTC-v1",
+  "tokens": {
+    "utm_source": ["x"],
+    "utm_medium": ["organic_social"],
+    "utm_campaign": ["launch_2026_10"],
+    "utm_content": ["ilyas", "fedor", "flare"],
+    "ref": ["ilyas", "fedor", "flare"],
+    "referrer_domain": ["t.co", "x.com", "twitter.com"]
+  }
+}

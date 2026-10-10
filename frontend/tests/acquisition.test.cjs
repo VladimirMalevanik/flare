@@ -5,10 +5,15 @@ const ts = require('typescript');
 const vm = require('node:vm');
 function moduleWith(context = {}) {
  const exports = {};
+ const consent = {};
+ vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/telemetry/consent.ts','utf8'), {
+ compilerOptions:{ module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022 },
+ }).outputText,{exports:consent});
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/auth/acquisition.ts','utf8'), {
  compilerOptions:{ module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022 },
- }).outputText,{exports,URL,AbortSignal,...context}); return exports;
+ }).outputText,{exports,URL,AbortSignal,require:()=>consent,...context}); return exports;
 }
+const policy={enabled:true,eligibility:'explicit-opt-in',revision:'x-launch-2026-10-v1',noticeId:'measurement-x-v1',cookieSeconds:604800};
 test('landing fields are minimized, conflict/encoded/oversized tokens discarded',()=>{
  const {landingTouch}=moduleWith();
  const touch=landingTouch('https://flare.invalid/register?utm_source=ALPHA&password=secret#secret','https://example.org/private?email=secret');
@@ -23,13 +28,13 @@ test('off policy/storage denial/outage never collect or block navigation',async(
  const off=moduleWith({fetch:async()=>{calls++;return {ok:true,json:async()=>({enabled:false})}}});
  await off.captureAcquisition('/api'); assert.equal(calls,1);
  const outage=moduleWith({fetch:async()=>{throw Error('synthetic')}});await outage.captureAcquisition('/api');
- const denied=moduleWith({fetch:async()=>({ok:true,json:async()=>({enabled:true,eligibility:'explicit-opt-in',revision:'fixture'})}),sessionStorage:{getItem(){throw Error('denied')}}});
+ const denied=moduleWith({fetch:async()=>({ok:true,json:async()=>policy}),sessionStorage:{getItem(){throw Error('denied')}}});
  await denied.captureAcquisition('/api');
 });
 test('explicit opt-in collects one bounded touch without a durable client queue',async()=>{
  const calls=[];
- const m=moduleWith({fetch:async(url,options)=>{calls.push([url,options]);return {ok:true,json:async()=>({enabled:true,eligibility:'explicit-opt-in',revision:'fixture'})}},
- sessionStorage:{getItem:()=> 'fixture'},window:{location:{href:'https://flare.invalid/register?utm_source=alpha&email=private'}},document:{referrer:''}});
+ const m=moduleWith({fetch:async(url,options)=>{calls.push([url,options]);return {ok:true,json:async()=>policy}},
+ sessionStorage:{getItem:key=>key==='flare_measurement_opt_in'?policy.revision:null},window:{location:{href:'https://flare.invalid/register?utm_source=alpha&email=private'}},document:{referrer:''}});
  await m.captureAcquisition('/api');assert.equal(calls.length,2);
  const payload=JSON.parse(calls[1][1].body);assert.equal(payload.touch.utm_source,'alpha');assert.equal(payload.touch.email,undefined);
 });

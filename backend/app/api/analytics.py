@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.api.auth import verified_user
+from app.api.auth import current_user, verified_user
 from app.api.schemas import AnalyticsEventRequest, AnalyticsSummary
 from app.api.routes import _database
 from app.models.database import Database, MembershipRequiredError
@@ -91,7 +91,7 @@ def inspect_value(payload: InspectionRequest,
 
 
 @router.post("/withdraw", status_code=204)
-def withdraw_measurement(user: Annotated[AuthenticatedUser, Depends(verified_user)],
+def withdraw_measurement(user: Annotated[AuthenticatedUser, Depends(current_user)],
     db: Annotated[Database, Depends(_database)], workspace: bool = False):
     try:
         FunnelService(db,user.identity).withdraw(workspace=workspace)
