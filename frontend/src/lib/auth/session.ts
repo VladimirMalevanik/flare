@@ -1,4 +1,4 @@
-import { resetAcquisitionConsent } from "./acquisition";
+import { currentAcquisitionOptIn, resetAcquisitionConsent } from "./acquisition";
 export interface Session {
   user: {
     id: string;
@@ -36,12 +36,14 @@ export async function authRequest(
   path: string,
   body?: unknown,
 ): Promise<AuthResponse> {
-  if (["register", "login", "logout"].includes(path)) resetAcquisitionConsent();
+  const payload = path === "register" && typeof body === "object" && body !== null && !Array.isArray(body)
+    ? { ...body, acquisitionOptIn: currentAcquisitionOptIn() } : body;
+  if (["login", "logout"].includes(path)) resetAcquisitionConsent();
   const response = await fetch(`${apiBaseUrl}/auth/${path}`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body ?? {}),
+    body: JSON.stringify(payload ?? {}),
     cache: "no-store",
   });
   if (!response.ok) {
@@ -66,6 +68,7 @@ export async function authRequest(
       response.status,
     );
   }
+  if (path === "register") resetAcquisitionConsent();
   if (response.status === 204) return { ok: true };
   return response.json() as Promise<AuthResponse>;
 }

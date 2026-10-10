@@ -14,6 +14,7 @@ import { LanguageSelector } from "@/components/language-selector";
 import { Select } from "@/components/select";
 import { useI18n } from "@/i18n/provider";
 import { AnalyticsPreferences } from "@/features/telemetry/analytics-preferences";
+import { AcquisitionPreferences } from "@/features/acquisition/preferences";
 import {
   dataErrorMessage,
   dataProvider,
@@ -416,6 +417,7 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
         icon="settings"
       >
         <AnalyticsPreferences compact />
+        <AcquisitionPreferences account />
         <SettingRow
           title={t("Exclude direct messages and private channels")}
           description={t("Keep connected context scoped to public team conversations.")}
