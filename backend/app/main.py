@@ -22,6 +22,7 @@ from app.api.github import router as github_router
 from app.api.imports import router as imports_router
 from app.api.import_packages import router as import_packages_router
 from app.import_staging import LocalStagedObjects
+from app.import_staging.postgres import PostgresStagedObjects
 from app.import_staging.policy import ImportPolicy
 from app.api.export import router as export_router
 from app.api.voice import router as voice_router
@@ -53,6 +54,10 @@ def create_app(
     if configured.environment == "production" and isinstance(import_storage, LocalStagedObjects):
         raise ValueError("Local ZIP staging is restricted to development/test")
     staging = import_storage
+    if staging is None and configured.import_enabled:
+        if configured.import_storage_provider != "postgres" or not configured.database_url:
+            raise ValueError("ZIP import requires PostgreSQL staging and DATABASE_URL")
+        staging = PostgresStagedObjects(configured.database_url)
     if staging is None and configured.import_staging_root:
         staging = LocalStagedObjects(configured.import_staging_root)
 
@@ -96,6 +101,8 @@ def create_app(
     application.state.import_storage = staging
     application.state.import_policy = import_policy or ImportPolicy.from_environment(
         production=configured.environment == "production" and staging is not None)
+    if isinstance(staging, PostgresStagedObjects):
+        application.state.import_policy.validate_postgres()
     application.state.settings = configured
     application.state.database = database
     application.state.email_sender = email_sender

@@ -1,30 +1,38 @@
 """Dedicated durable import worker; imports no AI/provider or Analyze executor.
 
-Run from backend/: python -m app.workers.import_worker [--once]
-Production requires an injected OPS-approved storage adapter; this CLI is local/test.
+Run from backend/: python -m app.workers.import_worker --mode jobs|cleanup [--once]
+Production uses the explicitly enabled, bounded PostgreSQL staging adapter.
 """
 import argparse
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 import hashlib
 import json
 import logging
 import os
 from pathlib import Path
 import resource
+import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 import psycopg
+from psycopg.rows import dict_row
 from app.import_staging import LocalStagedObjects
 from app.import_staging.policy import ImportPolicy
 from app.models.import_packages import ImportWorkerJobs, ImportPackageError
 
 
 class ImportProcessor:
-    def __init__(self, jobs, storage, policy=None):
+    def __init__(self, jobs, storage, policy=None, stop=None):
         self.jobs, self.storage, self.policy = jobs,storage,policy or ImportPolicy()
+        self.stop = stop
+
+    def check_stop(self):
+        if self.stop is not None and self.stop.is_set():
+            raise ImportWorkerStopped
 
     def decode(self, job, source, action, ordinal=None):
         policy = ImportPolicy(**job['policy'])
@@ -47,6 +55,7 @@ class ImportProcessor:
                 started, heartbeat = time.monotonic(),time.monotonic()
                 memory_check = started
                 while child.poll() is None:
+                    self.check_stop()
                     if sys.platform == 'darwin' and time.monotonic()-memory_check>=0.25:
                         usage=subprocess.run(['/bin/ps','-o','rss=','-p',str(child.pid)],capture_output=True,text=True,timeout=1)
                         if usage.stdout.strip() and int(usage.stdout.strip())*1024>policy.memory_bytes:
@@ -84,9 +93,11 @@ class ImportProcessor:
         try:
             # One bounded immutable object copy is verified on every restart.
             # No database transaction stays open while this storage I/O runs.
-            with tempfile.TemporaryFile() as source, self.storage.reader(job['object_key']) as original:
+            storage = self.storage.for_job(job) if hasattr(self.storage, 'for_job') else self.storage
+            with tempfile.TemporaryFile() as source, storage.reader(job['object_key']) as original:
                 count,digest,heartbeat=0,hashlib.sha256(),time.monotonic()
                 for block in iter(lambda: original.read(64*1024),b''):
+                    self.check_stop()
                     count+=len(block)
                     if count>min(policy.compressed_bytes,policy.scratch_bytes):
                         raise ImportPackageError('compressed_bytes')
@@ -100,6 +111,7 @@ class ImportProcessor:
                 rows=self.decode(job,source,'manifest')['manifest']
                 self.jobs.step(job,'manifest',rows)
                 while True:
+                    self.check_stop()
                     cpu=resource.getrusage(resource.RUSAGE_CHILDREN)
                     if time.monotonic()-started>policy.job_seconds or cpu.ru_utime+cpu.ru_stime-cpu_start.ru_utime-cpu_start.ru_stime>policy.cpu_seconds:
                         raise ImportPackageError('job_resource_limit')
@@ -113,6 +125,10 @@ class ImportProcessor:
                     else:
                         self.jobs.step(job,'gate')
                         return 'completed'
+        except ImportWorkerStopped:
+            # Leave provisional work fenced by its lease; another worker can
+            # resume after expiry. A shutdown is not package rejection/success.
+            return 'stopped'
         except ImportPackageError as error:
             if error.code=='lease_lost':
                 return 'lease_lost'
@@ -133,36 +149,164 @@ class ImportProcessor:
             # Keys are unique per upload attempt and never reused. A stale
             # delete can only touch an already-terminal, quarantined object;
             # all database completion writes remain token/expiry fenced.
-            self.storage.delete(obj['key'])
+            self.check_stop()
+            storage = self.storage.for_cleanup(obj) if hasattr(self.storage, 'for_cleanup') else self.storage
+            storage.delete(obj['key'])
             self.jobs.cleanup('done',obj['key'],obj['cleanup_token'])
+            # Both the physical retirement and token-fenced completion have
+            # committed. Opaque references distinguish upload attempts without
+            # exposing object keys, cleanup tokens, account or file metadata.
+            package_ref = hashlib.sha256(('flare-import-package-v1:' + str(obj['package_id'])).encode('ascii')).hexdigest()
+            object_ref = hashlib.sha256(('flare-import-object-v1:' + obj['key']).encode('ascii')).hexdigest()
+            logging.info('import_worker cleanup_committed package_ref=%s object_ref=%s', package_ref, object_ref)
             return 'deleted'
         except OSError:
             self.jobs.cleanup('retry',obj['key'],obj['cleanup_token'])
             return 'cleanup_retry'
         except ImportPackageError:
             return 'lease_lost'
+        except ImportWorkerStopped:
+            return 'stopped'
+
+
+class ImportWorkerStopped(Exception):
+    """Stop between bounded operations without changing a leased package."""
+
+
+@dataclass(frozen=True)
+class ImportRuntimeSettings:
+    database_url: str
+    provider: str
+    staging_root: str | None
+    heartbeat_dir: str | None
+    policy: ImportPolicy
+    poll_seconds: int = 1
+
+
+def load_import_runtime() -> ImportRuntimeSettings:
+    environment = os.getenv('FLARE_ENV', 'production')
+    if environment not in {'production', 'development', 'test'}:
+        raise ValueError('Invalid import environment')
+    production = environment == 'production'
+    enabled = os.getenv('FLARE_IMPORT_ENABLED', 'false' if production else 'true')
+    if enabled != 'true':
+        raise ValueError('Import worker must be explicitly enabled')
+    database_url = os.getenv('WORKER_DATABASE_URL', '')
+    provider = os.getenv('FLARE_IMPORT_STORAGE_PROVIDER', '' if production else 'local')
+    staging_root = os.getenv('FLARE_IMPORT_STAGING_ROOT')
+    heartbeat_dir = os.getenv('FLARE_WORKER_HEARTBEAT_DIR')
+    concurrency = os.getenv('FLARE_IMPORT_WORKER_CONCURRENCY', '' if production else '1')
+    if not database_url or concurrency != '1':
+        raise ValueError('Restricted worker database and concurrency=1 are required')
+    if provider not in {'local', 'postgres'} or (production and provider != 'postgres'):
+        raise ValueError('Production imports require PostgreSQL staging')
+    if provider == 'local' and not staging_root:
+        raise ValueError('Local staging root is required')
+    if production and not heartbeat_dir:
+        raise ValueError('Private worker heartbeat directory is required')
+    policy = ImportPolicy.from_environment(production=production)
+    if provider == 'postgres':
+        policy.validate_postgres()
+    return ImportRuntimeSettings(database_url, provider, staging_root, heartbeat_dir, policy)
+
+
+class RuntimeImportWorkerJobs(ImportWorkerJobs):
+    """Keep even idle claim/cleanup and role probes bounded during shutdown."""
+
+    def connection(self):
+        return psycopg.connect(self.url, row_factory=dict_row, connect_timeout=3,
+            options='-c statement_timeout=30000 -c lock_timeout=3000')
+
+
+def create_processor(settings: ImportRuntimeSettings, stop: threading.Event) -> ImportProcessor:
+    if settings.provider == 'postgres':
+        from app.import_staging.postgres import PostgresStagedObjects
+        storage = PostgresStagedObjects(settings.database_url)
+        storage.probe()
+    else:
+        storage = LocalStagedObjects(settings.staging_root)
+    return ImportProcessor(RuntimeImportWorkerJobs(settings.database_url), storage, settings.policy, stop)
+
+
+def record_heartbeat(directory: str | None, mode: str) -> None:
+    if directory is None:
+        return
+    if mode not in {'jobs', 'cleanup'}:
+        raise ValueError('Invalid import consumer mode')
+    private = Path(directory)
+    private.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if private.is_symlink() or private.stat().st_uid != os.getuid():
+        raise ValueError('Worker heartbeat directory must be private and owned')
+    private.chmod(0o700)
+    with tempfile.NamedTemporaryFile(mode='w', dir=private, prefix=f'.{mode}-', delete=False) as output:
+        path = Path(output.name)
+        try:
+            json.dump({'checked_at': time.monotonic()}, output)
+            output.flush()
+            os.replace(path, private / f'{mode}.json')
+        finally:
+            path.unlink(missing_ok=True)
+
+
+def update_heartbeat(processor: ImportProcessor, settings: ImportRuntimeSettings, mode: str) -> None:
+    if settings.provider == 'postgres':
+        # Database readiness requires a recent successful restricted operation;
+        # a live PID or a failed poll must never renew it.
+        processor.storage.heartbeat(mode)
+    record_heartbeat(settings.heartbeat_dir, mode)
+
+
+def run_loop(processor: ImportProcessor, settings: ImportRuntimeSettings,
+             stop: threading.Event, *, mode: str, once: bool = False) -> int:
+    if mode not in {'jobs', 'cleanup'}:
+        raise ValueError('Invalid import consumer mode')
+    update_heartbeat(processor, settings, mode)
+    operation = processor.process_one if mode == 'jobs' else processor.cleanup_one
+    while not stop.is_set():
+        try:
+            result = operation()
+            if stop.is_set():
+                break
+            update_heartbeat(processor, settings, mode)
+            if result:
+                logging.info('import_worker mode=%s outcome=%s', mode, result)
+        except (psycopg.Error, OSError):
+            # Database/storage exceptions can contain DSNs or row values.
+            logging.error('import_worker mode=%s database_or_storage_unavailable', mode)
+            if once:
+                return 1
+        if once:
+            return 0
+        stop.wait(settings.poll_seconds)
+    return 0
 
 
 def main():
-    parser=argparse.ArgumentParser(description='Process durable local/test ZIP imports')
+    parser=argparse.ArgumentParser(description='Process bounded durable ZIP imports or staging cleanup')
+    parser.add_argument('--mode', choices=('jobs', 'cleanup'), default='jobs')
     parser.add_argument('--once',action='store_true')
     args=parser.parse_args()
-    if os.getenv('FLARE_ENV','production') not in {'development','test'}:
-        raise ValueError('Production imports require OPS-approved adapter/worker wiring')
-    url=os.getenv('WORKER_DATABASE_URL'); root=os.getenv('FLARE_IMPORT_STAGING_ROOT')
-    if not url or not root:
-        raise ValueError('WORKER_DATABASE_URL and FLARE_IMPORT_STAGING_ROOT are required')
-    processor=ImportProcessor(ImportWorkerJobs(url),LocalStagedObjects(root),ImportPolicy.from_environment())
     logging.basicConfig(level=logging.INFO)
-    while True:
-        try:
-            result=processor.process_one(); cleaned=processor.cleanup_one()
-            if result or cleaned: logging.info('import_worker outcome=%s cleanup=%s',result,cleaned)
-        except psycopg.Error:
-            logging.error('import_worker database_unavailable')
-            if args.once: return 1
-        if args.once: return 0
-        time.sleep(1)
+    stop = threading.Event()
+    handlers = {}
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        handlers[sig] = signal.signal(sig, lambda *_: stop.set())
+    settings = None
+    try:
+        settings = load_import_runtime()
+        processor = create_processor(settings, stop)
+        return run_loop(processor, settings, stop, mode=args.mode, once=args.once)
+    except (ValueError, ImportPackageError, psycopg.Error, OSError):
+        logging.error('import_worker startup_or_runtime_failure')
+        return 1
+    finally:
+        if settings and settings.heartbeat_dir:
+            try:
+                (Path(settings.heartbeat_dir) / f'{args.mode}.json').unlink(missing_ok=True)
+            except OSError:
+                logging.error('import_worker heartbeat_cleanup_unavailable')
+        for sig, handler in handlers.items():
+            signal.signal(sig, handler)
 
 
 if __name__=='__main__':
