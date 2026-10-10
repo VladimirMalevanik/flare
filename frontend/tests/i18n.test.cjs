@@ -17,6 +17,7 @@ function load(relative, mocks = {}, globals = {}) {
   const exports = {};
   vm.runInNewContext(code, { exports, Intl, ...globals, require(name) {
     if (name in mocks) return mocks[name];
+    if (name === './developer-mail') return { DeveloperMail: () => null };
     if (name === 'react/jsx-runtime') return jsx;
     if (name === 'next/link') return { default: 'a' };
     if (name === '@/components/language-selector') return { LanguageSelector: 'language-selector' };

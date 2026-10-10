@@ -1,0 +1,25 @@
+.developer-mail-sheet { width: 640px; }
+.developer-mail-from { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; font-size: 13px; overflow-wrap: anywhere; }
+.developer-mail-from strong { font-weight: 500; }
+.developer-mail-sheet form input,
+.developer-mail-sheet form textarea { font: inherit; font-size: 14px; }
+.developer-mail-sheet textarea { width: 100%; resize: vertical; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--inset); color: var(--ink); line-height: 1.5; }
+.developer-mail-sheet input { color: var(--ink); }
+.developer-mail-sheet textarea:focus-visible,
+.developer-mail-sheet input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.developer-mail-sheet [aria-invalid="true"] { border-color: var(--accent-text); }
+.developer-mail-sheet #mail-body { min-height: 210px; }
+.developer-mail-sheet #mail-recipients-hint { margin-top: 6px; }
+.developer-mail-notice { margin-top: 16px; font-size: 13px; line-height: 1.5; }
+.developer-mail-results { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.developer-mail-results ul { list-style: none; padding: 0; margin: 0 0 12px; }
+.developer-mail-results li { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 8px; font-size: 12px; overflow-wrap: anywhere; }
+.developer-mail-results strong { font-weight: 500; flex-shrink: 0; }
+.developer-mail-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding-top: 20px; margin-top: 20px; border-top: 1px solid var(--line); }
+.developer-mail-actions .button { min-height: 40px; }
+@media (max-width: 600px) {
+  .developer-mail-section .setting-row { align-items: stretch; }
+  .developer-mail-sheet form input, .developer-mail-sheet form textarea { font-size: 16px; }
+  .developer-mail-results li { flex-direction: column; gap: 2px; margin-bottom: 12px; }
+  .developer-mail-actions .button { min-height: 44px; }
+}
