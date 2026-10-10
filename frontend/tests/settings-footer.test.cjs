@@ -15,6 +15,7 @@ function load(file, mocks) {
     if (name === 'react/jsx-runtime') return jsx;
     if (name === '@/i18n/provider') return i18nMock();
     if (name in mocks) return mocks[name];
+    if (name === './developer-mail') return { DeveloperMail: () => null };
     throw Error(`Unexpected import ${name}`);
   } });
   return exports;
