@@ -118,10 +118,10 @@ Already downloaded exports cannot be recalled after withdrawal.
 Validation uses a fresh local PostgreSQL cluster on port 58473; all accounts and
 data are synthetic. Checks completed:
 
-- 262 frontend tests and lint pass locally, including consent independence,
+- 264 frontend tests and lint pass locally, including consent independence,
   unknown revision/retention rejection, privacy signals, storage failure, pending
   touch withdrawal ordering, expired-session handling and honest account status.
-- 146 acquisition/funnel/analytics/auth PostgreSQL checks pass locally. Operator
+- 153 acquisition/funnel/analytics/auth PostgreSQL checks pass locally. Operator
   tests also run from the repository root, matching CI's collection mode.
 - Full CI on `da8fa5f`: 1,043 backend checks in self-managed mode; 1,042 checks and
   one provider-specific skip in Yandex mode; frontend tests/lint/build green.
@@ -132,6 +132,16 @@ data are synthetic. Checks completed:
   confirms withdrawn eligibility and cleared campaign labels. Desktop and390px
   views fit; no simultaneous fixed notices. Account status wording was then
   corrected and covered by the additional frontend regression.
+
+A further signup boundary regression was fixed: a retained HttpOnly acquisition
+cookie alone is insufficient to link registration after rejection, storage loss,
+new-tab consent loss, privacy signals or a failed cookie-forget. The frontend adds
+only a current explicit opt-in boolean to registration. The server accepts only
+JSON true for optional linkage; missing, false and truthy malformed values still
+allow normal signup with unknown attribution. Failed registration preserves the
+active tab choice for a corrected retry; successful registration/login/logout
+clears it. Existing authentication, legal acceptance and verification rules do
+not change. Additional HTTP/frontend regressions cover both consent paths.
 
 Final PR checks/build must be green on the accepted head before rollout; older
 artifact source is validation evidence, not authorization to deploy that archive.

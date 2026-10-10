@@ -41,6 +41,13 @@ export function acquisitionChoice(policy: AcquisitionPolicy): "allowed" | "rejec
   return "unset";
 }
 
+export function currentAcquisitionOptIn(): boolean {
+  try {
+    return !acquisitionPrivacyBlocked() && sessionStorage.getItem(consentKey) === measurementRevision &&
+      sessionStorage.getItem(rejectionKey) !== measurementRevision;
+  } catch { return false; }
+}
+
 export function chooseAcquisition(policy: AcquisitionPolicy, allowed: boolean): boolean {
   resetAcquisitionConsent();
   try {

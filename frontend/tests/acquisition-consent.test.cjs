@@ -90,3 +90,29 @@ test('account settings do not mistake auth-boundary tab consent reset for accoun
     assert.doesNotMatch(text,/Link measurement stays off until you allow it|Link measurement is allowed for this tab/);
   }
 });
+test('registration asserts current consent; rejection, privacy signals and failed forget cannot reuse an old cookie',async()=>{
+  for(const scenario of ['allowed','rejected','privacy','unset']) {
+    const calls=[];
+    const {m,storage,sandbox}=load({fetch:async(url,options)=>{
+      calls.push([url,options]);return {ok:true,status:201,json:async()=>({ok:true})};
+    }});
+    if(scenario!=='unset')storage.set(m.consentKey,policy.revision);
+    if(scenario==='rejected')storage.set(m.rejectionKey,policy.revision);
+    if(scenario==='privacy')sandbox.navigator.globalPrivacyControl=true;
+    const exports={};
+    vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/auth/session.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:()=>m,process:{env:{}},...sandbox});
+    await exports.authRequest('register',{email:'synthetic@example.invalid',acquisitionOptIn:true});
+    assert.equal(JSON.parse(calls[0][1].body).acquisitionOptIn,scenario==='allowed');
+    assert.equal(storage.has(m.consentKey),false);
+  }
+});
+test('failed registration keeps its active choice for a corrected retry; login still clears it',async()=>{
+  const {m,storage,sandbox}=load({fetch:async()=>({ok:false,status:422,json:async()=>({detail:'synthetic validation'})})});
+  storage.set(m.consentKey,policy.revision);
+  const exports={};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/auth/session.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:()=>m,process:{env:{}},...sandbox});
+  await assert.rejects(exports.authRequest('register',{}));
+  assert.equal(storage.get(m.consentKey),policy.revision);
+  await assert.rejects(exports.authRequest('login',{}));
+  assert.equal(storage.has(m.consentKey),false);
+});

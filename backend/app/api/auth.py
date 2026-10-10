@@ -51,6 +51,14 @@ class RegisterRequest(LoginRequest):
     name: str = Field(min_length=1, max_length=100)
     termsAccepted: Literal[True]
     privacyAccepted: Literal[True]
+    acquisitionOptIn: bool = False
+
+    @field_validator("acquisitionOptIn", mode="before")
+    @classmethod
+    def explicit_acquisition_opt_in(cls, value):
+        # An optional measurement assertion must never block registration or
+        # treat strings/numbers as consent. Only JSON true is eligible.
+        return value is True
 
     @field_validator("name")
     @classmethod
@@ -182,7 +190,8 @@ def register(payload: RegisterRequest, request: Request, response: Response):
     try:
         token = auth_service(request).register(
             payload.email, payload.password, payload.name,
-            acquisition_reference=(None if request.cookies.get(request.app.state.settings.session_cookie_name) else request.cookies.get(COOKIE)),
+            acquisition_reference=(request.cookies.get(COOKIE) if payload.acquisitionOptIn is True
+                and not request.cookies.get(request.app.state.settings.session_cookie_name) else None),
         )
     except RegistrationUnavailable:
         raise auth_error(
