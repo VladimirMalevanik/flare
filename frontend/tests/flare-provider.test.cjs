@@ -244,6 +244,26 @@ test('daily schedule and status use strict live API contracts', async () => {
   ]);
 });
 
+test('daily status cancellation reaches the actual HTTP request', async () => {
+  const controller = new AbortController();
+  let receivedSignal, cancelled = false;
+  global.fetch = (url, options) => {
+    assert.equal(url, '/api/analysis/daily-status');
+    receivedSignal = options.signal;
+    return new Promise((resolve, reject) => {
+      options.signal.addEventListener('abort', () => {
+        cancelled = true;
+        reject(new Error('request aborted'));
+      }, { once: true });
+    });
+  };
+  const request = provider().getDailyAnalysisStatus(controller.signal);
+  assert.equal(receivedSignal, controller.signal);
+  controller.abort();
+  await assert.rejects(request, /cannot reach the flare api/i);
+  assert.equal(cancelled, true);
+});
+
 test('retained daily quota reports consumed state without inventing sync success', async () => {
   const consumed={localDate:'2026-09-14',timezone:'UTC',state:'consumed',cycleId:null,runId:null,
     mode:'manual',scheduledFor:'2026-09-14T09:00:00Z',refreshDueAt:'2026-09-14T08:30:00Z',

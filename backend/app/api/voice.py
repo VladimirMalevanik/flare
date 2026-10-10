@@ -6,6 +6,7 @@ import asyncio
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from starlette.concurrency import run_in_threadpool
 
 from app.ai_engine.groq_voice_adapter import create_voice_transcriber
 from app.ai_engine.media_inspection import FfprobeMediaInspector, MediaInspectionError
@@ -13,7 +14,7 @@ from app.ai_engine.voice import AudioInput, VoiceError
 from app.ai_engine.voice_config import load_voice_settings
 from app.api.auth import verified_user
 from app.api.schemas import ItemResponse
-from app.models.database import Database
+from app.models.database import Database, MembershipRequiredError, WritePermissionRequiredError
 from app.services.auth_service import AuthenticatedUser
 from app.services.voice_service import VoiceTranscriptService
 
@@ -89,6 +90,9 @@ async def transcribe_voice(
     database: Annotated[Database, Depends(_database)],
 ) -> ItemResponse:
     """Keep source audio transient; persist only the validated English-first transcript."""
+    if user.role not in {"owner", "editor"}:
+        raise HTTPException(status_code=403, detail="Workspace write permission is required")
+
     try:
         settings = load_voice_settings()
     except ValueError:
@@ -123,11 +127,13 @@ async def transcribe_voice(
         await inspector.duration_seconds(audio)
         async with create_voice_transcriber() as transcriber:
             transcript = await transcriber.transcribe(audio)
-        item = VoiceTranscriptService(
+        service = VoiceTranscriptService(
             database,
             user.identity,
             max_upload_bytes=settings.max_upload_bytes,
-        ).persist(
+        )
+        item = await run_in_threadpool(
+            service.persist,
             transcript,
             media_type=persisted_media_type,
             upload_size=len(content),
@@ -136,6 +142,10 @@ async def transcribe_voice(
         raise _inspection_error(error) from None
     except VoiceError as error:
         raise _voice_error(error) from None
+    except MembershipRequiredError:
+        raise HTTPException(status_code=403, detail="Workspace membership is required") from None
+    except WritePermissionRequiredError:
+        raise HTTPException(status_code=403, detail="Workspace write permission is required") from None
     except (ValueError, TypeError):
         raise HTTPException(status_code=422, detail="Voice recording is invalid") from None
 

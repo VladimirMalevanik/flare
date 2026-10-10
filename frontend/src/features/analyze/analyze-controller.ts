@@ -1,5 +1,6 @@
 import type { AnalysisRun } from "@/lib/data/types";
 import type { FlareDataProvider } from "@/lib/data/provider";
+import { withRequestDeadline } from "./request-deadline";
 
 export type AnalyzeState = {
   busy: boolean;
@@ -43,6 +44,7 @@ export class AnalyzeController {
   private generation = 0;
   private abort: AbortController | null = null;
   private pendingKey: string | null = null;
+  private runToday = false;
   constructor(
     private provider: Pick<FlareDataProvider, "startAnalysis" | "getAnalysisRun">,
     private publish: (state: AnalyzeState) => void,
@@ -58,6 +60,7 @@ export class AnalyzeController {
     this.abort?.abort();
     this.abort = null;
     this.pendingKey = null;
+    this.runToday = false;
     this.update(initial);
   };
   start = async () => {
@@ -65,42 +68,47 @@ export class AnalyzeController {
     const generation = ++this.generation;
     const abort = new AbortController();
     this.abort = abort;
-    const deadline = setTimeout(() => abort.abort(), 300_000);
     let run = this.state.run;
+    let today = this.runToday;
     this.update({ busy: true, run, error: false, message: "Analyzing project context…" });
     const live = () => generation === this.generation && !abort.signal.aborted;
     try {
-      // Unknown POST outcome reuses the key. Terminal retries get a new key.
-      if (!run || ["completed", "failed"].includes(run.status)) {
-        this.pendingKey ??= this.key();
-        run = await this.provider.startAnalysis(this.pendingKey, abort.signal);
-        if (!live()) return;
-        this.pendingKey = null;
-      }
-      for (let count = 0; live(); count++) {
-        if (run.status === "completed") {
-          this.complete();
-          this.update({ busy: false, run, error: false, message: completedMessage(run, false),
-            completion: { today: false, selectedChunkCount: run.selectedChunkCount, hasFlares: run.flareIds.length > 0 } });
-          return;
+      await withRequestDeadline(async () => {
+        // Unknown POST outcome reuses the key. Terminal retries get a new key.
+        if (!run || ["completed", "failed"].includes(run.status)) {
+          today = this.runToday = false;
+          this.pendingKey ??= this.key();
+          run = await this.provider.startAnalysis(this.pendingKey, abort.signal);
+          if (!live()) return;
+          this.pendingKey = null;
         }
-        if (run.status === "failed") {
-          this.update({ busy: false, run, error: true, message: failureMessage(run.error) });
-          return;
+        for (let count = 0; live(); count++) {
+          if (run.status === "completed") {
+            this.complete();
+            this.update({ busy: false, run, error: false, message: completedMessage(run, today),
+              completion: { today, selectedChunkCount: run.selectedChunkCount, hasFlares: run.flareIds.length > 0 } });
+            return;
+          }
+          if (run.status === "failed") {
+            this.update({ busy: false, run, error: true, message: failureMessage(run.error) });
+            return;
+          }
+          this.update({ busy: true, run, error: false, message: run.stage === "flare_generation" ? "Generating Flares…" : "Analyzing project context…" });
+          if (count >= this.maxPolls) break;
+          await this.sleep(Math.min(1000 * 1.5 ** count, 10000), abort.signal);
+          if (!live()) return;
+          run = await this.provider.getAnalysisRun(run.id, abort.signal);
         }
-        this.update({ busy: true, run, error: false, message: run.stage === "flare_generation" ? "Generating Flares…" : "Analyzing project context…" });
-        if (count >= this.maxPolls) break;
-        await this.sleep(Math.min(1000 * 1.5 ** count, 10000), abort.signal);
-        if (!live()) return;
-        run = await this.provider.getAnalysisRun(run.id, abort.signal);
-      }
-      if (generation === this.generation) this.update({ busy: false, run, error: true, message: "Analysis is still pending. Check status again shortly." });
+        if (live()) this.update({ busy: false, run, error: true, message: "Analysis is still pending. Check status again shortly." });
+      }, abort, 300_000);
     } catch (error) {
       if (generation !== this.generation) return;
       const status = (error as { status?: number }).status;
       const code = (error as { code?: string }).code;
       if (status && status >= 400 && status < 500) this.pendingKey = null;
-      this.update({ busy: false, run, error: true, message: status === 422
+      this.update({ busy: false, run, error: true, message: abort.signal.aborted
+        ? "Analysis is still pending. Check status again shortly."
+        : status === 422
         ? requestFailureMessages[code ?? ""] ?? "Analysis could not accept this request. Try again shortly."
         : status === 403 ? "Only workspace owners and editors can analyze context."
         : status === 409 && code === "daily_limit"
@@ -110,7 +118,7 @@ export class AnalyzeController {
         : status === 409 ? "Analysis request conflicted with another change. Try again."
         : "Analysis status is unavailable. Try again to check this request." });
     } finally {
-      clearTimeout(deadline);
+      if (this.abort === abort) this.abort = null;
       if (generation === this.generation && this.state.busy) {
         this.update({ busy: false, run, error: true, message: "Analysis is still pending. Check status again shortly." });
       }
@@ -124,7 +132,7 @@ export class AnalyzeController {
     this.abort = abort;
     this.update({ busy: true, run: null, error: false, message: today ? "Loading today’s insight…" : "Loading the most recent insight…" });
     try {
-      const run = await this.provider.getAnalysisRun(runId, abort.signal);
+      const run = await withRequestDeadline(() => this.provider.getAnalysisRun(runId, abort.signal), abort);
       if (generation !== this.generation || abort.signal.aborted) return;
       if (run.status === "completed") {
         this.complete();
@@ -137,6 +145,7 @@ export class AnalyzeController {
         return;
       }
       this.state = { busy: false, run, error: false, message: "" };
+      this.runToday = today;
       await this.start();
     } catch {
       if (generation === this.generation) {
@@ -144,6 +153,8 @@ export class AnalyzeController {
           ? "Today’s insight status is unavailable."
           : "The most recent insight status is unavailable." });
       }
+    } finally {
+      if (this.abort === abort) this.abort = null;
     }
   };
 }

@@ -9,6 +9,7 @@ import {
   type DailyAnalysisStatus,
 } from "@/lib/data";
 import { AnalyzeController, type AnalyzeState } from "./analyze-controller";
+import { withRequestDeadline } from "./request-deadline";
 import { dailyRunChanged, dailyStatusMessage, isCurrentDailyCycle } from "./daily-status-copy";
 import { consumeFunnyRequest, funnyMessage, REQUIRED_SHAKES } from "@/features/funny/funny-state";
 import { playFunnySound, speakFunnyLine } from "@/features/funny/funny-sounds";
@@ -38,10 +39,12 @@ export function AnalyzeAction() {
   useEffect(() => {
     let live = true;
     let timer: number | undefined;
+    let request: AbortController | undefined;
     const load = async () => {
       let nextDelay = 60_000;
+      request = new AbortController();
       try {
-        const value = await dataProvider.getDailyAnalysisStatus();
+        const value = await withRequestDeadline(() => dataProvider.getDailyAnalysisStatus(request?.signal), request);
         if (!live) return;
         if (dailyRunChanged(dailyRef.current, value)) {
           controller.current?.reset();
@@ -64,6 +67,7 @@ export function AnalyzeAction() {
     void load();
     return () => {
       live = false;
+      request?.abort();
       if (timer !== undefined) window.clearTimeout(timer);
     };
   }, [state.run?.status, setFunnyRitual]);

@@ -118,7 +118,8 @@ function analyzeHarness({ mode = true, role = 'owner', status = available, muted
   };
   // React passes setters as bare callbacks; bind once so effect dependencies are stable.
   workspace.setFunnyRitual = workspace.setFunnyRitual.bind(workspace);
-  const controllerModule = load('../src/features/analyze/analyze-controller.ts', {}, {
+  const requestDeadline = load('../src/features/analyze/request-deadline.ts', {}, { setTimeout, clearTimeout });
+  const controllerModule = load('../src/features/analyze/analyze-controller.ts', { './request-deadline': requestDeadline }, {
     AbortController, setTimeout, clearTimeout, crypto: { randomUUID: () => 'one-key' },
   });
   const provider = {
@@ -132,10 +133,11 @@ function analyzeHarness({ mode = true, role = 'owner', status = available, muted
     '@/components/workspace-context': { useWorkspace: () => workspace },
     '@/lib/data': { dataProvider: provider, dataProviderMode: 'api' },
     './analyze-controller': controllerModule,
+    './request-deadline': requestDeadline,
     './daily-status-copy': load('../src/features/analyze/daily-status-copy.ts'),
     '@/features/funny/funny-state': funny,
     '@/features/funny/funny-sounds': { playFunnySound(kind, enabled) { if (enabled) sounds.push(kind); }, speakFunnyLine(line, enabled) { if (enabled) speech.push(line); } },
-  }, { window: { setTimeout: fn => { timers.set(++timerId, fn); return timerId; }, clearTimeout: id => timers.delete(id), addEventListener() {}, removeEventListener() {} }, document: { querySelector: () => ({ focus() {} }) } });
+  }, { AbortController, window: { setTimeout: fn => { timers.set(++timerId, fn); return timerId; }, clearTimeout: id => timers.delete(id), addEventListener() {}, removeEventListener() {} }, document: { querySelector: () => ({ focus() {} }) } });
   return { workspace, response, calls, sounds, speech, render: () => h.flush(AnalyzeAction), dispose: () => h.dispose(), changeDaily(next) {
     status = next;
     const [id, fn] = Array.from(timers.entries()).at(-1);
