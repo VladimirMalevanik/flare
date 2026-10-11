@@ -91,8 +91,19 @@ fixture used explicit test identity and did not finalize or run Analyze; it is n
 Azure or browser drag/drop acceptance. Linux CI exposed a SCRAM-specific missing
 password in the disposable administrator fixture; the test now creates a random
 test-only password and overrides the bootstrap DSN password for that new role.
-Production rollout and live smoke are still pending. No production import success
-is claimed yet.
+Production schema 0022 and release 1e3cdeb were deployed to the existing API,
+worker and web services. Both import consumers were observed running with fresh
+database-backed heartbeats. Authenticated Sources enabled its ZIP controls.
+The first real synthetic ZIP attempt failed before manifest inspection with
+`decoder_resource_limit`; no sources were published. A bounded read-only probe
+of the exact worker runtime confirmed that the stripped decoder environment
+could not import psycopg, while adding the installed portable dependency path
+allowed the actual decoder module to load. The decoder now forwards only the
+application root and the dependency root of the already loaded psycopg package;
+it does not inherit database credentials or other server environment variables.
+A real child-process regression uses a separate interpreter without installed
+dependencies and verifies ZIP manifest and Unicode text decoding. Live import
+acceptance remains pending until this correction is deployed and exercised.
 The deterministic synthetic fixture contains 12 supported text files (.md,
 .markdown, .txt, .csv) and 1 unsupported PNG. Full acceptance requires a dedicated
 verified test account, real picker/drop/progress/report, 12 files opened in Vault,

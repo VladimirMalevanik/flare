@@ -25,6 +25,15 @@ from app.import_staging.policy import ImportPolicy
 from app.models.import_packages import ImportWorkerJobs, ImportPackageError
 
 
+def _decoder_environment():
+    # Portable wrappers can exec a base interpreter whose site path omits the
+    # worker dependencies. Use the installed package already loaded by this
+    # trusted process, while keeping server environment and credentials out.
+    app_root = Path(__file__).resolve().parents[2]
+    dependency_root = Path(psycopg.__file__).resolve().parent.parent
+    return {'PYTHONPATH': os.pathsep.join((str(app_root), str(dependency_root)))}
+
+
 class ImportProcessor:
     def __init__(self, jobs, storage, policy=None, stop=None):
         self.jobs, self.storage, self.policy = jobs,storage,policy or ImportPolicy()
@@ -48,7 +57,7 @@ class ImportProcessor:
             source.seek(0)
             child = subprocess.Popen([sys.executable,'-m','app.workers.import_subprocess'],
                 stdin=subprocess.PIPE,stdout=output,stderr=subprocess.DEVNULL,pass_fds=(source.fileno(),),
-                env={'PYTHONPATH':str(Path(__file__).resolve().parents[2])})
+                env=_decoder_environment())
             try:
                 child.stdin.write(json.dumps(request).encode())
                 child.stdin.close()

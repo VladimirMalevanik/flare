@@ -11,6 +11,8 @@ import sys
 import threading
 import time
 import types
+import venv
+import zipfile
 
 import pytest
 
@@ -100,6 +102,60 @@ def test_runtime_database_connect_and_idle_queries_are_bounded(monkeypatch):
     jobs.connection()
     assert calls[0][1]['connect_timeout'] == 3
     assert calls[0][1]['options'] == '-c statement_timeout=30000 -c lock_timeout=3000'
+
+
+def test_decoder_uses_installed_dependencies_with_a_separate_interpreter(tmp_path, monkeypatch):
+    # The portable production wrapper execs a base interpreter, while its
+    # dependencies live elsewhere. A fresh interpreter environment reproduces
+    # that separation without installing packages or using a database.
+    interpreter_root = tmp_path / 'interpreter'
+    venv.EnvBuilder(with_pip=False).create(interpreter_root)
+    executable = str(interpreter_root / 'bin' / 'python')
+    app_root = str(Path(import_worker.__file__).resolve().parents[2])
+    dependency_root = str(Path(import_worker.psycopg.__file__).resolve().parent.parent)
+    assert not Path(dependency_root).is_relative_to(interpreter_root)
+    unavailable = subprocess.run(
+        [executable, '-c', 'import importlib.util; assert importlib.util.find_spec("psycopg") is None'],
+        env={'PYTHONPATH': app_root}, capture_output=True, timeout=5)
+    assert unavailable.returncode == 0, unavailable.stderr
+
+    ambient = tmp_path / 'untrusted-pythonpath'
+    ambient.mkdir()
+    (ambient / 'sitecustomize.py').write_text('raise SystemExit("ambient environment was inherited")\n')
+    monkeypatch.setenv('PYTHONPATH', str(ambient))
+    monkeypatch.setenv('WORKER_DATABASE_URL', 'synthetic-private-dsn')
+    monkeypatch.setenv('PGOPTIONS', 'synthetic-private-options')
+    monkeypatch.setattr(import_worker.sys, 'executable', executable)
+    launches = []
+    real_popen = subprocess.Popen
+    def launch(*args, **kwargs):
+        if args[0] == [executable, '-m', 'app.workers.import_subprocess']:
+            launches.append(kwargs['env'])
+        return real_popen(*args, **kwargs)
+    monkeypatch.setattr(import_worker.subprocess, 'Popen', launch)
+
+    text = '# Portable decoder\nПривет 👋\n'
+    archive = tmp_path / 'synthetic.zip'
+    with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED) as output:
+        output.writestr('notes/portable.md', text)
+    job = {'policy': asdict(ImportPolicy()), 'file_size': archive.stat().st_size}
+    heartbeats = []
+    processor = import_worker.ImportProcessor(types.SimpleNamespace(
+        step=lambda value, action: heartbeats.append((value, action))), None)
+    with archive.open('rb') as source:
+        manifest = processor.decode(job, source, 'manifest')['manifest']
+        parsed = processor.decode(job, source, 'file', 0)
+
+    assert manifest == [{'ordinal': 0, 'path': 'notes/portable.md',
+        'canonicalPath': 'notes/portable.md', 'fileBytes': len(text.encode()), 'skipReason': None}]
+    assert parsed['ordinal'] == 0 and parsed['hash'] == hashlib.sha256(text.encode()).hexdigest()
+    assert parsed['parsed']['status'] == 'prepared'
+    assert ''.join(chunk['content'] for chunk in parsed['parsed']['chunks']) == text
+    assert heartbeats == [(job, 'heartbeat'), (job, 'heartbeat')]
+    assert len(launches) == 2
+    assert all(set(environment) == {'PYTHONPATH'} for environment in launches)
+    assert all(environment['PYTHONPATH'].split(os.pathsep) == [app_root, dependency_root]
+               for environment in launches)
 
 
 def settings(directory):
