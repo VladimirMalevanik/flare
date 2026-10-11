@@ -102,10 +102,55 @@ allowed the actual decoder module to load. The decoder now forwards only the
 application root and the dependency root of the already loaded psycopg package;
 it does not inherit database credentials or other server environment variables.
 A real child-process regression uses a separate interpreter without installed
-dependencies and verifies ZIP manifest and Unicode text decoding. Live import
-acceptance remains pending until this correction is deployed and exercised.
-The deterministic synthetic fixture contains 12 supported text files (.md,
-.markdown, .txt, .csv) and 1 unsupported PNG. Full acceptance requires a dedicated
-verified test account, real picker/drop/progress/report, 12 files opened in Vault,
-same-ZIP replay with unchanged source/publication counts, no analysis activity,
-and verified active payload/scratch cleanup.
+dependencies and verifies ZIP manifest and Unicode text decoding. The correction
+at d109c094d6dbb8a77dd200020d16f3f07d626665 passed 132 runtime/ZIP tests and all
+GitHub backend/frontend checks. Official Linux release run 38124614760 passed;
+the verified backend package SHA-256 is
+2e6de2a04e22bccfbfb5705fa90add0b37b7ca0962b57755460ff0af1e564278.
+
+On 2026-10-11 the corrected worker-only deployment completed at 15:56:37 UTC.
+Independent Kudu status4/complete/active, exact release marker and public readiness
+confirmed it; API and web retained the compatible 1e3cdeb release. Schema and
+explicit policy stayed unchanged. A separate read-only runtime proof verified
+97 exact source files, the exact portable wrapper, trusted Azure interpreter,
+four supervised children and advancing successful import/cleanup heartbeat stamps. Azure CLI's
+initial observation timed out; that failed observation and genuine deployment
+request timestamp were preserved rather than deploying again.
+
+Live browser acceptance on https://flare4u.tech used a separate verified test
+account and the deterministic 3192-byte fixture, SHA-256
+9c38a48208acb51114ba6c5cce2e228a125f5f038b3d419c35b428285d462152.
+It contains 12 supported .md/.markdown/.txt/.csv files and one unsupported PNG.
+Actual external drag/drop progressed through upload, inspection and file reading
+(including 5/13 at 38%) to 13/13 at 100%, reporting
+“12 files added to Vault · 1 not added”. The expanded PNG report said
+“Unsupported file format”; all 12 supported entries were Imported. Every added
+file was opened in Vault and matched its original synthetic text, Unicode and
+CSV content. The account's two pre-existing items remained: 14 total after import.
+Repeating the exact ZIP under the same Obsidian connector returned duplicate,
+zero newly published files and the canonical completed package. After refreshing,
+Vault still held 14 items and exactly 12 unique synthetic files. Analyze was not
+clicked; imported files opened as ready, without extracted facts.
+
+The worker's container stdout capture was initially disabled. Filesystem logging
+was enabled on that existing service, retaining its previous 35MB/7-day bounds;
+no new resource, network rule or permission was added. Earlier receipt scans were
+preserved as failed observations. A further exact replay was completed after the
+logging restart, so its current archive reference can be correlated with captured
+cleanup output. That exact replay was created at 17:00:25.390095 UTC. A bounded
+read-only Kudu scan observed one strict committed cleanup receipt matching both
+its current package and object references at 17:00:28.141393 UTC, approximately
+2.75 seconds later. The current d109 release marker was verified before and after
+the scan; six log tails, 128887 bytes total, were read without outputting raw logs
+or credentials. This witnesses committed live PostgreSQL payload retirement and
+token-fenced cleanup completion under the verified cleanup code. It is not a
+direct private-table row count, a fresh runtime-process proof, or backup erasure.
+The earlier independent runtime/source proof retains its actual earlier timestamp.
+Anonymous local scratch handles close when the decoder/import contexts finish;
+that lifecycle is covered by runtime tests, not a claimed live filesystem count.
+
+Sanitized browser evidence: [acceptance metadata](evidence/live-acceptance.json),
+[successful import](evidence/live-import-success.png),
+and [unsupported-format reason](evidence/live-skip-report.png).
+Content-free cleanup correlation is recorded in
+[cleanup evidence](evidence/live-cleanup.json).
