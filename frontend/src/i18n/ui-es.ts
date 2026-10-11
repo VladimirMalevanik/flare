@@ -1,6 +1,17 @@
 import type { uiEn } from "./ui-en";
 
 export const uiEs = {
+  "Import stopped because it took too long. Try a smaller ZIP.": "La importación se detuvo porque tardó demasiado. Prueba con un ZIP más pequeño.",
+  "The request timed out. The server may still be processing this import. Check status before retrying.": "La solicitud agotó el tiempo de espera. El servidor podría seguir procesando la importación. Comprueba el estado antes de reintentar.",
+  "Import status is unavailable. Check status or try cancelling again.": "El estado de la importación no está disponible. Comprueba el estado o intenta cancelarla de nuevo.",
+  "Cancellation is not confirmed. Check status or try cancelling again.": "La cancelación no está confirmada. Comprueba el estado o intenta cancelarla de nuevo.",
+  "Import status unavailable": "Estado de importación no disponible",
+  "Cancelling import…": "Cancelando importación…",
+  "Checking import status…": "Comprobando el estado…",
+  "Retry cancellation": "Reintentar cancelación",
+  "Check status": "Comprobar estado",
+  "Choose another ZIP": "Elegir otro ZIP",
+  "Close import": "Cerrar importación",
   "Pause animations": "Pausar animaciones",
   "Resume animations": "Reanudar animaciones",
   "Your saved context": "Tu contexto guardado",

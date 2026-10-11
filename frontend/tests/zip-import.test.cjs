@@ -17,15 +17,15 @@ function text(node) {
   if (Array.isArray(node)) return node.map(text).join(' ');
   return node ? text(node.props?.children) : '';
 }
-function harness(provider, history = []) {
-  let cursor=0;const state=[],effects=[],timers=[],deps=[],cleanups=[];
+function harness(provider, history = [], sourceKind = 'obsidian') {
+  let cursor=0, timerId=0, requestId=0;const state=[],effects=[],timers=new Map(),deps=[],cleanups=[];
   provider.getImportCapabilities ??= async()=>({available:true,maxUploadBytes:100000});
   provider.listImportPackages ??= async()=>history;
   const exports={};
   const code=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/features/sources/zip-import.tsx'),'utf8'),{
     compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;
-  vm.runInNewContext(code,{exports,AbortController,crypto:{randomUUID:()=> 'request-1'},
-    setTimeout(fn){timers.push(fn);return timers.length;},clearTimeout(){},require(name){
+  vm.runInNewContext(code,{exports,AbortController,crypto:{randomUUID:()=> `request-${++requestId}`},
+    setTimeout(fn){const id=++timerId;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);},require(name){
       if(name==='react/jsx-runtime')return jsx;
       if(name==='next/link')return {default:'a'};
       if(name==='@/components/dialog')return {Dialog:'dialog'};
@@ -35,19 +35,94 @@ function harness(provider, history = []) {
       if(name==='react')return {
         useState(initial){const i=cursor++;if(!(i in state))state[i]=initial;return[state[i],v=>state[i]=typeof v==='function'?v(state[i]):v];},
         useRef(initial){const i=cursor++;if(!(i in state))state[i]={current:initial};return state[i];},
-        useEffect(fn,values){const i=cursor++;if(!deps[i]||values.some((v,j)=>v!==deps[i][j])){effects.push(fn);deps[i]=values;}}
+        useEffect(fn,values){const i=cursor++;if(!deps[i]||values.some((v,j)=>v!==deps[i][j])){effects.push(()=>{cleanups[i]?.();cleanups[i]=fn();});deps[i]=values;}}
       };
       throw Error(name);
     }});
-  function render(){cursor=0;return exports.ZipImport({sourceKind:'obsidian'});}
+  function render(){cursor=0;return exports.ZipImport({sourceKind});}
   return {render,buttons:()=>nodes(render()).filter(n=>n.type==='button'),
-    async effects(){for(const fn of effects.splice(0)){const cleanup=fn();if(typeof cleanup==='function')cleanups.push(cleanup);}await new Promise(r=>setImmediate(r));},
-    async poll(){for(const fn of timers.splice(0))fn();await new Promise(r=>setImmediate(r));},
+    async effects(){for(const fn of effects.splice(0))fn();await new Promise(r=>setImmediate(r));},
+    async poll(){const ready=[...timers.values()];timers.clear();for(const fn of ready)fn();await new Promise(r=>setImmediate(r));},
     async select(file={name:'snapshot.zip',size:100},repeat=false){const opener=nodes(render()).find(n=>n.type==='button'&&text(n).trim()==='Import ZIP');assert.ok(opener);assert.ok(!opener.props.disabled);opener.props.onClick();const input=nodes(render()).find(n=>n.type==='input');input.props.onChange({target:{files:[file]}});if(repeat)input.props.onChange({target:{files:[file]}});await new Promise(r=>setImmediate(r));},
     async click(label){const button=this.buttons().find(n=>text(n).trim()===label || n.props['aria-label']===label);assert.ok(button,label);assert.ok(!button.props.disabled);button.props.onClick();await new Promise(r=>setImmediate(r));},
-    dispose(){for(const fn of cleanups.splice(0).reverse())fn();},
+    dispose(){for(const fn of cleanups.splice(0).reverse())if(typeof fn==='function')fn();},
     exports};
 }
+
+for (const sourceKind of ['notion','obsidian']) for (const status of ['failed','cancelled','expired']) {
+ test(`${sourceKind}: ${status} with unknown counts stops animation and can be closed without server deletion`,async()=>{
+  const app=harness({},[fixture({sourceKind,status,errorCode:status==='failed'?'decode_deadline':null})],sourceKind);
+  app.render();await app.effects();
+  const bar=nodes(app.render()).find(n=>n.props?.role==='progressbar');
+  assert.doesNotMatch(bar.props.className,/is-indeterminate/);
+  assert.match(bar.props.className,/is-stopped/);
+  assert.notEqual(bar.props['aria-valuetext'],'Waiting for the file list');
+  assert.equal(bar.props.children.props.style.width,'0%');
+  if(status==='failed')assert.match(text(app.render()),/stopped because it took too long/);
+  await app.click('Close import');
+  assert.ok(!nodes(app.render()).some(n=>n.props?.role==='progressbar'));
+  assert.ok(app.buttons().some(n=>text(n).trim()==='Import ZIP'));
+ });
+}
+test('failed results offer another ZIP and the picker opens immediately',async()=>{
+ const app=harness({},[fixture({status:'failed'})]);app.render();await app.effects();
+ await app.click('Choose another ZIP');
+ assert.ok(nodes(app.render()).some(n=>n.type==='input'&&n.props.type==='file'));
+ assert.ok(!nodes(app.render()).some(n=>n.props?.role==='progressbar'));
+});
+test('progress failure pauses polling, stops animation and explicit status check recovers the server result',async()=>{
+ let reads=0;
+ const app=harness({async getImportPackage(){if(++reads===1)throw Error('offline');return fixture({status:'completed',phase:'complete',entryCount:1,supportedCount:1,importedCount:1});}},[fixture()]);
+ app.render();await app.effects();app.render();await app.effects();await app.poll();
+ assert.match(text(app.render()),/Import status unavailable/);
+ assert.doesNotMatch(nodes(app.render()).find(n=>n.props?.role==='progressbar').props.className,/is-indeterminate/);
+ app.render();await app.effects();await app.poll();assert.equal(reads,1);
+ await app.click('Check status');assert.equal(reads,2);assert.match(text(app.render()),/Import complete/);
+ assert.ok(nodes(app.render()).some(n=>n.type==='a'&&n.props.href==='/vault'));
+});
+test('uncertain cancellation preserves the active job, unblocks buttons and can be retried',async()=>{
+ let cancels=0;
+ const app=harness({async importPackageAction(id,kind){assert.equal(kind,'cancel');if(++cancels===1)throw {code:'import_request_timeout'};return fixture({status:'cancelled'});},async getImportPackage(){throw Error('offline');}},[fixture({status:'processing'})]);
+ app.render();await app.effects();await app.click('Cancel import');
+ assert.match(text(app.render()),/Cancellation is not confirmed/);
+ assert.doesNotMatch(text(app.render()),/Import cancelled/);
+ assert.ok(!app.buttons().find(n=>text(n).trim()==='Retry cancellation').props.disabled);
+ await app.click('Retry cancellation');assert.equal(cancels,2);assert.match(text(app.render()),/Import cancelled/);
+});
+test('lost cancellation response resolves an already completed server result without inventing cancellation',async()=>{
+ const app=harness({async importPackageAction(){throw Error('lost response');},async getImportPackage(){return fixture({status:'completed',phase:'complete',entryCount:1,supportedCount:1,importedCount:1});}},[fixture({status:'processing'})]);
+ app.render();await app.effects();await app.click('Cancel import');
+ assert.match(text(app.render()),/Import complete/);assert.doesNotMatch(text(app.render()),/Import cancelled|Cancellation is not confirmed/);
+});
+test('rapid repeated cancellation invokes only one server action',async()=>{
+ let finish,calls=0;
+ const app=harness({importPackageAction(){calls++;return new Promise(resolve=>finish=resolve);}},[fixture()]);
+ app.render();await app.effects();
+ const button=app.buttons().find(n=>text(n).trim()==='Cancel import');
+ button.props.onClick();button.props.onClick();assert.equal(calls,1);
+ finish(fixture({status:'cancelled'}));await new Promise(r=>setImmediate(r));assert.match(text(app.render()),/Import cancelled/);
+});
+test('cancel during uncertain creation recovers the same key solely to cancel; late create never uploads',async()=>{
+ let resolveCreate,attempt=0;const calls=[];
+ const app=harness({createImportPackage(input,signal){calls.push(['create',input.requestKey,signal]);if(++attempt===1)return new Promise(resolve=>resolveCreate=resolve);return Promise.resolve(fixture({status:'uploading'}));},async importPackageAction(id,kind){calls.push([kind,id]);return fixture({status:'cancelled'});},async uploadImportPackage(){throw Error('must not upload');}});
+ app.render();await app.effects();await app.select();await app.click('Cancel import');
+ assert.equal(calls[0][2].aborted,true);assert.equal(calls[0][1],calls[1][1]);assert.deepEqual(calls[2],['cancel','package-1']);
+ resolveCreate(fixture({status:'uploading'}));await new Promise(r=>setImmediate(r));
+ assert.match(text(app.render()),/Import cancelled/);assert.equal(calls.length,3);
+});
+test('retry after an uncertain create displays an already completed receipt without finalizing again',async()=>{
+ let attempts=0;
+ const app=harness({async createImportPackage(){if(++attempts===1)throw {code:'import_request_timeout'};return fixture({status:'completed',phase:'complete',entryCount:1,supportedCount:1,importedCount:1});},async importPackageAction(){throw Error('must not finalize');}});
+ app.render();await app.effects();await app.select();assert.match(text(app.render()),/request timed out/);
+ await app.click('Retry upload');assert.match(text(app.render()),/Import complete/);
+});
+test('closing a loading report aborts it; late pages cannot replace a reopened report',async()=>{
+ let finish,firstSignal,reads=0;
+ const app=harness({getImportPackageReport(id,cursor,signal){if(++reads===1){firstSignal=signal;return new Promise(resolve=>finish=resolve);}return Promise.resolve({entries:[{ordinal:0,path:'current.txt',status:'failed'}],nextCursor:null});}},[fixture({status:'failed'})]);
+ app.render();await app.effects();await app.click('View import report');await app.click('Close import window');assert.equal(firstSignal.aborted,true);
+ await app.click('View import report');finish({entries:[{ordinal:0,path:'late.txt',status:'failed'}],nextCursor:null});await new Promise(r=>setImmediate(r));
+ assert.match(text(app.render()),/current.txt/);assert.doesNotMatch(text(app.render()),/late.txt/);
+});
 
 test('upload, finalize, truthful phase/counts, terminal result and paged skips',async()=>{
  const calls=[];
@@ -93,7 +168,7 @@ test('provider request sends raw ZIP with cookie, no-store, abort, strict DTO an
  const dto={canonical_id:null,id:'id',source_kind:'notion',file_name:'a.zip',file_size:4,status:'queued',phase:'inspect',entry_count:null,prepared_count:0,published_count:0,skipped_count:0,chunk_count:0,failed_count:0,error_code:null,retryable:false};
  const provider=new ApiDataProvider({baseUrl:'/api',fallback:new Proxy({}, {get(){throw Error('fallback');}})});
  const file=new Blob(['ZIP!']);const signal=new AbortController().signal;
- global.fetch=async(url,init)=>{assert.equal(url,'/api/imports/packages/id/upload');assert.equal(init.body,file);assert.equal(init.signal,signal);assert.equal(init.headers['Content-Type'],'application/octet-stream');assert.equal(init.credentials,'include');assert.equal(init.cache,'no-store');return new Response(JSON.stringify(dto));};
+ global.fetch=async(url,init)=>{assert.equal(url,'/api/imports/packages/id/upload');assert.equal(init.body,file);assert.ok(init.signal instanceof AbortSignal);assert.equal(init.signal.aborted,false);assert.equal(init.headers['Content-Type'],'application/octet-stream');assert.equal(init.credentials,'include');assert.equal(init.cache,'no-store');return new Response(JSON.stringify(dto));};
  assert.equal((await provider.uploadImportPackage('id',file,signal)).sourceKind,'notion');
  assert.equal(mapImportPackage({...dto,status:'duplicate',canonical_id:'accepted-id'}).canonicalId,'accepted-id');
  global.fetch=async(url,init)=>{assert.equal(url,'/api/imports/packages/duplicate/finalize');assert.equal(init.method,'POST');return new Response(JSON.stringify({...dto,id:'accepted-id',status:'completed',phase:'complete',entry_count:1,prepared_count:1,published_count:1}));};

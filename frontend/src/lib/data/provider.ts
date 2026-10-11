@@ -33,13 +33,13 @@ export type AnalyticsEventInput =
       metadata: { screen: "sources_from_insights" } };
 
 export interface FlareDataProvider {
-  getImportCapabilities(): Promise<{ available: boolean; maxUploadBytes: number | null }>;
-  createImportPackage(input: { sourceKind: ZipSourceKind; fileName: string; fileSize: number; requestKey: string }): Promise<ImportPackage>;
+  getImportCapabilities(signal?: AbortSignal): Promise<{ available: boolean; maxUploadBytes: number | null }>;
+  createImportPackage(input: { sourceKind: ZipSourceKind; fileName: string; fileSize: number; requestKey: string }, signal?: AbortSignal): Promise<ImportPackage>;
   uploadImportPackage(id: string, file: File, signal?: AbortSignal): Promise<ImportPackage>;
-  importPackageAction(id: string, action: "finalize" | "cancel" | "retry"): Promise<ImportPackage>;
+  importPackageAction(id: string, action: "finalize" | "cancel" | "retry", signal?: AbortSignal): Promise<ImportPackage>;
   getImportPackage(id: string, signal?: AbortSignal): Promise<ImportPackage>;
-  listImportPackages(): Promise<ImportPackage[]>;
-  getImportPackageReport(id: string, after?: number): Promise<ImportPackageReport>;
+  listImportPackages(signal?: AbortSignal): Promise<ImportPackage[]>;
+  getImportPackageReport(id: string, after?: number, signal?: AbortSignal): Promise<ImportPackageReport>;
   startAnalysis(key: string, signal?: AbortSignal): Promise<AnalysisRun>;
   getAnalysisRun(id: string, signal?: AbortSignal): Promise<AnalysisRun>;
   getAnalysisSchedule(): Promise<AnalysisSchedule>;

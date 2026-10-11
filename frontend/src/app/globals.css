@@ -2754,6 +2754,7 @@ html[data-funny-mode="true"] .insight-feed:has(.funny-ritual-panel) {
 .zip-progress-track { flex: 1; height: 6px; border-radius: 20px; background: var(--line); overflow: hidden; }
 .zip-progress-track > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 320ms ease-out; }
 .zip-progress-track.is-indeterminate > span { animation: zip-progress-search 1.6s ease-in-out infinite alternate; }
+.zip-progress-track.is-stopped > span { animation: none; transition: none; }
 .zip-progress-percent { color: var(--secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
 .zip-stats { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 6px; }
 .zip-stats > div, .zip-stats > button { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; text-align: left; min-width: 0; }

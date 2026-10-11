@@ -1,4 +1,5 @@
 import type { ImportPackage, ImportPackageReport, ZipSourceKind } from "./types";
+import { importRequest, IMPORT_UPLOAD_MS } from "./import-request";
 import type { AnalyticsEventInput, FlareDataProvider } from "./provider";
 import type {
   AnalysisRun,
@@ -382,32 +383,32 @@ export class ApiDataProvider implements FlareDataProvider {
     return response.json();
   }
 
-  async getImportCapabilities(): Promise<{ available: boolean; maxUploadBytes: number | null }> {
-    const body = asRecord(await this.request("/imports/packages/capabilities"));
+  async getImportCapabilities(signal?: AbortSignal): Promise<{ available: boolean; maxUploadBytes: number | null }> {
+    const body = asRecord(await importRequest((signal) => this.request("/imports/packages/capabilities", { signal }), signal));
     if (typeof body.available !== "boolean") throw new FlareApiError("Invalid import capability");
     return { available: body.available, maxUploadBytes: body.maxUploadBytes === null ? null : countField(body, "maxUploadBytes") };
   }
-  async createImportPackage(input: { sourceKind: ZipSourceKind; fileName: string; fileSize: number; requestKey: string }): Promise<ImportPackage> {
-    return mapImportPackage(await this.request("/imports/packages", { method: "POST", body: JSON.stringify(input) }));
+  async createImportPackage(input: { sourceKind: ZipSourceKind; fileName: string; fileSize: number; requestKey: string }, signal?: AbortSignal): Promise<ImportPackage> {
+    return mapImportPackage(await importRequest((signal) => this.request("/imports/packages", { method: "POST", body: JSON.stringify(input), signal }), signal));
   }
   async uploadImportPackage(id: string, file: File, signal?: AbortSignal): Promise<ImportPackage> {
-    return mapImportPackage(await this.request(`/imports/packages/${encodeURIComponent(id)}/upload`, {
+    return mapImportPackage(await importRequest((signal) => this.request(`/imports/packages/${encodeURIComponent(id)}/upload`, {
       method: "PUT", body: file, signal, headers: { "Content-Type": "application/octet-stream" },
-    }));
+    }), signal, IMPORT_UPLOAD_MS));
   }
-  async importPackageAction(id: string, action: "finalize" | "cancel" | "retry"): Promise<ImportPackage> {
-    return mapImportPackage(await this.request(`/imports/packages/${encodeURIComponent(id)}/${action}`, { method: "POST" }));
+  async importPackageAction(id: string, action: "finalize" | "cancel" | "retry", signal?: AbortSignal): Promise<ImportPackage> {
+    return mapImportPackage(await importRequest((signal) => this.request(`/imports/packages/${encodeURIComponent(id)}/${action}`, { method: "POST", signal }), signal));
   }
   async getImportPackage(id: string, signal?: AbortSignal): Promise<ImportPackage> {
-    return mapImportPackage(await this.request(`/imports/packages/${encodeURIComponent(id)}`, { signal }));
+    return mapImportPackage(await importRequest((signal) => this.request(`/imports/packages/${encodeURIComponent(id)}`, { signal }), signal));
   }
-  async listImportPackages(): Promise<ImportPackage[]> {
-    const body = await this.request("/imports/packages");
+  async listImportPackages(signal?: AbortSignal): Promise<ImportPackage[]> {
+    const body = await importRequest((signal) => this.request("/imports/packages", { signal }), signal);
     if (!Array.isArray(body)) throw new FlareApiError("Invalid import response");
     return body.map(mapImportPackage);
   }
-  async getImportPackageReport(id: string, after = -1): Promise<ImportPackageReport> {
-    const body = asRecord(await this.request(`/imports/packages/${encodeURIComponent(id)}/entries?after=${after}`));
+  async getImportPackageReport(id: string, after = -1, signal?: AbortSignal): Promise<ImportPackageReport> {
+    const body = asRecord(await importRequest((signal) => this.request(`/imports/packages/${encodeURIComponent(id)}/entries?after=${after}`, { signal }), signal));
     if (!Array.isArray(body.entries)) throw new FlareApiError("Invalid import report");
     return { entries: body.entries.map((value) => {
       const row = asRecord(value);
