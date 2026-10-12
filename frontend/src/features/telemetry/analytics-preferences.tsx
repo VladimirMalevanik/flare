@@ -17,7 +17,7 @@ export function AnalyticsPreferences({ compact = true }: { compact?: boolean }) 
     : snapshot.choice === "allowed" ? copy.allowed : snapshot.choice === "rejected" ? copy.rejected : copy.unset;
   const choose = (choice: "allowed" | "rejected") => { siteAnalytics.setConsent(choice); setOpen(false); };
   return (
-    <div className={styles.preferences}>
+    <div className={styles.preferences} data-preferences="analytics">
       {!compact && <h3 className={styles.title}>{copy.title}</h3>}
       <p className={`${styles.note} ${snapshot.storageError ? styles.error : ""}`} role="status">{status}</p>
       <button type="button" className={styles.change} aria-expanded={open} onClick={() => setOpen(value => !value)}>{copy.change}</button>

@@ -418,7 +418,7 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
         subtitle={t("Manage connections, analytics, and saved workspace data.")}
         icon="settings"
       >
-        <AnalyticsPreferences compact />
+        <AnalyticsPreferences compact={false} />
         <AcquisitionPreferences account />
         <SettingRow title={t("Source connections")} description={t("Choose shared context and manage sync on Sources.")}>
           <Link className="button" href="/sources">{t("Open Sources")}</Link>

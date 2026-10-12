@@ -14,7 +14,8 @@ const en = {
   removed: "Your account’s measurement data has been removed and future measurement is off.",
   withdraw: "Turn off account measurement", busy: "Saving…",
   retention: "The optional link cookie lasts up to 7 days. Linked measurement stays for up to 90 days. Change your choice in Settings or the measurement notice.",
-  account: "Remove your account’s campaign link and measurement history, and stop future measurement. Your notes, Flares and account stay available. This does not change website page-count analytics.",
+  accountRetention: "Link cookie: up to 7 days. Linked measurement: up to 90 days.",
+  account: "Turn off campaign tracking and delete its history for your account. Your notes, Flares and account stay available. Website analytics is managed separately.",
 };
 type Copy = { [Key in keyof typeof en]: string };
 const es: Copy = {
@@ -32,6 +33,7 @@ const es: Copy = {
   removed: "Se eliminaron los datos de medición de tu cuenta y se desactivó la medición futura.",
   withdraw: "Desactivar medición de la cuenta", busy: "Guardando…",
   retention: "La cookie opcional del enlace dura hasta 7 días. La medición vinculada dura hasta 90 días. Cambia tu elección en Configuración o en el aviso de medición.",
-  account: "Elimina el vínculo de campaña y el historial de medición de tu cuenta y detén la medición futura. Tus notas, Flares y cuenta siguen disponibles. Esto no cambia la analítica de páginas del sitio web.",
+  accountRetention: "Cookie del enlace: hasta 7 días. Medición vinculada: hasta 90 días.",
+  account: "Desactiva la medición de campañas y elimina su historial para tu cuenta. Tus notas, Flares y cuenta siguen disponibles. La analítica del sitio se gestiona por separado.",
 };
 export const acquisitionCopy: Record<Locale, Copy> = { en, es };
