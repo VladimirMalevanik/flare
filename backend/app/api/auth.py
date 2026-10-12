@@ -3,6 +3,7 @@
 from typing import Annotated, Literal
 from dataclasses import replace
 from uuid import UUID
+from hashlib import sha256
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -168,6 +169,17 @@ def verified_user(
             "Review and accept the current Terms of Service and Privacy Policy to continue.",
         )
     selected = request.query_params.getlist("workspace")
+    if not selected and request.app.state.settings.team_enabled and request.url.path.endswith('/callback'):
+        provider = 'github-app' if request.url.path == '/integrations/github/callback' else (
+            request.url.path.split('/')[-2] if request.url.path.startswith('/integrations/sources/') else None)
+        states = request.query_params.getlist('state')
+        if provider and len(states)==1 and len(states[0])<=128:
+            from app.services.team import TeamService
+            from app.api.team import invoke
+            target = invoke(TeamService(request.app.state.database,user.user_id),'oauth',sha256(states[0].encode()).hexdigest(),provider)
+            if target is not None:
+                selected = [str(target)]
+                request.state.team_callback_workspace = str(target)
     if selected and not request.url.path.startswith(("/auth", "/team", "/ops", "/acquisition")):
         if len(selected) != 1:
             raise auth_error(400, "workspace_invalid", "Choose one project.")
@@ -184,7 +196,8 @@ def verified_user(
             project = next((p for p in projects if p["id"] == target), None)
             if project is None:
                 raise auth_error(404, "workspace_unavailable", "Project unavailable for your account.")
-            if not project["writable"] and request.method not in {"GET", "HEAD", "OPTIONS", "DELETE"}:
+            stops_job = request.url.path.endswith('/cancel') and request.url.path.startswith(('/imports/packages/','/integrations/sources/'))
+            if not project["writable"] and request.method not in {"GET", "HEAD", "OPTIONS", "DELETE"} and not stops_job:
                 raise auth_error(403, "team_subscription_required", "This project is read-only until its Team subscription is renewed.")
             user = replace(user, workspace_id=UUID(target), workspace_name=project["name"], role=project["role"])
     return user

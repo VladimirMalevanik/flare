@@ -72,6 +72,8 @@ class Settings:
             raise RuntimeError("PADDLE_TEAM_PRICE_ID is invalid")
         if self.paddle_team_price_id and self.paddle_team_price_id == self.paddle_pro_price_id:
             raise RuntimeError("Team and Pro require different prices")
+        if self.team_enabled and not self.paddle_team_price_id:
+            raise RuntimeError("Team requires PADDLE_TEAM_PRICE_ID")
         if self.environment not in {"production", "development", "test"}:
             raise RuntimeError("FLARE_ENV must be production, development or test")
         if self.import_storage_provider not in {None, "postgres"}:
@@ -96,7 +98,7 @@ class Settings:
             raise RuntimeError("EMAIL_VERIFICATION_TTL_SECONDS must be positive")
         if self.email_verification_resend_seconds <= 0:
             raise RuntimeError("EMAIL_VERIFICATION_RESEND_SECONDS must be positive")
-        if self.email_verification_required:
+        if self.email_verification_required or self.team_enabled:
             if not self.app_public_url:
                 raise RuntimeError("Email verification requires APP_PUBLIC_URL")
             public_url = urlsplit(self.app_public_url)

@@ -24,6 +24,13 @@ export function ProjectMenu() {
     return () => controller.abort();
   }, []);
   useEffect(() => {
+    let live = true;
+    const refresh = () => { void teamRequest<ProjectsResponse>("/projects").then(value => { if(live)setData(value); }).catch(()=>{}); };
+    window.addEventListener("focus",refresh);
+    window.addEventListener("flare:team-refresh",refresh);
+    return () => { live=false;window.removeEventListener("focus",refresh);window.removeEventListener("flare:team-refresh",refresh); };
+  }, []);
+  useEffect(() => {
     const open = () => { setRequestId(crypto.randomUUID()); setName(""); setError(""); setCreate(true); };
     window.addEventListener("flare:create-project", open);
     return () => window.removeEventListener("flare:create-project", open);
@@ -33,7 +40,7 @@ export function ProjectMenu() {
   function choose(id: string) {
     if (id === "create") { setRequestId(crypto.randomUUID()); setCreate(true); return; }
     // Existing page beforeunload handlers can guard unsaved drafts.
-    switchProject(data?.projects.find(p => p.id === id)?.kind === "personal" ? null : id);
+    switchProject(id);
   }
   async function save() {
     if (busy || !name.trim() || !data?.capability.canCreate) return;
@@ -45,7 +52,7 @@ export function ProjectMenu() {
   }
   return <div className="team-project-menu">
     <Select value={value} aria-label={copy("Current project", "Proyecto actual")} onValueChange={choose}
-      options={[...data.projects.map(p => ({ value:p.id, label:p.name, description:p.kind === "team" ? (copy("Team project", "Proyecto de equipo")) : (copy("Personal", "Personal")) })),
+      options={[...data.projects.map(p => ({ value:p.id, label:p.name, description:p.kind === "team" ? copy("Team project", "Proyecto de equipo") : p.kind === "shared" ? copy("Shared project", "Proyecto compartido") : copy("Personal", "Personal") })),
         { value:"create", label:copy("Create project", "Crear proyecto"), description:data.capability.canCreate ? "Team" : (copy("Requires Team", "Requiere Team")) }]}/>
     {create && <Dialog title={copy("Create team project", "Crear proyecto de equipo")} onClose={() => { if (!busy) setCreate(false); }} className="team-dialog">
       <h2>{copy("Create team project", "Crear proyecto de equipo")}</h2>

@@ -136,10 +136,10 @@ export function createSandboxCheckoutClient({
       // Synchronous lock, before the first await, including the success overlay.
       if (snapshot.phase !== "idle") return;
       const clientToken = token?.trim();
-      const priceId = (plan === "team" ? teamPriceId : proPriceId)?.trim();
-      if (!clientToken || !priceId) return fail("configuration");
+      let priceId = (plan === "team" ? teamPriceId : proPriceId)?.trim();
+      if (!clientToken || (plan === "pro" && !priceId)) return fail("configuration");
       if (!/^test_[A-Za-z0-9_-]+$/.test(clientToken)) return fail("sandbox-only");
-      if (!/^pri_[a-z0-9]{26}$/.test(priceId)) return fail("price");
+      if (priceId && !/^pri_[a-z0-9]{26}$/.test(priceId)) return fail("price");
       if (typeof user?.id !== "string" || !user.id.trim()
         || typeof user.email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user.email)) return fail("auth");
 
@@ -159,6 +159,12 @@ export function createSandboxCheckoutClient({
         ]);
         if (attempt !== generation) return;
         if (intent.environment !== "sandbox") return fail("sandbox-only");
+        // Team's price can come from the authenticated, server-owned Team
+        // intent. Pro retains its existing public pinned-price contract.
+        if (!priceId && plan === "team") {
+          if (!/^pri_[a-z0-9]{26}$/.test(intent.priceId)) return fail("price");
+          priceId = intent.priceId;
+        }
         if (intent.priceId !== priceId) return fail("price");
         if (intent.customData?.userId !== user.id) return fail("auth");
         if (intent.quantity !== 1 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(intent.email)

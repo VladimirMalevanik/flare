@@ -69,7 +69,7 @@ def team():
             r=client.post(f'/team/projects/{wid}/invitations',json={'email':user.email,'role':role,'sharingAcknowledged':True})
             assert r.status_code==201,r.text;return mail.token,r.json()['id']
         def accept(self,client,token): return client.post('/team/invitations/accept',json={'token':token,'accept':True})
-    f=Fixture(); f.db=db; f.mail=mail; f.config=config
+    f=Fixture(); f.projects=projects; f.db=db; f.mail=mail; f.config=config
     try: yield f
     finally:
         stack.close();db.close()
@@ -196,7 +196,12 @@ def test_task_limit_counts_archived_rows_and_bounds_history(team):
     assert len(c.get(tasks+'/'+tid+'/history').json())==50
     assert c.post(tasks,json={'id':tid,'expectedVersion':55,'remove':True}).status_code==200
     assert c.get(tasks).json()['tasks']==[]
+    replacement=str(uuid4())
+    assert c.post(tasks,json={'id':replacement,'expectedVersion':0,'title':'Replacement'}).status_code==200
+    assert c.post(tasks,json={'id':replacement,'expectedVersion':1,'remove':True}).status_code==200
     assert c.post(tasks,json={'id':str(uuid4()),'expectedVersion':0,'title':'Storage bypass'}).status_code==409
+    team.query("UPDATE team_tasks SET deleted_at=now()-interval '31 days' WHERE workspace_id=%s",UUID(wid))
+    assert c.post(tasks,json={'id':str(uuid4()),'expectedVersion':0,'title':'After retirement'}).status_code==200
 
 
 def test_db_runtime_cannot_assign_membership_or_write_team_tables(team):
@@ -218,10 +223,12 @@ def test_documents_storage_is_atomic_and_shared_between_members(team):
 def test_transfer_rebinds_schedule_keeps_license_payer_and_revokes_old_invites(team):
     owner,c=team.account(); member,m=team.account(); wid=team.create(owner,c);token,_=team.invite(c,wid,member);team.accept(m,token)
     team.query("INSERT INTO analysis_schedules(workspace_id,updated_by_user_id) VALUES(%s,%s)",UUID(wid),owner.user_id)
+    other,o=team.account();old_token,_=team.invite(c,wid,other)
     r=c.post(f'/team/projects/{wid}/members/{member.user_id}',json={'action':'transfer'});assert r.status_code==200,r.text
     assert team.query('SELECT updated_by_user_id FROM analysis_schedules WHERE workspace_id=%s',UUID(wid))[0][0]==member.user_id
     assert team.query('SELECT license_workspace_id FROM team_projects WHERE workspace_id=%s',UUID(wid))[0][0]==owner.workspace_id
     assert c.post(f'/team/projects/{wid}/invitations',json={'email':'new@team-test.invalid','sharingAcknowledged':True}).status_code==403
+    assert team.accept(o,old_token).status_code==404
 
 
 def test_team_checkout_uses_server_price_and_does_not_grant_browser_access(team):
@@ -235,3 +242,143 @@ def test_team_checkout_uses_server_price_and_does_not_grant_browser_access(team)
     child=c.get('/billing/status',params={'workspace':wid});assert child.status_code==200,child.text
     assert child.json()['plan']=='team' and child.json()['canManageBilling'] is False
     assert c.post('/billing/checkout-intents',params={'workspace':wid},json={'plan':'team'}).status_code==403
+
+
+def test_preview_is_email_bound_and_shows_only_project_invitation(team):
+    owner,c=team.account();member,m=team.account();outsider,o=team.account();wid=team.create(owner,c);token,_=team.invite(c,wid,member)
+    assert o.post('/team/invitations/preview',json={'token':token}).status_code==404
+    preview=m.post('/team/invitations/preview',json={'token':token});assert preview.status_code==200,preview.text
+    assert preview.json()['projectName']=='Flare Team' and preview.json()['invitedBy']==owner.name
+    assert 'token' not in preview.json() and 'email' not in preview.json()
+
+
+def test_create_retry_is_idempotent_and_single_task_get_is_scoped(team):
+    owner,c=team.account();wid=team.create(owner,c);path=f'/team/projects/{wid}/tasks';tid=str(uuid4());body={'id':tid,'expectedVersion':0,'title':'Retry safely'}
+    assert c.post(path,json=body).status_code==200
+    assert c.post(path,json=body).status_code==200
+    assert len(c.get(path).json()['tasks'])==1 and len(c.get(path+'/'+tid+'/history').json())==1
+    assert c.get(path+'/'+tid).json()['creatorName']==owner.name
+    stranger,s=team.account();assert s.get(path+'/'+tid).status_code==404
+
+
+def test_concurrent_project_creation_and_pending_seats_are_atomic(team):
+    from concurrent.futures import ThreadPoolExecutor
+    owner,c=team.account();team.paid(owner);svc=TeamService(team.db,owner.user_id)
+    def attempt(args):
+        try:return svc.call(*args)
+        except psycopg.Error as error:return error.sqlstate
+    ids=[uuid4(),uuid4()]
+    with ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(attempt,[('create',tid,'Concurrent') for tid in ids]))
+    created=[r for r in results if isinstance(r,UUID)];team.projects.extend(created);assert len(created)==1 and 'P0003' in results
+    wid=created[0];team.query('UPDATE team_policy SET max_members=2')
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results=list(pool.map(attempt,[('invite',wid,'one@team-test.invalid','editor',sha256(uuid4().bytes).hexdigest()),('invite',wid,'two@team-test.invalid','editor',sha256(uuid4().bytes).hexdigest())]))
+    assert len([r for r in results if isinstance(r,dict)])==1 and 'P0003' in results
+
+
+def test_two_editors_cannot_overwrite_same_task_version(team):
+    from concurrent.futures import ThreadPoolExecutor
+    from psycopg.types.json import Jsonb
+    owner,c=team.account();member,m=team.account();wid=team.create(owner,c);token,_=team.invite(c,wid,member);team.accept(m,token)
+    tid=uuid4();svc=TeamService(team.db,owner.user_id);svc.call('task',UUID(wid),tid,0,Jsonb({'title':'Original'}),False)
+    def change(user):
+        try:return TeamService(team.db,user.user_id).call('task',UUID(wid),tid,1,Jsonb({'title':user.name}),False)
+        except psycopg.Error as error:return error.sqlstate
+    with ThreadPoolExecutor(max_workers=2) as pool:results=list(pool.map(change,[owner,member]))
+    assert len([r for r in results if isinstance(r,dict)])==1 and '40001' in results
+    assert c.get(f'/team/projects/{wid}/tasks/{tid}').json()['version']==2
+
+
+def test_utf8_storage_budget_keeps_failed_publication_atomic(team):
+    from app.services.item_service import ItemService
+    from app.models.database import WorkspaceIdentity
+    owner,c=team.account();wid=team.create(owner,c);team.query('UPDATE team_policy SET max_content_bytes=1048576')
+    svc=ItemService(team.db,WorkspaceIdentity(UUID(wid),owner.user_id))
+    for _ in range(10):svc.create_note(title='Stored',content='x'*100000)
+    with pytest.raises(psycopg.Error):svc.create_note(title='Overflow',content='я'*30000)
+    assert len(c.get('/items',params={'workspace':wid}).json())==10
+    assert team.query('SELECT sum(octet_length(content)) FROM chunks WHERE workspace_id=%s',UUID(wid))[0][0]==1000000
+    usage=c.get(f'/team/projects/{wid}/usage').json()
+    assert usage['contentBytes']==1000000 and usage['documents']==10
+
+
+def test_team_bodies_are_bounded_before_json_parsing(team):
+    _,c=team.account()
+    assert c.post('/team/projects',content=b' '*70000,headers={'Content-Type':'application/json'}).status_code==413
+    assert c.post('/team/projects',content=iter([b' '*40000,b' '*40000]),headers={'Content-Type':'application/json'}).status_code==413
+
+
+def test_task_keyset_cursor_includes_all_rows_without_cross_project_leaks(team):
+    from psycopg.types.json import Jsonb
+    owner,c=team.account();wid=team.create(owner,c);svc=TeamService(team.db,owner.user_id)
+    for i in range(105):svc.call('task',UUID(wid),uuid4(),0,Jsonb({'title':str(i)}),False)
+    path=f'/team/projects/{wid}/tasks';page=c.get(path).json();assert len(page['tasks'])==100 and page['nextCursor']
+    rest=c.get(path,params=page['nextCursor']).json();assert len(rest['tasks'])==5 and rest['nextCursor'] is None
+    assert len({t['id'] for t in page['tasks']+rest['tasks']})==105
+    assert c.get(path+'/'+rest['tasks'][0]['id']).status_code==200
+
+
+def test_unpaid_team_is_filtered_before_scheduler_without_blocking_personal_projects(team):
+    owner,c=team.account();wid=team.create(owner,c);personal,p=team.account();now=datetime.now(timezone.utc)
+    # Both projects have the same due slot. Prepare an older update timestamp
+    # exactly as a schedule configured earlier would have, without real AI.
+    due=(now+timedelta(minutes=10)).time().replace(tzinfo=None)
+    for workspace,user in [(UUID(wid),owner),(personal.workspace_id,personal)]:
+        team.query("INSERT INTO analysis_schedules(workspace_id,enabled,local_time,updated_by_user_id) VALUES(%s,true,%s,%s)",workspace,due,user.user_id)
+    with psycopg.connect(os.environ['TEST_DATABASE_URL']) as conn:
+        conn.execute('SET LOCAL session_replication_role=replica')
+        conn.execute("UPDATE analysis_schedules SET updated_at=now()-interval '1 hour' WHERE workspace_id=ANY(%s)",([UUID(wid),personal.workspace_id],))
+    team.query("UPDATE billing_subscriptions SET status='canceled' WHERE workspace_id=%s",owner.workspace_id)
+    with psycopg.connect(os.environ['TEST_DATABASE_URL']) as conn:
+        conn.execute('SET LOCAL ROLE flare_worker')
+        assert conn.execute('SELECT materialize_analysis_cycles(%s,100)',(now,)).fetchone()[0]==1
+    assert team.query('SELECT count(*) FROM analysis_cycles WHERE workspace_id=%s',UUID(wid))[0][0]==0
+    assert team.query('SELECT count(*) FROM analysis_cycles WHERE workspace_id=%s',personal.workspace_id)[0][0]==1
+
+
+def test_disable_team_keeps_personal_workspace_and_denies_selected_team_requests(team):
+    owner,c=team.account();wid=team.create(owner,c);team.config.team_enabled=False
+    assert c.get('/items').status_code==200
+    assert c.get('/items',params={'workspace':wid}).status_code==403
+    assert c.get('/team/projects').status_code==503
+
+
+def test_project_rename_is_owner_only_and_export_keeps_author_on_readonly_license(team):
+    owner,c=team.account();member,m=team.account();wid=team.create(owner,c);token,_=team.invite(c,wid,member);team.accept(m,token)
+    assert m.patch(f'/team/projects/{wid}',json={'name':'Not allowed'}).status_code==403
+    assert c.patch(f'/team/projects/{wid}',json={'name':'Customer Research'}).status_code==200
+    assert m.get('/team/projects').json()['projects'][1]['name']=='Customer Research'
+    assert m.post(f'/team/projects/{wid}/tasks',json={'id':str(uuid4()),'expectedVersion':0,'title':'Shared task'}).status_code==200
+    team.query("UPDATE billing_subscriptions SET status='canceled' WHERE workspace_id=%s",owner.workspace_id)
+    response=m.get(f'/team/projects/{wid}/tasks/export');assert response.status_code==200,response.text
+    assert response.headers['content-disposition'].startswith('attachment;')
+    assert response.json()['tasks'][0]['creatorName']==member.name
+    stranger,s=team.account();assert s.get(f'/team/projects/{wid}/tasks/export').status_code==404
+
+
+def test_team_oauth_state_selects_its_bound_project_and_returns_to_that_project(team):
+    from app.api import github
+    from fastapi import Depends
+    from typing import Annotated
+    from app.services.auth_service import AuthenticatedUser
+    from types import SimpleNamespace
+    owner,c=team.account();other,o=team.account();wid=team.create(owner,c);raw='a'*43;digest=sha256(raw.encode()).hexdigest()
+    team.query("INSERT INTO github_connection_states(token_hash,workspace_id,user_id,expires_at) VALUES(%s,%s,%s,now()+interval '5 minutes')",digest,UUID(wid),owner.user_id)
+    assert TeamService(team.db,other.user_id).call('oauth',digest,'github-app') is None
+    selected=[]
+    def fake_service(user:Annotated[AuthenticatedUser,Depends(github.session_user)]):
+        selected.append(user.workspace_id)
+        return SimpleNamespace(complete=lambda *_args:None)
+    c.app.dependency_overrides[github.service]=fake_service
+    c.app.state.github_settings=SimpleNamespace(frontend_return_url=team.config.app_public_url+'/sources')
+    response=c.get('/integrations/github/callback',params={'state':raw,'installation_id':1,'code':'synthetic'},follow_redirects=False)
+    assert response.status_code==303,response.text
+    assert selected==[UUID(wid)]
+    assert 'project='+wid in response.headers['location'] and 'github=select' in response.headers['location']
+
+
+def test_sharing_and_acceptance_require_literal_true(team):
+    owner,c=team.account();member,m=team.account();wid=team.create(owner,c)
+    assert c.post(f'/team/projects/{wid}/invitations',json={'email':member.email,'sharingAcknowledged':1}).status_code==422
+    token,_=team.invite(c,wid,member)
+    assert m.post('/team/invitations/accept',json={'token':token,'accept':1}).status_code==422

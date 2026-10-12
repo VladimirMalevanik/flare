@@ -16,6 +16,8 @@ CREATE TABLE public.team_projects (
  workspace_id uuid PRIMARY KEY REFERENCES public.workspaces(id),
  license_workspace_id uuid NOT NULL REFERENCES public.workspaces(id),
  created_by text REFERENCES public.auth_users(id) ON DELETE SET NULL,
+ content_bytes bigint NOT NULL DEFAULT 0 CHECK(content_bytes>=0),
+ document_count integer NOT NULL DEFAULT 0 CHECK(document_count>=0),
  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  CHECK(workspace_id<>license_workspace_id)
 );
@@ -52,6 +54,7 @@ CREATE TABLE public.team_tasks (
  UNIQUE(workspace_id,id)
 );
 CREATE INDEX team_task_list ON public.team_tasks(workspace_id,updated_at DESC,id) WHERE deleted_at IS NULL;
+CREATE INDEX team_task_retirement ON public.team_tasks(workspace_id,deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE TABLE public.team_task_history (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  workspace_id uuid NOT NULL,
@@ -105,6 +108,14 @@ BEGIN
  RETURN false;
 END $$;
 
+CREATE FUNCTION public._team_workspace_paid(w uuid) RETURNS boolean
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE license uuid;
+BEGIN
+ SELECT license_workspace_id INTO license FROM public.team_projects WHERE workspace_id=w;
+ RETURN CASE WHEN FOUND THEN public._team_paid(license) ELSE true END;
+END $$;
+
 CREATE FUNCTION public._team_guard(w uuid,needed text DEFAULT 'read') RETURNS public.team_projects
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE a public.auth_users:=public._team_actor(); p public.team_projects; r text;
@@ -129,7 +140,8 @@ BEGIN
  IF NOT EXISTS(SELECT 1 FROM public.auth_users WHERE id=u AND NOT disabled) THEN
   RAISE EXCEPTION 'Account required' USING ERRCODE='42501'; END IF;
  SELECT coalesce(jsonb_agg(x),'[]') INTO result FROM (
-  SELECT w.id,w.name,m.role,CASE WHEN p.workspace_id IS NULL THEN 'personal' ELSE 'team' END AS kind,
+  SELECT w.id,w.name,m.role,CASE WHEN p.workspace_id IS NOT NULL THEN 'team'
+   WHEN w.id=(SELECT initial_workspace_id FROM public.auth_users WHERE id=u) THEN 'personal' ELSE 'shared' END AS kind,
    CASE WHEN p.workspace_id IS NULL THEN true ELSE public._team_paid(p.license_workspace_id) END AS writable,
    (p.license_workspace_id IS NOT NULL AND EXISTS(SELECT 1 FROM public.workspace_members lm
     WHERE lm.workspace_id=p.license_workspace_id AND lm.user_id=u AND lm.role='owner')) AS "canManageLicense"
@@ -149,11 +161,12 @@ BEGIN
  IF a.id IS NULL THEN RAISE EXCEPTION 'Account required' USING ERRCODE='42501'; END IF;
  SELECT count(*) INTO count_projects FROM public.team_projects WHERE license_workspace_id=a.initial_workspace_id;
  RETURN jsonb_build_object('enabled',p.enabled,'canCreate',p.enabled AND a.verification_provenance='actual'
-   AND a.email_verified_at IS NOT NULL AND public._team_paid(a.initial_workspace_id) AND count_projects<p.max_projects,
+   AND a.email_verified_at IS NOT NULL AND EXISTS(SELECT 1 FROM public.workspace_members WHERE workspace_id=a.initial_workspace_id AND user_id=a.id AND role='owner')
+   AND public._team_paid(a.initial_workspace_id) AND count_projects<p.max_projects,
    'requiresVerification',a.verification_provenance IS DISTINCT FROM 'actual' OR a.email_verified_at IS NULL,
    'limits',jsonb_build_object('projects',p.max_projects,'members',p.max_members,'tasks',p.max_tasks,
     'documents',p.max_documents,'contentBytes',p.max_content_bytes,'invitationsDaily',p.max_invites_daily),
-   'projectCount',count_projects,'priceId',p.price_id);
+   'projectCount',count_projects,'priceId',p.price_id,'billingWorkspaceId',a.initial_workspace_id);
 END $$;
 
 CREATE FUNCTION public.team_project_create(new_id uuid,new_name text) RETURNS uuid
@@ -178,6 +191,44 @@ BEGIN
  INSERT INTO public.workspace_members(workspace_id,user_id,role) VALUES(new_id,a.id,'owner');
  INSERT INTO public.team_projects(workspace_id,license_workspace_id,created_by) VALUES(new_id,a.initial_workspace_id,a.id);
  RETURN new_id;
+END $$;
+
+CREATE FUNCTION public.team_project_usage(w uuid) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE p public.team_projects:=public._team_guard(w); policy public.team_policy;
+BEGIN
+ SELECT * INTO policy FROM public.team_policy WHERE singleton;
+ RETURN jsonb_build_object('contentBytes',p.content_bytes,'documents',p.document_count,
+  'tasks',(SELECT count(*) FROM public.team_tasks WHERE workspace_id=w AND deleted_at IS NULL),
+  'limits',jsonb_build_object('contentBytes',policy.max_content_bytes,'documents',policy.max_documents,'tasks',policy.max_tasks));
+END $$;
+
+CREATE FUNCTION public.team_project_rename(w uuid,new_name text) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE p public.team_projects:=public._team_guard(w,'owner');
+BEGIN
+ IF new_name IS NULL OR length(btrim(new_name)) NOT BETWEEN 1 AND 100 THEN RAISE EXCEPTION 'Invalid project name' USING ERRCODE='22023'; END IF;
+ UPDATE public.workspaces SET name=btrim(new_name) WHERE id=w;
+END $$;
+
+CREATE FUNCTION public.team_oauth_workspace(digest text,provider text) RETURNS uuid
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE u text:=nullif(current_setting('app.user_id',true),''); w uuid;
+BEGIN
+ IF digest IS NULL OR digest !~ '^[0-9a-f]{64}$' OR NOT EXISTS(SELECT 1 FROM public.auth_users
+  WHERE id=u AND NOT disabled AND email_verified_at IS NOT NULL AND verification_provenance='actual') THEN RETURN NULL; END IF;
+ IF provider='github-app' THEN
+  SELECT s.workspace_id INTO w FROM public.github_connection_states s JOIN public.team_projects p ON p.workspace_id=s.workspace_id
+   WHERE s.token_hash=digest AND s.user_id=u AND s.consumed_at IS NULL AND s.expires_at>clock_timestamp();
+ ELSIF provider IN ('slack','gmail','drive','notion') AND to_regclass('public.source_auth_states') IS NOT NULL THEN
+  EXECUTE 'SELECT s.workspace_id FROM public.source_auth_states s JOIN public.source_connections c ON c.id=s.connection_id
+   JOIN public.team_projects p ON p.workspace_id=s.workspace_id WHERE s.state_hash=$1 AND s.user_id=$2
+   AND s.expires_at>clock_timestamp() AND c.provider=$3 AND c.owner_user_id=$2 AND c.scope_revision=s.scope_revision'
+   INTO w USING digest,u,provider;
+ END IF;
+ IF w IS NULL OR NOT public._team_workspace_paid(w) OR NOT EXISTS(SELECT 1 FROM public.workspace_members
+  WHERE workspace_id=w AND user_id=u AND role IN ('owner','editor')) THEN RETURN NULL; END IF;
+ RETURN w;
 END $$;
 
 CREATE FUNCTION public.team_members_list(w uuid) RETURNS jsonb
@@ -267,6 +318,21 @@ BEGIN
  RETURN jsonb_build_object('workspaceId',inv.workspace_id);
 END $$;
 
+CREATE FUNCTION public._team_retire_connections(w uuid,target text) RETURNS void
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ -- DATA-003 is a separate release. When its schema is installed, immediately
+ -- retire removed/downgraded users' authorizations; saved snapshots remain.
+ IF to_regclass('public.source_connections') IS NULL THEN RETURN; END IF;
+ EXECUTE 'UPDATE public.source_connections SET credential_blob=NULL,cursor_blob=NULL,resources=''[]'',enabled=false,
+   status=''disabled'',scope_revision=scope_revision+1,error_code=''authorization_lost'',updated_at=clock_timestamp()
+   WHERE workspace_id=$1 AND owner_user_id=$2' USING w,target;
+ EXECUTE 'DELETE FROM public.source_auth_states WHERE workspace_id=$1 AND user_id=$2' USING w,target;
+ EXECUTE 'UPDATE public.source_jobs SET status=''cancelled'',lease_token=NULL,lease_expires_at=NULL,cursor_blob=NULL,
+   completed_at=clock_timestamp(),error_code=''authorization_lost'' WHERE workspace_id=$1 AND owner_user_id=$2
+   AND status IN (''queued'',''processing'',''retry_wait'')' USING w,target;
+END $$;
+
 CREATE FUNCTION public.team_membership_change(w uuid,target text,action text,new_role text DEFAULT NULL) RETURNS void
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE p public.team_projects:=public._team_guard(w); a public.auth_users:=public._team_actor(); caller_role text; target_role text; task public.team_tasks;
@@ -289,9 +355,11 @@ BEGIN
   IF action='role' THEN
    IF new_role IS NULL OR new_role NOT IN ('editor','viewer') THEN RAISE EXCEPTION 'Invalid role' USING ERRCODE='22023'; END IF;
    UPDATE public.workspace_members SET role=new_role WHERE workspace_id=w AND user_id=target;
+   IF new_role='viewer' THEN PERFORM public._team_retire_connections(w,target); END IF;
    INSERT INTO public.team_member_events(workspace_id,actor_id,target_id,action,role) VALUES(w,a.id,target,'role',new_role);
   ELSE
    DELETE FROM public.workspace_members WHERE workspace_id=w AND user_id=target;
+   PERFORM public._team_retire_connections(w,target);
    UPDATE public.team_invitations SET canceled_at=clock_timestamp() WHERE workspace_id=w AND consumed_at IS NULL AND canceled_at IS NULL AND invited_by=target;
    FOR task IN UPDATE public.team_tasks SET assignee_id=NULL,version=version+1,updated_at=clock_timestamp()
      WHERE workspace_id=w AND assignee_id=target AND deleted_at IS NULL RETURNING * LOOP
@@ -331,10 +399,15 @@ BEGIN
  IF fresh THEN
   IF expected<>0 OR remove THEN RAISE EXCEPTION 'Task not found' USING ERRCODE='P0002'; END IF;
   SELECT * INTO policy FROM public.team_policy WHERE singleton;
-  -- Total rows are bounded as well as visible tasks; deletion cannot amplify storage.
-  IF (SELECT count(*) FROM public.team_tasks WHERE workspace_id=w)>=policy.max_tasks THEN RAISE EXCEPTION 'Task limit reached' USING ERRCODE='P0003'; END IF;
+  -- Retire only explicitly deleted tasks after their documented recovery window.
+  DELETE FROM public.team_tasks WHERE workspace_id=w AND deleted_at<clock_timestamp()-interval '30 days';
+  -- Both active tasks and deletion churn are bounded. Pending deletion does not
+  -- create an unbounded history or block the first replacement task.
+  IF (SELECT count(*) FROM public.team_tasks WHERE workspace_id=w AND deleted_at IS NULL)>=policy.max_tasks
+    OR (SELECT count(*) FROM public.team_tasks WHERE workspace_id=w)>=2*policy.max_tasks THEN
+   RAISE EXCEPTION 'Task limit reached' USING ERRCODE='P0003'; END IF;
  ELSIF task.deleted_at IS NOT NULL THEN RAISE EXCEPTION 'Task not found' USING ERRCODE='P0002';
- ELSIF expected=0 AND task.created_by=a.id AND NOT remove AND task.version=1 AND task.title=payload->>'title'
+ ELSIF expected=0 AND task.created_by=a.id AND NOT remove AND task.version=1 AND task.title=btrim(payload->>'title')
    AND task.description=coalesce(payload->>'description','') AND task.status=coalesce(payload->>'status','todo')
    AND task.assignee_id IS NOT DISTINCT FROM payload->>'assigneeId' THEN
   RETURN jsonb_build_object('id',task.id,'version',task.version);
@@ -388,6 +461,19 @@ BEGIN
  RETURN result;
 END $$;
 
+CREATE FUNCTION public.team_tasks_export(w uuid) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE p public.team_projects:=public._team_guard(w); result jsonb;
+BEGIN
+ SELECT coalesce(jsonb_agg(x),'[]') INTO result FROM (
+  SELECT t.id,t.title,t.description,t.status,t.created_by AS "createdBy",t.creator_name AS "creatorName",
+   t.assignee_id AS "assigneeId",a.name AS "assigneeName",t.version,t.created_at AS "createdAt",t.updated_at AS "updatedAt"
+  FROM public.team_tasks t LEFT JOIN public.auth_users a ON a.id=t.assignee_id WHERE t.workspace_id=w AND t.deleted_at IS NULL
+  ORDER BY t.created_at,t.id
+ ) x;
+ RETURN jsonb_build_object('workspaceId',w,'exportedAt',clock_timestamp(),'tasks',result);
+END $$;
+
 CREATE FUNCTION public.team_invitation_preview(digest text) RETURNS jsonb
  LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE a public.auth_users:=public._team_actor(); inv public.team_invitations; result jsonb;
@@ -422,12 +508,18 @@ BEGIN
  IF NOT FOUND THEN RETURN CASE WHEN TG_OP='DELETE' THEN OLD ELSE NEW END; END IF;
  IF TG_OP<>'DELETE' AND NOT public._team_paid(p.license_workspace_id) THEN RAISE EXCEPTION 'Team subscription required' USING ERRCODE='P0001'; END IF;
  SELECT * INTO policy FROM public.team_policy WHERE singleton;
- IF TG_TABLE_NAME='documents' AND TG_OP='INSERT' AND (SELECT count(*) FROM public.documents WHERE workspace_id=w)>=policy.max_documents THEN
-  RAISE EXCEPTION 'Project document limit reached' USING ERRCODE='P0003'; END IF;
- IF TG_TABLE_NAME='chunks' AND TG_OP<>'DELETE' THEN
-  added:=octet_length(NEW.content)-CASE WHEN TG_OP='UPDATE' THEN octet_length(OLD.content) ELSE 0 END;
-  SELECT coalesce(sum(octet_length(content)),0) INTO used FROM public.chunks WHERE workspace_id=w;
+ IF TG_TABLE_NAME='documents' THEN
+  IF TG_OP='INSERT' AND p.document_count>=policy.max_documents THEN RAISE EXCEPTION 'Project document limit reached' USING ERRCODE='P0003'; END IF;
+  IF TG_OP IN ('INSERT','DELETE') THEN
+   UPDATE public.team_projects SET document_count=document_count+CASE WHEN TG_OP='INSERT' THEN 1 ELSE -1 END WHERE workspace_id=w;
+  END IF;
+ END IF;
+ IF TG_TABLE_NAME='chunks' THEN
+  added:=CASE WHEN TG_OP='DELETE' THEN -octet_length(OLD.content)
+   ELSE octet_length(NEW.content)-CASE WHEN TG_OP='UPDATE' THEN octet_length(OLD.content) ELSE 0 END END;
+  used:=p.content_bytes;
   IF used+added>policy.max_content_bytes THEN RAISE EXCEPTION 'Project storage limit reached' USING ERRCODE='P0003'; END IF;
+  UPDATE public.team_projects SET content_bytes=used+added WHERE workspace_id=w;
  END IF;
  RETURN CASE WHEN TG_OP='DELETE' THEN OLD ELSE NEW END;
 END $$;

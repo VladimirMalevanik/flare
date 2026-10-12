@@ -49,6 +49,7 @@ function harness(relative, locale) {
     if (name === '@/lib/storage/preferences') return { readLocal: (_, fallback) => fallback, writeLocal() {} };
     if (name === '@/features/funny/funny-sounds') return { playFunnySound() {} };
     if (name === '@/lib/auth/session') return { apiBaseUrl: '/api' };
+    if (name === '@/lib/team-context') return { projectApiUrl: url => url };
     throw Error(`Unexpected import ${name}`);
   } });
   return { render(component, props = {}) { cursor = 0; return exports[component](props); },

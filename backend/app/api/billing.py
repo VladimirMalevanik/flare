@@ -73,9 +73,12 @@ def billing_status(request: Request,
         rows = billing_repository(request).subscriptions(user.identity)
         state = workspace_entitlement(rows, configured.paddle_pro_price_id, team_price_id=configured.paddle_team_price_id)
         team_project = False
+        team_checkout_ready = False
         if configured.team_enabled:
             from app.services.team import TeamService
             svc = TeamService(request.app.state.database, user.user_id)
+            capability = svc.capability()
+            team_checkout_ready = capability['enabled'] and not capability['requiresVerification'] and capability['priceId']==configured.paddle_team_price_id and capability['billingWorkspaceId']==str(user.workspace_id)
             project = next((p for p in svc.projects() if p['id']==str(user.workspace_id)),None)
             if project and project['kind']=='team':
                 team_project = True
@@ -97,7 +100,7 @@ def billing_status(request: Request,
         "canManageBilling": owner,
         "checkoutAvailable": owner and configured.paddle_billing_enabled and state["plan"] == "free",
         "teamCheckoutAvailable": owner and configured.team_enabled and configured.paddle_billing_enabled
-            and bool(configured.paddle_team_price_id) and state['plan']=='free',
+            and bool(configured.paddle_team_price_id) and team_checkout_ready and state['plan']=='free',
     }
 
 
@@ -130,6 +133,8 @@ async def create_checkout_intent(request: Request,
             raise _error(503,'billing_not_configured','Team checkout is not configured')
         if capability['requiresVerification']:
             raise _error(403,'team_verification_required','Verify your email before buying Team')
+        if capability['billingWorkspaceId'] != str(user.workspace_id):
+            raise _error(403,'team_billing_workspace','Buy the Team license from your personal workspace')
     if configured.team_enabled:
         from app.services.team import TeamService
         projects = await run_in_threadpool(TeamService(request.app.state.database,user.user_id).projects)

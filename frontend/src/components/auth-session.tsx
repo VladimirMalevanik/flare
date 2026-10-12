@@ -59,11 +59,13 @@ export function AuthSession({ session, children }: { session: Session | null; ch
     window.addEventListener("focus", check);
     document.addEventListener("visibilitychange", check);
     window.addEventListener("pageshow", check);
+    window.addEventListener("flare:team-refresh", check);
     return () => {
       active = false;
       window.removeEventListener("focus", check);
       document.removeEventListener("visibilitychange", check);
       window.removeEventListener("pageshow", check);
+      window.removeEventListener("flare:team-refresh", check);
     };
   }, [session]);
   if (error) return <main className="page"><h1>{copy("Project unavailable","Proyecto no disponible")}</h1><p role="alert">{error}</p><a className="button primary" href="/vault">{copy("Return to personal project","Volver al proyecto personal")}</a></main>;

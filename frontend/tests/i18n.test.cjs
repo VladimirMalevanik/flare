@@ -272,7 +272,7 @@ test('visible JSX strings use i18n apart from legal copy, names, and technical n
   const root = path.join(__dirname, '../src');
   const allowed = new Set([
     'Flare', 'Flares', 'Vault', 'Team', 'FLARES', 'VAULT', 'VM', 'Velocity Labs', '© 2026 Flare',
-    'URL', 'KB', 'Esc', '⌘K', 'Apple silicon', 'Intel', 'M', 'i', 'DMG · arm64', 'DMG · x64',
+    'URL', 'KB', 'MiB', 'Esc', '⌘K', 'Apple silicon', 'Intel', 'M', 'i', 'DMG · arm64', 'DMG · x64',
     'Europe/Moscow', 'America/Los_Angeles', 'Europe/London', 'Asia/Singapore',
   ]);
   const attributes = new Set(['title', 'subtitle', 'description', 'placeholder', 'aria-label', 'label']);

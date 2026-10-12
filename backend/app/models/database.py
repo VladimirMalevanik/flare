@@ -113,18 +113,33 @@ def _connection_is_ready(connection: Connection) -> bool:
         WHERE n.nspname='public' AND c.relname=ANY(%s)''',(team_tables,)).fetchone()
     if team_private != (True,):
         return False
-    team_functions = connection.execute('''SELECT count(*)>=16 AND bool_and(p.prosecdef
+    team_functions = connection.execute('''SELECT count(*)=25 AND bool_and(p.prosecdef
         AND p.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']
         AND r.rolname IN ('flare_owner','flare_team_executor') AND NOT r.rolsuper AND NOT r.rolbypassrls
         AND NOT r.rolcreatedb AND NOT r.rolcreaterole
         AND (r.rolname='flare_owner' OR NOT r.rolcanlogin AND NOT r.rolinherit)
         AND NOT EXISTS(SELECT 1 FROM pg_auth_members WHERE member=r.oid)
+        AND (r.rolname<>'flare_owner' OR p.proconfig @> ARRAY['application_name=flare-team-management'])
         AND NOT has_function_privilege('public',p.oid,'EXECUTE')
         AND NOT has_function_privilege('flare_worker',p.oid,'EXECUTE')
         AND has_function_privilege('flare_app',p.oid,'EXECUTE')=(left(p.proname,6)<>'_team_' AND p.proname<>'guard_team_content'))
         FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
         WHERE n.nspname='public' AND (left(p.proname,5)='team_' OR left(p.proname,6)='_team_' OR p.proname='guard_team_content')''').fetchone()
     if team_functions != (True,):
+        return False
+    managed_team_guard = connection.execute('''SELECT NOT EXISTS(
+        SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
+        WHERE n.nspname='public' AND r.rolname='flare_owner' AND p.prosecdef
+          AND left(p.proname,5)<>'team_' AND left(p.proname,6)<>'_team_' AND p.proname<>'guard_team_content'
+          AND NOT coalesce(p.proconfig @> ARRAY['application_name=flare-runtime'],false))''').fetchone()
+    if managed_team_guard != (True,):
+        return False
+    team_worker_admission = connection.execute('''SELECT count(*)=5 AND bool_and(
+        position('public._team_workspace_paid' IN pg_get_functiondef(p.oid))>0)
+        FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+        WHERE n.nspname='public' AND p.proname=ANY(%s)''',
+        (['materialize_analysis_cycles','claim_analysis_cycle_refresh','enqueue_due_analysis_cycles','claim_analysis_job','analysis_job_check'],)).fetchone()
+    if team_worker_admission != (True,):
         return False
 
     protected_tables = connection.execute(

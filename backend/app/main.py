@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 import logging
 import psycopg
 from time import perf_counter
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -16,7 +17,7 @@ from app.api.acquisition import router as acquisition_router
 from app.api.analytics import router as analytics_router
 from app.api.auth import router as auth_router
 from app.api.billing import router as billing_router, WEBHOOK_PATH
-from app.api.team import router as team_router
+from app.api.team import router as team_router, TeamBodyLimit
 from app.api.flares import router as flares_router
 from app.api.analysis import router as analysis_router
 from app.api.analysis_schedule import router as analysis_schedule_router
@@ -69,6 +70,10 @@ def create_app(
         configured.validate()
         if email_sender is not None:
             application.state.email_sender = email_sender
+        elif configured.team_enabled and configured.smtp_url:
+            application.state.email_sender = SmtpEmailSender(configured.smtp_url, configured.email_from or "")
+        elif configured.team_enabled and configured.environment != 'production' and configured.app_public_url:
+            application.state.email_sender = LoggingEmailSender()
         elif not configured.email_verification_required:
             application.state.email_sender = None
         elif configured.smtp_url:
@@ -108,6 +113,7 @@ def create_app(
     application.state.settings = configured
     application.state.database = database
     application.state.email_sender = email_sender
+    application.add_middleware(TeamBodyLimit)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=configured.cors_origins,
@@ -122,6 +128,15 @@ def create_app(
             if request.headers.get("origin") not in configured.cors_origins:
                 return JSONResponse({"detail": "Request origin is not allowed"}, status_code=403)
         response = await call_next(request)
+        callback_workspace = getattr(request.state,'team_callback_workspace',None)
+        location = response.headers.get('location')
+        if callback_workspace and location and response.status_code in {302,303,307,308}:
+            target = urlsplit(location)
+            public = urlsplit(configured.app_public_url or '')
+            if (target.scheme,target.netloc)==(public.scheme,public.netloc):
+                query = [(key,value) for key,value in parse_qsl(target.query,keep_blank_values=True) if key!='project']
+                query.append(('project',callback_workspace))
+                response.headers['location']=urlunsplit((target.scheme,target.netloc,target.path,urlencode(query),target.fragment))
         if request.url.path.startswith((
             "/auth", "/items", "/imports", "/flares", "/analyze", "/analysis-runs",
             "/integrations", "/ops", "/analytics", "/voice",

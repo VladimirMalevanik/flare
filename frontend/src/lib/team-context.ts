@@ -15,7 +15,10 @@ export function projectApiUrl(url: string): string {
 
 export function projectHref(path: string, project = selectedProject()): string {
   if (!project) return path;
-  return `${path}${path.includes("?") ? "&" : "?"}project=${encodeURIComponent(project)}`;
+  const hashIndex = path.indexOf("#");
+  const base = hashIndex === -1 ? path : path.slice(0,hashIndex);
+  const fragment = hashIndex === -1 ? "" : path.slice(hashIndex);
+  return `${base}${base.includes("?") ? "&" : "?"}project=${encodeURIComponent(project)}${fragment}`;
 }
 
 export function switchProject(id: string | null, pathname = "/vault") {

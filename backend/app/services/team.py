@@ -14,6 +14,9 @@ class TeamService:
             'projects': 'SELECT public.team_projects_list() AS result',
             'capability': 'SELECT public.team_capability() AS result',
             'create': 'SELECT public.team_project_create(%s,%s) AS result',
+            'rename': 'SELECT public.team_project_rename(%s,%s) AS result',
+            'usage': 'SELECT public.team_project_usage(%s) AS result',
+            'oauth': 'SELECT public.team_oauth_workspace(%s,%s) AS result',
             'members': 'SELECT public.team_members_list(%s) AS result',
             'invite': 'SELECT public.team_invite(%s,%s,%s,%s) AS result',
             'invitations': 'SELECT public.team_invitations_list(%s) AS result',
@@ -24,6 +27,7 @@ class TeamService:
             'task': 'SELECT public.team_task_write(%s,%s,%s,%s,%s) AS result',
             'history': 'SELECT public.team_task_history_list(%s,%s) AS result',
             'task_get': 'SELECT public.team_task_get(%s,%s) AS result',
+            'export': 'SELECT public.team_tasks_export(%s) AS result',
             'preview': 'SELECT public.team_invitation_preview(%s) AS result',
             'license': 'SELECT public.team_license_snapshots(%s) AS result',
         }

@@ -15,6 +15,7 @@ export function SubscriptionSection() {
   const { locale } = useI18n();
   const copy = subscriptionCopy[locale];
   const teamConfirmed = {en:"Team is confirmed for this license.",es:"Team está confirmado para esta licencia."}[locale];
+  const teamUpgradeUnavailable = {en:"This workspace already has Pro. A Team upgrade is not available here yet; contact Flare to change the existing subscription.",es:"Este espacio ya tiene Pro. La actualización a Team aún no está disponible aquí; contacta con Flare para cambiar la suscripción existente."}[locale];
   const session = useSession();
   const checkout = useSyncExternalStore(
     paddleSandboxCheckout.subscribe,
@@ -51,6 +52,7 @@ export function SubscriptionSection() {
   const cachedStatus = billing.status?.workspaceId === workspaceId ? billing.status : null;
   const verifiedStatus = cachedStatus && cachedStatus.plan !== "free" && !hasUnexpiredProAccess(cachedStatus) ? null : cachedStatus;
   const currentPlan = verifiedStatus?.plan ?? null;
+  useEffect(() => { if(currentPlan === "team")window.dispatchEvent(new Event("flare:team-refresh")); }, [currentPlan]);
   const canBuyPro = billing.phase === "ready" && verifiedStatus?.checkoutAvailable
     && verifiedStatus.canManageBilling && currentPlan === "free" && !billing.pendingConfirmation
     && !billing.confirmationTimedOut;
@@ -70,7 +72,7 @@ export function SubscriptionSection() {
     ? copy.errors[checkout.error]
     : notice === "open" ? copy.errors.open : null;
   const statusMessage = errorMessage
-    ?? (notice === "team" ? copy.teamUnavailable
+    ?? (notice === "team" ? currentPlan === "pro" ? teamUpgradeUnavailable : copy.teamUnavailable
       : notice === "free" ? copy.freeUnavailable
       : checkout.phase === "loading" ? copy.loadingStatus
       : checkout.phase === "open" ? copy.openStatus
