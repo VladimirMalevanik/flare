@@ -5,7 +5,7 @@ CREATE TABLE public.source_connections (
  owner_user_id text NOT NULL REFERENCES public.auth_users(id), account_label text,
  credential_blob text CHECK(length(credential_blob)<=24000), cursor_blob text CHECK(length(cursor_blob)<=24000),
  scope_revision bigint NOT NULL DEFAULT 1, enabled boolean NOT NULL DEFAULT false,
- resources jsonb NOT NULL DEFAULT '[]' CHECK(jsonb_typeof(selected_resources)='array' AND jsonb_array_length(selected_resources)<=20),
+ resources jsonb NOT NULL DEFAULT '[]' CHECK(jsonb_typeof(resources)='array' AND jsonb_array_length(resources)<=20),
  policy jsonb NOT NULL DEFAULT '{}', status text NOT NULL DEFAULT 'pending'
   CHECK(status IN ('pending','connected','ready','syncing','error','disabled')),
  github_installation_id bigint, github_repository_id bigint, error_code text,

@@ -107,5 +107,5 @@ def action(connection_id:UUID,action:Literal['sync','cancel','disconnect'],body:
     if action!='disconnect':
         verified_user(request,user)
         settings,_=configuration(request)
-        if not settings.enabled: raise HTTPException(503,{'code':'source_not_enabled'})
+        if not settings.enabled or not repository.ready(): raise HTTPException(503,{'code':'source_not_enabled'})
     return operation(lambda:repository.action('enqueue' if action=='sync' else action,connection_id))

@@ -1,9 +1,9 @@
 """Caller-bound source API queries and worker-only lease capabilities."""
 from uuid import UUID
 import psycopg
-from psycopg.rows import dict_row
+from psycopg.rows import dict_row, tuple_row
 from psycopg.types.json import Jsonb
-from app.models.database import Database, WorkspaceIdentity
+from app.models.database import Database, WorkspaceIdentity, _source_storage_is_safe
 
 
 class SourceStateError(Exception):
@@ -23,8 +23,13 @@ class SourceConnectionRepository:
         self.database, self.identity = database, identity
 
     def ready(self) -> bool:
-        with self.database.workspace_transaction(self.identity) as connection:
-            return connection.execute("SELECT to_regprocedure('public.source_api(text,uuid,jsonb)') IS NOT NULL AS ready").fetchone()['ready']
+        try:
+            with self.database.workspace_transaction(self.identity) as connection:
+                with connection.cursor(row_factory=tuple_row) as cursor:
+                    exists=cursor.execute("SELECT to_regprocedure('public.source_api(text,uuid,jsonb)') IS NOT NULL").fetchone()[0]
+                    return exists and _source_storage_is_safe(cursor)
+        except psycopg.Error:
+            return False
 
     def action(self, action: str, connection_id: UUID | None = None, payload: dict | None = None):
         try:
