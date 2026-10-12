@@ -102,6 +102,7 @@ test('Settings keeps language and theme controls with both funny preference rows
     '@/components/workspace-context': { useWorkspace: () => ({ profile: { name: 'Fedor', role: 'owner', timezone: 'UTC' }, theme: 'dark' }) },
     '@/lib/storage/preferences': {}, '@/components/language-selector': { LanguageSelector: 'language-selector' },
     '@/components/select': { Select: 'select' }, '@/features/telemetry/analytics-preferences': { AnalyticsPreferences: 'analytics' },
+    '@/features/acquisition/preferences': { AcquisitionPreferences: 'acquisition-preferences' },
     '@/lib/data': {},
   });
   const all = nodes(SettingsPage({ supportEmail: null }));

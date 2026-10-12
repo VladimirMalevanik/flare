@@ -44,6 +44,7 @@ function harness(relative, locale) {
     if (name === '@/components/language-selector') return { LanguageSelector: () => null };
     if (name === '@/components/select') return { Select: 'custom-select' };
     if (name === '@/features/telemetry/analytics-preferences') return { AnalyticsPreferences: () => null };
+    if (name === '@/features/acquisition/preferences') return { AcquisitionPreferences: () => null };
     if (name === '@/lib/storage/preferences') return { readLocal: (_, fallback) => fallback, writeLocal() {} };
     if (name === '@/features/funny/funny-sounds') return { playFunnySound() {} };
     if (name === '@/lib/auth/session') return { apiBaseUrl: '/api' };
