@@ -1,6 +1,9 @@
 # WEB-007 validation — 2026-10-12
 
-- Backend: 57 focused tests and the complete suite passed (680 passed, 382 skipped).
+- Backend: 57 focused tests and the complete merged-base suite passed (771 passed,
+  419 skipped). One import-runtime test needs `/bin/ps`; the sandboxed full run
+  reported 770 passed plus that permission-only failure, and the exact test passed
+  separately with process inspection enabled.
   The focused set includes `test_developer_mail.py`, dotenv role isolation, SMTP,
   email and authentication configuration. It covers anonymous and nondeveloper
   denial, pinned-ID/email
@@ -10,7 +13,7 @@
   concurrency across simultaneous requests, and the real application's origin guard
   / router wiring. No live database or SMTP was used. Existing Starlette/httpx
   deprecation warning does not affect the result; no dependency upgrade was made.
-- Frontend: all 284 tests passed using the existing lock-file dependencies. Ten mail
+- Frontend: all 294 merged-base tests passed using the existing lock-file dependencies. Ten mail
   behavioral tests cover paste, permissions, drafts,
   duplicate submission, validation, partial retries, lost-response handling, localized
   copy, authenticated HTTP payloads, and fail-safe handling of unknown proxy errors.

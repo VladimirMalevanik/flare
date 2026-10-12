@@ -1,0 +1,21 @@
+{
+  "releases": {
+    "api": "9663c9bc856898de62668465341a899c557b64c6",
+    "worker": "9663c9bc856898de62668465341a899c557b64c6",
+    "web": "a6046adc24ab6dd3d22ae7a9c4d752c49cd07a13"
+  },
+  "worker_bootstrap": {
+    "sha256": "8ace0e3ab8ca4789ce95a592120771e05fe5d9c341a35ef9a5877050eedfb6dd",
+    "starts_import_worker": false,
+    "starts_analysis_worker": true
+  },
+  "readiness": {
+    "api": {
+      "status": "ready"
+    },
+    "worker": {
+      "status": "ready",
+      "role": "worker"
+    }
+  }
+}

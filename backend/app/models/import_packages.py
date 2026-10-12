@@ -1,5 +1,6 @@
 """Short, tenant-bound API transactions and restricted worker capabilities."""
 from uuid import UUID
+from contextlib import contextmanager
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
@@ -27,31 +28,44 @@ class ImportPackages:
     def __init__(self, database: Database, identity: WorkspaceIdentity):
         self.database, self.identity = database, identity
 
+    @contextmanager
+    def transaction(self, *, write=False):
+        try:
+            with self.database.workspace_transaction(self.identity, write=write,
+                    timeout=3, statement_timeout_ms=5_000, lock_timeout_ms=2_000) as connection:
+                yield connection
+        except psycopg.Error as error:
+            # Only fixed trigger codes are public. SQL details can contain rows.
+            code = error.diag.message_primary if error.sqlstate == 'P0001' else None
+            if code in {'concurrency_limit', 'integrity_failure'}:
+                raise ImportPackageError(code) from None
+            raise OSError('import_database_unavailable') from None
+
     def action(self, action, package_id=None, payload=None):
-        with self.database.workspace_transaction(self.identity, write=True) as connection:
+        with self.transaction(write=True) as connection:
             return checked(connection.execute('SELECT public.import_api(%s,%s,%s) AS result',
                 (action, package_id, Jsonb(payload or {}))).fetchone()['result'])
 
     def get(self, package_id: UUID):
-        with self.database.workspace_transaction(self.identity) as connection:
+        with self.transaction() as connection:
             row = connection.execute(f'SELECT {PUBLIC_COLUMNS} FROM public.import_packages WHERE id=%s', (package_id,)).fetchone()
             if not row:
                 raise ImportPackageError('not_found')
             return row
 
     def list(self):
-        with self.database.workspace_transaction(self.identity) as connection:
+        with self.transaction() as connection:
             return connection.execute(f'SELECT {PUBLIC_COLUMNS} FROM public.import_packages ORDER BY created_at DESC,id DESC LIMIT 50').fetchall()
 
     def entries(self, package_id, after=-1, limit=50):
         self.get(package_id)
-        with self.database.workspace_transaction(self.identity) as connection:
+        with self.transaction() as connection:
             return connection.execute('''SELECT ordinal,path,file_bytes,skip_reason,status,document_id,version_id
                 FROM public.import_package_entries WHERE package_id=%s AND ordinal>%s ORDER BY ordinal LIMIT %s''',
                 (package_id, after, min(limit, 100))).fetchall()
 
     def publications(self, after=0, limit=50):
-        with self.database.workspace_transaction(self.identity) as connection:
+        with self.transaction() as connection:
             return connection.execute('''SELECT id,package_id,requested_by_user_id,source_kind,published_at,source_count,chunk_count
                 FROM public.import_publications WHERE id>%s ORDER BY id LIMIT %s''', (after,min(limit,100))).fetchall()
 

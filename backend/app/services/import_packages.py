@@ -8,6 +8,33 @@ from app.import_staging.policy import ImportPolicy
 from app.models.import_packages import ImportPackages, ImportPackageError
 
 
+async def _storage_call(function, *args):
+    """Keep synchronous I/O off the event loop and settle it before closing.
+
+    Thread cancellation cannot interrupt a database write. The adapter bounds each
+    operation; waiting for that operation prevents an exit racing its writer.
+    """
+    operation = asyncio.create_task(asyncio.to_thread(function, *args))
+    try:
+        return await asyncio.shield(operation)
+    except asyncio.CancelledError as cancelled:
+        # A timeout and a client disconnect can cancel the request repeatedly.
+        # Every cancellation must still wait for this bounded thread: otherwise
+        # opening/sealing could finish after teardown has already raced it.
+        while not operation.done():
+            try:
+                await asyncio.shield(operation)
+            except asyncio.CancelledError:
+                continue
+            except BaseException:
+                break
+        # Retrieve a failed result, but preserve the original cancellation as
+        # the reason for teardown. The synchronous operation is now settled.
+        if not operation.cancelled():
+            operation.exception()
+        raise cancelled
+
+
 class ImportPackageService:
     def __init__(self, repository: ImportPackages, storage, policy: ImportPolicy):
         self.repo, self.storage, self.policy = repository, storage, policy
@@ -32,26 +59,53 @@ class ImportPackageService:
     async def upload(self, package_id, stream):
         if not self.storage:
             raise ImportPackageError('storage_unavailable')
-        claim = await asyncio.to_thread(self.repo.action, 'upload_claim', package_id)
+        claim = await _storage_call(self.repo.action, 'upload_claim', package_id)
         policy = ImportPolicy(**claim['policy'])
         count, digest = 0, hashlib.sha256()
         try:
-            # The adapter performs bounded writes; no body() or multipart buffer.
-            with self.storage.writer(claim['key']) as target:
-                async with asyncio.timeout(policy.upload_seconds):
+            storage = self.storage
+            if hasattr(storage, 'for_upload'):
+                storage = storage.for_upload(self.repo.identity, claim['key'], claim['token'])
+            manager = storage.writer(claim['key'])
+            opened = False
+
+            def open_writer():
+                nonlocal opened
+                target = manager.__enter__()
+                opened = True
+                return target
+
+            def close_writer(*exception):
+                nonlocal opened
+                try:
+                    return manager.__exit__(*exception)
+                finally:
+                    opened = False
+
+            # The whole operation, including opening and sealing, has a deadline.
+            # No transaction spans client streaming and no body() buffers a ZIP.
+            async with asyncio.timeout(policy.upload_seconds):
+                try:
+                    target = await _storage_call(open_writer)
                     async for block in stream:
                         count += len(block)
                         if count>policy.compressed_bytes or count>claim['fileSize']:
                             raise ImportPackageError('compressed_bytes')
                         digest.update(block)
-                        await asyncio.to_thread(target.write, block)
-                if count!=claim['fileSize']:
-                    raise ImportPackageError('upload_size')
-            await asyncio.to_thread(self.repo.action, 'upload_done', package_id,
-                {'token':claim['token'],'bytes':count,'hash':digest.hexdigest()})
+                        await _storage_call(target.write, block)
+                    if count!=claim['fileSize']:
+                        raise ImportPackageError('upload_size')
+                except BaseException as error:
+                    if opened:
+                        await _storage_call(close_writer, type(error), error, error.__traceback__)
+                    raise
+                else:
+                    await _storage_call(close_writer, None, None, None)
+                await _storage_call(self.repo.action, 'upload_done', package_id,
+                    {'token':claim['token'],'bytes':count,'hash':digest.hexdigest()})
         except BaseException:
             # Object was recorded before writing. Even a disconnect/crash leaves
             # a durable cleanup obligation, including incomplete .part files.
-            await asyncio.shield(asyncio.to_thread(self.repo.action,'upload_abort',package_id,{'token':claim['token']}))
+            await _storage_call(self.repo.action,'upload_abort',package_id,{'token':claim['token']})
             raise
         return await asyncio.to_thread(self.repo.get, package_id)

@@ -41,8 +41,8 @@ export default async function RootLayout({
   return (
     <html lang={locale}>
       <body>
-        <Suspense fallback={null}><AcquisitionCapture /></Suspense>
         <I18nProvider initialLocale={locale}>
+          <Suspense fallback={null}><AcquisitionCapture /></Suspense>
           <Suspense fallback={null}><SiteAnalytics /></Suspense>
           {children}
         </I18nProvider>
