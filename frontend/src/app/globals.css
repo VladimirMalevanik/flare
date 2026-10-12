@@ -1142,6 +1142,35 @@ blockquote {
 .settings-section > header p {
   margin-top: 4px;
 }
+/* Settings preference groups share the same rhythm as the surrounding rows. */
+.settings-section > [data-preferences] {
+  gap: 10px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--divider);
+}
+.settings-section > header + [data-preferences] {
+  padding-top: 4px;
+}
+.settings-section > [data-preferences] h3 {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+.settings-section > [data-preferences] p {
+  max-width: 68ch;
+  margin: 0;
+  text-wrap: pretty;
+}
+.settings-section [data-analytics-choice] {
+  display: grid;
+  gap: 10px;
+}
+.settings-section > [data-preferences] button {
+  max-width: 100%;
+  white-space: normal;
+  text-align: start;
+}
 .profile-editor {
   display: flex;
   gap: 24px;
@@ -1530,9 +1559,11 @@ blockquote {
 }
 .schedule-actions {
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
 }
 .schedule-actions p {
+  flex: 1 1 240px;
   margin-right: auto;
 }
 .import-guide-steps {

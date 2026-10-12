@@ -125,16 +125,18 @@ export function SubscriptionSection() {
           );
         })}
       </div>
-      <p className={styles.note}>{copy.sandboxNote}</p>
-      {billingMessage && <p className={`${styles.status} ${billing.error ? styles.error : ""}`} role={billing.error ? "alert" : "status"}>{billingMessage}</p>}
-      {statusMessage && (
-        <p className={`${styles.status} ${errorMessage ? styles.error : ""}`} role={errorMessage ? "alert" : "status"}>
-          {statusMessage}
-        </p>
-      )}
-      {(billing.error || billing.confirmationTimedOut) && (
-        <button type="button" className="button" disabled={billing.phase === "loading"} onClick={() => void billingStatus.checkAgain()}>{copy.refresh}</button>
-      )}
+      <div className={styles.feedback}>
+        <p className={styles.note}>{copy.sandboxNote}</p>
+        {billingMessage && <p className={`${styles.status} ${billing.error ? styles.error : ""}`} role={billing.error ? "alert" : "status"}>{billingMessage}</p>}
+        {statusMessage && (
+          <p className={`${styles.status} ${errorMessage ? styles.error : ""}`} role={errorMessage ? "alert" : "status"}>
+            {statusMessage}
+          </p>
+        )}
+        {(billing.error || billing.confirmationTimedOut) && (
+          <button type="button" className="button" disabled={billing.phase === "loading"} onClick={() => void billingStatus.checkAgain()}>{copy.refresh}</button>
+        )}
+      </div>
     </section>
   );
 }

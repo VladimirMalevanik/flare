@@ -29,10 +29,10 @@ export function AcquisitionPreferences({ account = false }: { account?: boolean 
     setStatus(saved ? copy.allowed : copy.error); setError(!saved);
   }
   // Withdrawal stays available even when policy is disabled or unavailable.
-  return <div className={styles.preferences}>
+  return <div className={styles.preferences} data-preferences="acquisition">
     <h3 className={styles.title}>{copy.settingsTitle}</h3>
     <p className={styles.description}>{account ? copy.account : copy.description}</p>
-    <p className={styles.note}>{copy.retention}</p>
+    <p className={styles.note}>{account ? copy.accountRetention : copy.retention}</p>
     <p className={`${styles.note} ${error ? styles.error : ""}`} role="status">{status || (account ? copy.accountStatus : blocked ? copy.blocked : policy && acquisitionChoice(policy) === "allowed" ? copy.allowed : copy.unset)}</p>
     <div className={styles.actions}>
       {!account && policy && <button type="button" className={styles.button} disabled={busy || blocked} onClick={allow}>{copy.allow}</button>}
