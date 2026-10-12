@@ -38,7 +38,23 @@ export async function sendMail(recipients: string[], draft: MailDraft): Promise<
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ recipients, subject: draft.subject, body: draft.body }),
     });
-    if (!response.ok) throw new MailRequestError(![400, 401, 403, 422, 503].includes(response.status));
+    if (!response.ok) {
+      let detail: unknown;
+      try { detail = (await response.json())?.detail; } catch { detail = undefined; }
+      const code = typeof detail === "object" && detail !== null && "code" in detail
+        ? (detail as { code?: unknown }).code : undefined;
+      const rejectedBeforeDelivery =
+        (response.status === 422 && Array.isArray(detail)) ||
+        (response.status === 503 && (code === "developer_mail_unavailable" || detail === "Database is unavailable")) ||
+        (response.status === 403 && (
+          code === "developer_mail_forbidden" || code === "email_verification_required" ||
+          code === "legal_acceptance_required" || detail === "Request origin is not allowed"
+        )) ||
+        (response.status === 401 && (
+          detail === "Authentication required" || detail === "Use the session cookie to authenticate"
+        ));
+      throw new MailRequestError(!rejectedBeforeDelivery);
+    }
     const result: unknown = await response.json();
     if (!Array.isArray(result) || result.length !== recipients.length || result.some((item, index) =>
       item?.recipient !== recipients[index] || !["accepted", "failed", "unknown"].includes(item?.status))) {

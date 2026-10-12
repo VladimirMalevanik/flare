@@ -32,6 +32,7 @@ class Settings:
     app_public_url: str | None = None
     smtp_url: str | None = field(default=None, repr=False)
     email_from: str | None = None
+    developer_mail_accounts: str | None = field(default=None, repr=False)
     paddle_environment: str = "sandbox"
     paddle_pro_price_id: str | None = None
     paddle_webhook_secret: str | None = field(default=None, repr=False)
@@ -173,6 +174,7 @@ def load_settings() -> Settings:
         app_public_url=os.getenv("APP_PUBLIC_URL"),
         smtp_url=os.getenv("SMTP_URL"),
         email_from=os.getenv("EMAIL_FROM"),
+        developer_mail_accounts=os.getenv("DEVELOPER_MAIL_ACCOUNTS"),
         paddle_environment=os.getenv("PADDLE_ENVIRONMENT", "sandbox"),
         paddle_pro_price_id=os.getenv("PADDLE_PRO_PRICE_ID"),
         paddle_webhook_secret=os.getenv("PADDLE_WEBHOOK_SECRET"),

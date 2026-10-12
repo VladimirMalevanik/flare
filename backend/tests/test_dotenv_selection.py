@@ -28,6 +28,7 @@ def test_explicit_dotenv_is_authoritative(monkeypatch, tmp_path: Path):
         "FLARE_PROCESS_ROLE=api\n"
         "DATABASE_URL=postgresql://selected\n"
         "VOICE_GROQ_API_KEY=selected-api-voice-key\n"
+        'DEVELOPER_MAIL_ACCOUNTS={"auth:00000000-0000-4000-8000-000000000001":"dev@example.test"}\n'
         "FLARE_DATABASE_PROVIDER=yandex\n",
         encoding="utf-8",
     )
@@ -50,6 +51,7 @@ def test_explicit_dotenv_is_authoritative(monkeypatch, tmp_path: Path):
     assert "WORKER_DATABASE_URL" not in environment.os.environ
     assert "GROQ_API_KEY" not in environment.os.environ
     assert environment.os.environ["VOICE_GROQ_API_KEY"] == "selected-api-voice-key"
+    assert "dev@example.test" in environment.os.environ["DEVELOPER_MAIL_ACCOUNTS"]
 
 
 def test_explicit_dotenv_must_exist(monkeypatch, tmp_path: Path):
@@ -111,6 +113,7 @@ def test_worker_process_keeps_scheduled_email_delivery_configuration(monkeypatch
     monkeypatch.setenv("SMTP_URL", "smtps://secret@smtp.test")
     monkeypatch.setenv("APP_PUBLIC_URL", "https://flare.test")
     monkeypatch.setenv("EMAIL_FROM", "Flare <private@flare.test>")
+    monkeypatch.setenv("DEVELOPER_MAIL_ACCOUNTS", '{"auth:private":"private@flare.test"}')
     monkeypatch.setattr(environment, "load_dotenv", lambda: None)
 
     environment.load_project_dotenv(allowed_roles={"api", "worker"})
@@ -121,6 +124,7 @@ def test_worker_process_keeps_scheduled_email_delivery_configuration(monkeypatch
     assert environment.os.environ["SMTP_URL"] == "smtps://secret@smtp.test"
     assert environment.os.environ["APP_PUBLIC_URL"] == "https://flare.test"
     assert environment.os.environ["EMAIL_FROM"] == "Flare <private@flare.test>"
+    assert "DEVELOPER_MAIL_ACCOUNTS" not in environment.os.environ
 
 
 def test_worker_process_scrubs_ambient_github_private_key(monkeypatch, tmp_path: Path):
@@ -149,6 +153,7 @@ def test_default_discovery_uses_explicit_process_role_for_secret_separation(monk
     monkeypatch.setenv("DATABASE_URL", "postgresql://api")
     monkeypatch.setenv("GITHUB_APP_PRIVATE_KEY", "api-only")
     monkeypatch.setenv("GITHUB_CLIENT_SECRET", "api-only")
+    monkeypatch.setenv("DEVELOPER_MAIL_ACCOUNTS", "api-only")
     monkeypatch.setattr(environment, "load_dotenv", lambda: None)
 
     environment.load_project_dotenv(allowed_roles={"api", "worker"})
@@ -158,3 +163,4 @@ def test_default_discovery_uses_explicit_process_role_for_secret_separation(monk
     assert "DATABASE_URL" not in environment.os.environ
     assert "GITHUB_APP_PRIVATE_KEY" not in environment.os.environ
     assert "GITHUB_CLIENT_SECRET" not in environment.os.environ
+    assert "DEVELOPER_MAIL_ACCOUNTS" not in environment.os.environ

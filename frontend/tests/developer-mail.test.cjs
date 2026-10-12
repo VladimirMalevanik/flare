@@ -145,3 +145,30 @@ test('HTTP client sends authenticated plain text and treats network/malformed re
     await assert.rejects(broken.sendMail(['one@example.invalid'], { subject: 'Hello', body: 'Body' }), error => error.uncertain === true && !error.message.includes('private'));
   }
 });
+
+test('HTTP client retries only structured rejections known to happen before SMTP delivery', async () => {
+  const draft = { subject: 'Hello', body: 'Body' };
+  const recipients = ['one@example.invalid'];
+  for (const response of [
+    { status: 503, detail: { code: 'developer_mail_unavailable' } },
+    { status: 403, detail: { code: 'developer_mail_forbidden' } },
+    { status: 422, detail: [{ type: 'value_error' }] },
+  ]) {
+    const client = load('developer-mail-client.ts', { '@/lib/auth/session': { apiBaseUrl: '/api' } }, {
+      fetch: async () => ({ ok: false, status: response.status, json: async () => ({ detail: response.detail }) }),
+    });
+    await assert.rejects(client.sendMail(recipients, draft), error => error.uncertain === false);
+  }
+  for (const response of [
+    { status: 503, body: '<html>proxy timeout</html>' },
+    { status: 403, body: { detail: 'unexpected gateway response' } },
+  ]) {
+    const client = load('developer-mail-client.ts', { '@/lib/auth/session': { apiBaseUrl: '/api' } }, {
+      fetch: async () => ({ ok: false, status: response.status, json: async () => {
+        if (typeof response.body === 'string') throw Error('not json');
+        return response.body;
+      } }),
+    });
+    await assert.rejects(client.sendMail(recipients, draft), error => error.uncertain === true);
+  }
+});

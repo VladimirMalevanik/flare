@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from email import policy
+from email.message import EmailMessage
 import json
-import os
 import re
 import smtplib
 from uuid import UUID
@@ -17,6 +19,7 @@ MAX_RECIPIENTS = 20
 MAX_SUBJECT = 200
 MAX_BODY = 20_000
 _ADDRESS = re.compile(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+\Z")
+_DELIVERY_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="developer-mail")
 
 
 def mailbox(value: str) -> str:
@@ -32,14 +35,14 @@ def mailbox(value: str) -> str:
     return value
 
 
-def account_grants() -> dict[str, str]:
+def account_grants(configured: str | None) -> dict[str, str]:
     """Fail closed on absent or malformed private release-owner configuration.
 
     Pin both the account ID and its email; a new signup using the same email must
     never inherit a deleted developer's access. No email list enters source or JS.
     """
     try:
-        raw = json.loads(os.environ.get("DEVELOPER_MAIL_ACCOUNTS", "{}"))
+        raw = json.loads(configured or "{}")
         if not isinstance(raw, dict) or not 1 <= len(raw) <= 6:
             return {}
         grants = {}
@@ -54,12 +57,31 @@ def account_grants() -> dict[str, str]:
         return {}
 
 
-def can_send(user: AuthenticatedUser) -> bool:
+def can_send(user: AuthenticatedUser, configured: str | None) -> bool:
     return bool(
         user.email_verified
         and user.legal_accepted
-        and account_grants().get(user.user_id) == user.email.strip().lower()
+        and account_grants(configured).get(user.user_id) == user.email.strip().lower()
     )
+
+
+def sender_header(value: str) -> str:
+    """Validate one From mailbox while preserving an optional display name."""
+    if not isinstance(value, str) or not value.strip() or len(value) > 320:
+        raise ValueError("EMAIL_FROM is invalid")
+    message = EmailMessage(policy=policy.default)
+    message["From"] = value.strip()
+    header = message["From"]
+    if (
+        header is None
+        or header.defects
+        or len(header.addresses) != 1
+        or len(header.groups) != 1
+        or header.groups[0].display_name is not None
+    ):
+        raise ValueError("EMAIL_FROM must contain exactly one mailbox")
+    mailbox(header.addresses[0].addr_spec)
+    return str(header)
 
 
 def configured_sender(settings) -> tuple[EmailSender | None, str | None]:
@@ -67,8 +89,8 @@ def configured_sender(settings) -> tuple[EmailSender | None, str | None]:
     if not settings.smtp_url or not settings.email_from:
         return None, None
     try:
-        sender_address = mailbox(settings.email_from)
-        return SmtpEmailSender(settings.smtp_url, sender_address), sender_address
+        sender = sender_header(settings.email_from)
+        return SmtpEmailSender(settings.smtp_url, sender), sender
     except (ValueError, TypeError):
         return None, None
 
@@ -96,10 +118,11 @@ def _send_one(sender: EmailSender, recipient: str, subject: str, body: str) -> S
 
 async def send_copies(sender: EmailSender, recipients: list[str], subject: str,
                       body: str) -> list[SendOutcome]:
-    slots = asyncio.Semaphore(4)
+    loop = asyncio.get_running_loop()
 
     async def deliver(recipient: str) -> SendOutcome:
-        async with slots:
-            return await asyncio.to_thread(_send_one, sender, recipient, subject, body)
+        return await loop.run_in_executor(
+            _DELIVERY_POOL, _send_one, sender, recipient, subject, body,
+        )
 
     return list(await asyncio.gather(*(deliver(address) for address in recipients)))

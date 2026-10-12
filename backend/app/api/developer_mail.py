@@ -48,8 +48,9 @@ class MailOutcome(BaseModel):
     status: Literal["accepted", "failed", "unknown"]
 
 
-def _developer(user: Annotated[AuthenticatedUser, Depends(verified_user)]) -> AuthenticatedUser:
-    if not can_send(user):
+def _developer(request: Request,
+               user: Annotated[AuthenticatedUser, Depends(verified_user)]) -> AuthenticatedUser:
+    if not can_send(user, request.app.state.settings.developer_mail_accounts):
         raise HTTPException(403, detail={"code": "developer_mail_forbidden"})
     return user
 
@@ -58,7 +59,7 @@ def _developer(user: Annotated[AuthenticatedUser, Depends(verified_user)]) -> Au
 def capability(request: Request, response: Response,
                user: Annotated[AuthenticatedUser, Depends(verified_user)]) -> dict:
     response.headers["Cache-Control"] = "no-store"
-    if not can_send(user):
+    if not can_send(user, request.app.state.settings.developer_mail_accounts):
         return {"allowed": False}
     sender, address = configured_sender(request.app.state.settings)
     return {"allowed": True, "ready": sender is not None, "sender": address,

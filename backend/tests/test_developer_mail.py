@@ -1,6 +1,7 @@
 """Manual mail permission and delivery regressions, without live SMTP or DB."""
 import asyncio
 import json
+import os
 import smtplib
 import threading
 import time
@@ -29,11 +30,12 @@ def developer(monkeypatch):
     return user
 
 
-def client_for(user=None):
+def client_for(user=None, *, smtp_url=None, email_from="sender@flare.example"):
     application = FastAPI()
     application.state.settings = SimpleNamespace(
         dev_mode=False, session_cookie_name="flare_session", email_verification_required=False,
-        smtp_url=None, email_from="sender@flare.example",
+        smtp_url=smtp_url, email_from=email_from,
+        developer_mail_accounts=os.getenv("DEVELOPER_MAIL_ACCOUNTS"),
     )
     application.include_router(router)
     if user is not None:
@@ -84,7 +86,7 @@ def test_developer_viewer_has_mail_but_never_queue_owner_access(developer):
     json.dumps({f"auth:{uuid4()}": "dev@example.invalid" for _ in range(7)})])
 def test_absent_or_malformed_grants_fail_closed(monkeypatch, raw):
     monkeypatch.setenv("DEVELOPER_MAIL_ACCOUNTS", raw)
-    assert account_grants() == {}
+    assert account_grants(raw) == {}
 
 
 def test_empty_grants_and_renamed_account_fail_closed(developer, monkeypatch):
@@ -144,7 +146,12 @@ def test_separate_copies_truthful_outcomes_and_no_provider_details(developer, mo
 def test_real_application_keeps_origin_guard_and_mail_router(developer, monkeypatch):
     sender = Sender()
     monkeypatch.setattr(api, "configured_sender", lambda _: (sender, "sender@flare.example"))
-    application = create_app(Settings(database_url=None, environment="test", cors_origins=["http://testserver"]))
+    application = create_app(Settings(
+        database_url=None,
+        environment="test",
+        cors_origins=["http://testserver"],
+        developer_mail_accounts=os.environ["DEVELOPER_MAIL_ACCOUNTS"],
+    ))
     application.dependency_overrides[current_user] = lambda: developer
     # No DB/lifespan needed: only the existing middleware and real route wiring.
     client = TestClient(application)
@@ -160,8 +167,34 @@ def test_real_application_keeps_origin_guard_and_mail_router(developer, monkeypa
 def test_smtp_required_even_if_application_has_a_logging_sender():
     settings = SimpleNamespace(smtp_url=None, email_from="sender@flare.example")
     assert configured_sender(settings) == (None, None)
-    for url, address in [("smtp://", "sender@flare.example"), ("smtp://mail.example", "From\r\nBcc: x@y.z")]:
+    for url, address in [
+        ("smtp://", "sender@flare.example"),
+        ("smtp://mail.example", "From\r\nBcc: x@y.z"),
+        ("smtp://mail.example", "A <a@example.com>, B <b@example.com>"),
+        ("smtp://mail.example", "Group: a@example.com;"),
+    ]:
         assert configured_sender(SimpleNamespace(smtp_url=url, email_from=address)) == (None, None)
+
+
+def test_production_display_name_sender_is_ready_without_network_access(developer):
+    settings = SimpleNamespace(
+        smtp_url="smtps://resend:secret@smtp.resend.com:465",
+        email_from="Flare <no-reply@flare4u.tech>",
+    )
+    sender, rendered = configured_sender(settings)
+    assert sender is not None
+    assert rendered == "Flare <no-reply@flare4u.tech>"
+    with client_for(
+        developer,
+        smtp_url=settings.smtp_url,
+        email_from=settings.email_from,
+    ) as client:
+        assert client.get("/ops/mail/capability").json() == {
+            "allowed": True,
+            "ready": True,
+            "sender": "Flare <no-reply@flare4u.tech>",
+            "maxRecipients": 20,
+        }
 
 
 def test_concurrency_is_bounded_and_order_retained():
@@ -177,8 +210,17 @@ def test_concurrency_is_bounded_and_order_retained():
             with self.lock:
                 self.active -= 1
     sender = BlockingSender()
-    recipients = [f"recipient{i}@example.invalid" for i in range(20)]
-    results = asyncio.run(send_copies(sender, recipients, "Subject", "Message"))
+    first = [f"first{i}@example.invalid" for i in range(20)]
+    second = [f"second{i}@example.invalid" for i in range(20)]
+
+    async def deliver_two_requests():
+        return await asyncio.gather(
+            send_copies(sender, first, "Subject", "Message"),
+            send_copies(sender, second, "Subject", "Message"),
+        )
+
+    first_results, second_results = asyncio.run(deliver_two_requests())
     assert 1 < sender.maximum <= 4
-    assert [item.recipient for item in results] == recipients
-    assert all(item.status == "accepted" for item in results)
+    assert [item.recipient for item in first_results] == first
+    assert [item.recipient for item in second_results] == second
+    assert all(item.status == "accepted" for item in first_results + second_results)

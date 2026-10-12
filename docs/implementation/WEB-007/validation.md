@@ -1,21 +1,22 @@
-# WEB-007 validation — 2026-10-10
+# WEB-007 validation — 2026-10-12
 
-- Backend: 37 focused tests passed (`test_developer_mail.py` and existing
-  `test_smtp_email.py`). Includes anonymous and nondeveloper denial, pinned-ID/email
+- Backend: 57 focused tests and the complete suite passed (680 passed, 382 skipped).
+  The focused set includes `test_developer_mail.py`, dotenv role isolation, SMTP,
+  email and authentication configuration. It covers anonymous and nondeveloper
+  denial, pinned-ID/email
   checks, unverified/legal gates, no inherited customer-owner privilege, fail-closed
   policy, header/recipient validation, explicit rejection versus uncertain outcomes,
-  separate copies, bounded concurrency, and the real application's origin guard /
-  router wiring. No live database or SMTP was used. Existing Starlette/httpx
+  the production display-name sender, separate copies, process-wide bounded
+  concurrency across simultaneous requests, and the real application's origin guard
+  / router wiring. No live database or SMTP was used. Existing Starlette/httpx
   deprecation warning does not affect the result; no dependency upgrade was made.
-- Frontend: all 264 tests passed after restoring the existing lock-file dependencies
-  with owner approval. Nine new behavioral tests cover paste, permissions, drafts,
+- Frontend: all 284 tests passed using the existing lock-file dependencies. Ten mail
+  behavioral tests cover paste, permissions, drafts,
   duplicate submission, validation, partial retries, lost-response handling, localized
-  copy, and authenticated HTTP payloads. The final focus-only change was followed by
-  another successful run of the nine mail tests.
-- ESLint, TypeScript `--noEmit`, and the final Next.js production build passed.
-  Dependency manifest and lock file are unchanged. Initial build attempts lacked
-  already-declared dependencies in reused local directories; the approved restore
-  resolved this. No new package or version was introduced.
+  copy, authenticated HTTP payloads, and fail-safe handling of unknown proxy errors.
+- ESLint, TypeScript checking inside the final Next.js production build, and that
+  production build passed. Dependency manifest and lock file are unchanged. No new
+  package or version was introduced.
 - Browser: final production build on loopback with a synthetic account / API fixture.
   English and Spanish composer rendered. Opening focuses To. Escape closes the
   dialog, restores focus to Compose email, and reopening retains recipients, subject
@@ -23,8 +24,9 @@
   sent and retry only for failed addresses. At 390×844, fields and outcomes fit without
   horizontal overflow; dialog scrolling reaches every footer action. Viewport override
   was reset after the test. All addresses and mail results in the preview are synthetic.
-- Whitespace / declared-file-scope review performed before publication. Main/config /
-  database and active OPS-005 / API-005 scopes are untouched.
+- Whitespace, secret-pattern and declared-file-scope review passed. The database
+  schema, import flow and AI analysis scopes are untouched. API configuration now
+  owns and isolates the private account grant from worker processes.
 
 ![Desktop composer with a synthetic draft](preview-desktop.jpg)
 
@@ -32,11 +34,10 @@
 
 ## Remaining live checks
 
-No production deployment, private developer grants or SMTP configuration was changed.
-Live delivery, reply routing and SPF/DKIM/DMARC headers still require a configured
-provider and the release owner's rollout. The earlier neutral resend-verification
-response did not establish sending. Arc Gmail contents remained unavailable, so
-receipt of that message is unconfirmed. The connected Gmail account did not match
-the intended recipient and its messages were not inspected.
+No production deployment or private developer grant was changed during this code
+validation. Azure already has a resolved SMTP secret reference and the production
+display-name sender; live delivery, reply routing and SPF/DKIM/DMARC headers still
+require the coordinated rollout and one explicitly agreed test recipient. The earlier
+neutral resend-verification response did not establish sending.
 
 The code is ready for review, not accepted or activated on the live website.
