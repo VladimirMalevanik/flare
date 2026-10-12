@@ -165,6 +165,12 @@ const nextScheduleWindow = (
 };
 
 export class MockDataProvider implements FlareDataProvider {
+  async getSourceConnections(): Promise<import("./types").SourceConnections> { return { providers: ["slack", "gmail", "drive", "notion", "github"].map(provider => ({ provider: provider as import("./types").ConnectedProvider, available: false, syncAvailable: false })), connections: [] }; }
+  async connectSource(_provider: import("./types").ConnectedProvider): Promise<{url?: string; connected?: boolean}> { throw new Error("Sources require the Flare API."); }
+  async sourceResources(_id: string, _cursor?: string): Promise<import("./types").SourceResourcePage> { throw new Error("Sources require the Flare API."); }
+  async selectSourceResources(_id: string, _expectedRevision: number, _resourceIds: string[], _shareWithWorkspace: boolean): Promise<void> { throw new Error("Sources require the Flare API."); }
+  async sourceConnectionAction(_id: string, _action: "sync" | "cancel" | "disconnect"): Promise<void> { throw new Error("Sources require the Flare API."); }
+
   private analysisRuns = new Map<string, AnalysisRun>();
   private dailyRun: AnalysisRun | null = null;
   private dailyRunDate: string | null = null;

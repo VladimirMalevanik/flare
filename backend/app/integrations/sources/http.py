@@ -73,6 +73,8 @@ class ProviderHTTP:
             raise SourceProviderError('invalid_provider_request')
         if self.requests >= self.settings.max_requests or self.clock() - self.started >= self.settings.deadline_seconds:
             raise SourceProviderError('sync_budget_reached')
+        if parsed.hostname == "api.notion.com" and self.requests:
+            time.sleep(0.35)
         self.requests += 1
         try:
             with httpx.Client(transport=self.transport, timeout=httpx.Timeout(10, connect=5), follow_redirects=False, trust_env=False) as client:

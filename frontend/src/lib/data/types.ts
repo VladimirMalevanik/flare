@@ -198,3 +198,10 @@ export type ImportPackageEntry = {
   status: "pending" | "prepared" | "skipped" | "published" | "failed"; documentId: string | null;
 };
 export type ImportPackageReport = { entries: ImportPackageEntry[]; nextCursor: number | null };
+
+export type ConnectedProvider = "slack" | "gmail" | "drive" | "notion" | "github";
+export type SourceResource = { id: string; name: string; kind: string };
+export type SourceCounts = { added: number; updated: number; unchanged: number; skipped: number; conflicts: number; more: boolean };
+export type SourceConnection = { id: string; provider: ConnectedProvider; owner: boolean; canDisconnect: boolean; accountLabel: string | null; scopeRevision: number; status: "pending" | "connected" | "ready" | "syncing" | "error" | "disabled"; enabled: boolean; resources: SourceResource[]; lastSyncAt: string | null; nextSyncAt: string | null; errorCode: string | null; lastResult: SourceCounts | null; job: (SourceCounts & { id: string; status: string; errorCode: string | null }) | null };
+export type SourceConnections = { providers: { provider: ConnectedProvider; available: boolean; syncAvailable: boolean }[]; connections: SourceConnection[] };
+export type SourceResourcePage = { resources: SourceResource[]; cursor: string | null; scopeRevision: number };

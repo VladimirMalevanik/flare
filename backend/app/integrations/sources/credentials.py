@@ -10,10 +10,11 @@ class CredentialScope:
     connection_id: str
     provider: str
     user_id: str
+    purpose: str = 'credentials'
 
     def envelope(self) -> dict:
         return {'workspace': str(self.workspace_id), 'connection': str(self.connection_id),
-                'provider': self.provider, 'user': self.user_id, 'version': 1}
+                'provider': self.provider, 'user': self.user_id, 'purpose': self.purpose, 'version': 2}
 
 
 class CredentialUnavailable(Exception):

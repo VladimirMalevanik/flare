@@ -14,7 +14,7 @@ from psycopg_pool import ConnectionPool
 from pwdlib import PasswordHash
 
 
-CURRENT_SCHEMA_REVISION = "0022"
+CURRENT_SCHEMA_REVISION = "0023"
 IMPORT_STAGING_TABLES = ("import_staging_blocks", "import_staging_health")
 # These are private tables, rather than member-readable tenant projections. The
 # API and worker get only their exact capabilities; even a column SELECT grant

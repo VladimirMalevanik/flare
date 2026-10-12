@@ -33,6 +33,11 @@ export type AnalyticsEventInput =
       metadata: { screen: "sources_from_insights" } };
 
 export interface FlareDataProvider {
+  getSourceConnections(signal?: AbortSignal): Promise<import("./types").SourceConnections>;
+  connectSource(provider: import("./types").ConnectedProvider, signal?: AbortSignal): Promise<{url?: string; connected?: boolean}>;
+  sourceResources(id: string, cursor?: string, signal?: AbortSignal): Promise<import("./types").SourceResourcePage>;
+  selectSourceResources(id: string, expectedRevision: number, resourceIds: string[], shareWithWorkspace: boolean, signal?: AbortSignal): Promise<void>;
+  sourceConnectionAction(id: string, action: "sync" | "cancel" | "disconnect", signal?: AbortSignal): Promise<void>;
   getImportCapabilities(signal?: AbortSignal): Promise<{ available: boolean; maxUploadBytes: number | null }>;
   createImportPackage(input: { sourceKind: ZipSourceKind; fileName: string; fileSize: number; requestKey: string }, signal?: AbortSignal): Promise<ImportPackage>;
   uploadImportPackage(id: string, file: File, signal?: AbortSignal): Promise<ImportPackage>;

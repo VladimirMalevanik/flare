@@ -26,7 +26,7 @@ class SourceOAuth:
                           code_challenge=challenge, code_challenge_method='S256')
             endpoint = 'https://accounts.google.com/o/oauth2/v2/auth'
         elif self.provider == 'slack':
-            params.update(client_id=self.settings.slack_client_id, scope='channels:read,channels:history')
+            params.update(client_id=self.settings.slack_client_id, user_scope='channels:read,channels:history')
             endpoint = 'https://slack.com/oauth/v2/authorize'
         else:
             params.update(client_id=self.settings.notion_client_id, response_type='code', owner='user')
@@ -54,11 +54,14 @@ class SourceOAuth:
         value = response.json()
         if not isinstance(value, dict) or self.provider == 'slack' and value.get('ok') is not True:
             raise SourceProviderError('authorization_lost', reconnect=True)
-        access = plain_text(value.get('access_token'), maximum=6000)
-        renewal = value.get('refresh_token') or refresh_token
+        token_value = (value.get('authed_user') or (value if refresh_token and value.get('token_type') == 'user' else None)) if self.provider == 'slack' else value
+        if not isinstance(token_value, dict):
+            raise SourceProviderError('authorization_lost', reconnect=True)
+        access = plain_text(token_value.get('access_token'), maximum=6000)
+        renewal = token_value.get('refresh_token') or refresh_token
         if renewal is not None:
             renewal = plain_text(renewal, maximum=6000)
-        expires = value.get('expires_in')
+        expires = token_value.get('expires_in')
         if expires is not None and (type(expires) is not int or not 0 < expires <= 31_536_000):
             raise SourceProviderError('invalid_provider_response')
         if self.provider in GOOGLE_SCOPES and not renewal or expires and not renewal:

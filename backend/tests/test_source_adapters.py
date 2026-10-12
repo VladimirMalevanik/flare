@@ -112,7 +112,7 @@ def test_oauth_urls_request_only_the_intended_read_context(source_settings, prov
         assert query['code_challenge_method'] == ['S256']
         assert 'readonly' in query['scope'][0] and 'modify' not in query['scope'][0]
     if provider == 'slack':
-        assert query['scope'] == ['channels:read,channels:history']
+        assert query['user_scope'] == ['channels:read,channels:history']
 
 
 def test_gmail_exchange_and_refresh_keep_account_binding(source_settings):

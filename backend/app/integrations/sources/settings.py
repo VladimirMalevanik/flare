@@ -27,6 +27,7 @@ class SourceSettings:
     deadline_seconds: int = 120
     sync_interval_seconds: int = 3600
     lookback_days: int = 30
+    workspace_bytes: int = 500_000_000
 
     def validate(self) -> None:
         if not self.enabled:
@@ -36,12 +37,16 @@ class SourceSettings:
             local = parsed.hostname in {'localhost', '127.0.0.1', '::1'}
             if (parsed.scheme != 'https' and not (local and parsed.scheme == 'http')) or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
                 raise ValueError('Invalid source callback configuration')
+        api, frontend = urlsplit(self.public_api_url), urlsplit(self.frontend_url)
+        if (api.scheme, api.hostname, api.port) != (frontend.scheme, frontend.hostname, frontend.port):
+            raise ValueError('Source callbacks must return through the same authenticated origin')
         if not self.token_keys or len(self.token_keys) > 3:
             raise ValueError('Source encryption keys are required')
         limits = [(self.max_resources, 1, 20), (self.max_response_bytes, 10_000, 2_000_000),
                   (self.max_document_bytes, 1000, 200_000), (self.max_requests, 2, 100),
                   (self.page_items, 1, 15), (self.deadline_seconds, 10, 120),
-                  (self.sync_interval_seconds, 300, 86400), (self.lookback_days, 1, 90)]
+                  (self.sync_interval_seconds, 300, 86400), (self.lookback_days, 1, 90),
+                  (self.workspace_bytes, 1_000_000, 1_000_000_000)]
         if any(type(value) is not int or not minimum <= value <= maximum for value, minimum, maximum in limits):
             raise ValueError('Invalid source limits')
         from .credentials import CredentialCipher
@@ -70,7 +75,8 @@ def load_source_settings() -> SourceSettings:
         names = {'max_resources': 'SOURCE_MAX_RESOURCES', 'max_response_bytes': 'SOURCE_MAX_RESPONSE_BYTES',
                  'max_document_bytes': 'SOURCE_MAX_DOCUMENT_BYTES', 'max_requests': 'SOURCE_MAX_REQUESTS',
                  'page_items': 'SOURCE_PAGE_ITEMS', 'deadline_seconds': 'SOURCE_DEADLINE_SECONDS',
-                 'sync_interval_seconds': 'SOURCE_SYNC_INTERVAL_SECONDS', 'lookback_days': 'SOURCE_LOOKBACK_DAYS'}
+                 'sync_interval_seconds': 'SOURCE_SYNC_INTERVAL_SECONDS', 'lookback_days': 'SOURCE_LOOKBACK_DAYS',
+                 'workspace_bytes': 'SOURCE_WORKSPACE_BYTES'}
         defaults = SourceSettings()
         configured = SourceSettings(
             enabled=os.getenv('SOURCES_ENABLED', 'false').lower() == 'true',

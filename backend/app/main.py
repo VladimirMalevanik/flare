@@ -19,6 +19,7 @@ from app.api.flares import router as flares_router
 from app.api.analysis import router as analysis_router
 from app.api.analysis_schedule import router as analysis_schedule_router
 from app.api.github import router as github_router
+from app.api.source_connections import router as source_connections_router
 from app.api.imports import router as imports_router
 from app.api.import_packages import router as import_packages_router
 from app.import_staging import LocalStagedObjects
@@ -178,6 +179,7 @@ def create_app(
     application.include_router(analysis_router)
     application.include_router(analysis_schedule_router)
     application.include_router(github_router)
+    application.include_router(source_connections_router)
     application.include_router(export_router)
     application.include_router(voice_router)
     application.include_router(ops.router)
