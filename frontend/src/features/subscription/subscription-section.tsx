@@ -14,6 +14,7 @@ const plans = ["free", "pro", "team"] as const;
 export function SubscriptionSection() {
   const { locale } = useI18n();
   const copy = subscriptionCopy[locale];
+  const teamConfirmed = {en:"Team is confirmed for this license.",es:"Team está confirmado para esta licencia."}[locale];
   const session = useSession();
   const checkout = useSyncExternalStore(
     paddleSandboxCheckout.subscribe,
@@ -74,7 +75,7 @@ export function SubscriptionSection() {
       : checkout.phase === "loading" ? copy.loadingStatus
       : checkout.phase === "open" ? copy.openStatus
       : currentPlan === "pro" ? copy.proConfirmed
-      : currentPlan === "team" ? (locale === "es" ? "Team está confirmado para esta licencia." : "Team is confirmed for this license.")
+      : currentPlan === "team" ? teamConfirmed
       : billing.pendingConfirmation ? copy.confirming
       : billing.confirmationTimedOut ? copy.confirmationDelayed
       : checkout.phase === "complete" ? copy.completeStatus

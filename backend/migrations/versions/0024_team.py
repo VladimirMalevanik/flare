@@ -19,7 +19,8 @@ FUNCTIONS = {
  'team_membership_change(uuid,text,text,text)': True,
  'team_tasks_list(uuid,timestamptz,uuid)': True,
  'team_task_write(uuid,uuid,integer,jsonb,boolean)': True,
- 'team_task_history_list(uuid,uuid)': True, 'team_license_snapshots(uuid)': True, 'guard_team_content()': False,
+ 'team_task_history_list(uuid,uuid)': True, 'team_task_get(uuid,uuid)': True,
+ 'team_invitation_preview(text)': True, 'team_license_snapshots(uuid)': True, 'guard_team_content()': False,
 }
 TABLES = ('team_policy','team_projects','team_invitations','team_tasks','team_task_history','team_member_events')
 

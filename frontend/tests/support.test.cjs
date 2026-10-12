@@ -19,6 +19,9 @@ function load(relative, mocks = {}) {
     exports,
     require(name) {
       if (name in mocks) return mocks[name];
+      if (name === '@/lib/team-context') return { projectApiUrl: url => url, projectHref: path => path };
+      if (name === '@/features/team/project-menu') return { ProjectMenu: () => null };
+
       if (name === "./developer-mail") return { DeveloperMail: () => null };
       if (name === "@/i18n/provider") return require("./i18n-utils.cjs").i18nMock();
       if (name === "@/components/language-selector") return { LanguageSelector: "language-selector" };

@@ -258,8 +258,7 @@ BEGIN
  SELECT * INTO policy FROM public.team_policy WHERE singleton;
  IF (SELECT count(*) FROM public.workspace_members WHERE workspace_id=p.workspace_id)>=policy.max_members THEN
   RAISE EXCEPTION 'Member limit reached' USING ERRCODE='P0003'; END IF;
- IF NOT EXISTS(SELECT 1 FROM public.workspace_members WHERE workspace_id=p.license_workspace_id AND user_id=inv.invited_by AND role='owner')
-   AND NOT EXISTS(SELECT 1 FROM public.workspace_members WHERE workspace_id=p.workspace_id AND user_id=inv.invited_by AND role='owner') THEN
+ IF NOT EXISTS(SELECT 1 FROM public.workspace_members WHERE workspace_id=p.workspace_id AND user_id=inv.invited_by AND role='owner') THEN
   RAISE EXCEPTION 'Invitation is no longer authorized' USING ERRCODE='P0002'; END IF;
  INSERT INTO public.workspace_members(workspace_id,user_id,role) VALUES(inv.workspace_id,a.id,inv.role)
   ON CONFLICT(workspace_id,user_id) DO NOTHING;
@@ -282,6 +281,7 @@ BEGIN
    RAISE EXCEPTION 'Verified successor required' USING ERRCODE='22023'; END IF;
   UPDATE public.workspace_members SET role='owner' WHERE workspace_id=w AND user_id=target;
   UPDATE public.workspace_members SET role='editor' WHERE workspace_id=w AND user_id=a.id;
+  UPDATE public.team_invitations SET canceled_at=clock_timestamp() WHERE workspace_id=w AND invited_by=a.id AND consumed_at IS NULL AND canceled_at IS NULL;
   UPDATE public.analysis_schedules SET updated_by_user_id=target WHERE workspace_id=w;
   INSERT INTO public.team_member_events(workspace_id,actor_id,target_id,action,role) VALUES(w,a.id,target,'ownership','owner');
  ELSE
@@ -297,6 +297,8 @@ BEGIN
      WHERE workspace_id=w AND assignee_id=target AND deleted_at IS NULL RETURNING * LOOP
     INSERT INTO public.team_task_history(workspace_id,task_id,actor_id,actor_name,action,fields,version)
      VALUES(w,task.id,a.id,a.name,'unassigned',ARRAY['assigneeId'],task.version);
+    DELETE FROM public.team_task_history WHERE workspace_id=w AND task_id=task.id AND id NOT IN
+     (SELECT id FROM public.team_task_history WHERE workspace_id=w AND task_id=task.id ORDER BY created_at DESC,id DESC LIMIT 50);
    END LOOP;
    INSERT INTO public.team_member_events(workspace_id,actor_id,target_id,action) VALUES(w,a.id,target,CASE WHEN action='leave' THEN 'left' ELSE 'removed' END);
   END IF;
@@ -322,7 +324,7 @@ CREATE FUNCTION public.team_task_write(w uuid,task_id uuid,expected integer,payl
 DECLARE p public.team_projects:=public._team_guard(w,'write'); a public.auth_users:=public._team_actor(); task public.team_tasks;
  policy public.team_policy; title text; body text; status text; assigned text; fields text[]; fresh boolean;
 BEGIN
- IF task_id IS NULL OR payload IS NULL OR jsonb_typeof(payload)<>'object' OR EXISTS(SELECT 1 FROM jsonb_object_keys(payload) k WHERE k NOT IN ('title','description','status','assigneeId')) THEN
+ IF task_id IS NULL OR expected IS NULL OR expected<0 OR remove IS NULL OR payload IS NULL OR jsonb_typeof(payload)<>'object' OR EXISTS(SELECT 1 FROM jsonb_object_keys(payload) k WHERE k NOT IN ('title','description','status','assigneeId')) THEN
   RAISE EXCEPTION 'Invalid task' USING ERRCODE='22023'; END IF;
  SELECT * INTO task FROM public.team_tasks WHERE workspace_id=w AND id=task_id FOR UPDATE;
  fresh:=NOT FOUND;
@@ -332,6 +334,10 @@ BEGIN
   -- Total rows are bounded as well as visible tasks; deletion cannot amplify storage.
   IF (SELECT count(*) FROM public.team_tasks WHERE workspace_id=w)>=policy.max_tasks THEN RAISE EXCEPTION 'Task limit reached' USING ERRCODE='P0003'; END IF;
  ELSIF task.deleted_at IS NOT NULL THEN RAISE EXCEPTION 'Task not found' USING ERRCODE='P0002';
+ ELSIF expected=0 AND task.created_by=a.id AND NOT remove AND task.version=1 AND task.title=payload->>'title'
+   AND task.description=coalesce(payload->>'description','') AND task.status=coalesce(payload->>'status','todo')
+   AND task.assignee_id IS NOT DISTINCT FROM payload->>'assigneeId' THEN
+  RETURN jsonb_build_object('id',task.id,'version',task.version);
  ELSIF expected IS DISTINCT FROM task.version THEN RAISE EXCEPTION 'Task changed; reload before saving' USING ERRCODE='40001'; END IF;
  title:=CASE WHEN payload?'title' THEN btrim(payload->>'title') ELSE task.title END;
  body:=CASE WHEN payload?'description' THEN payload->>'description' ELSE coalesce(task.description,'') END;
@@ -367,6 +373,33 @@ BEGIN
   SELECT actor_name AS "actorName",action,fields,version,created_at AS "createdAt" FROM public.team_task_history
    WHERE workspace_id=w AND task_id=t ORDER BY created_at DESC,id DESC LIMIT 50
  ) x; RETURN result;
+END $$;
+
+CREATE FUNCTION public.team_task_get(w uuid,t uuid) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE p public.team_projects:=public._team_guard(w); result jsonb;
+BEGIN
+ SELECT jsonb_build_object('id',task.id,'title',task.title,'description',task.description,'status',task.status,
+  'createdBy',task.created_by,'creatorName',task.creator_name,'assigneeId',task.assignee_id,'assigneeName',a.name,
+  'version',task.version,'createdAt',task.created_at,'updatedAt',task.updated_at) INTO result
+ FROM public.team_tasks task LEFT JOIN public.auth_users a ON a.id=task.assignee_id
+ WHERE task.workspace_id=w AND task.id=t AND task.deleted_at IS NULL;
+ IF result IS NULL THEN RAISE EXCEPTION 'Task not found' USING ERRCODE='P0002'; END IF;
+ RETURN result;
+END $$;
+
+CREATE FUNCTION public.team_invitation_preview(digest text) RETURNS jsonb
+ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE a public.auth_users:=public._team_actor(); inv public.team_invitations; result jsonb;
+BEGIN
+ SELECT * INTO inv FROM public.team_invitations WHERE token_hash=digest AND email=a.email;
+ IF NOT FOUND OR inv.canceled_at IS NOT NULL OR inv.expires_at<=clock_timestamp() OR inv.consumed_at IS NOT NULL THEN
+  RAISE EXCEPTION 'Invitation unavailable' USING ERRCODE='P0002'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.workspace_members WHERE workspace_id=inv.workspace_id AND user_id=inv.invited_by AND role='owner') THEN
+  RAISE EXCEPTION 'Invitation unavailable' USING ERRCODE='P0002'; END IF;
+ SELECT jsonb_build_object('projectName',w.name,'invitedBy',u.name,'role',inv.role,'expiresAt',inv.expires_at)
+  INTO result FROM public.workspaces w LEFT JOIN public.auth_users u ON u.id=inv.invited_by WHERE w.id=inv.workspace_id;
+ RETURN result;
 END $$;
 
 CREATE FUNCTION public.team_license_snapshots(w uuid) RETURNS jsonb

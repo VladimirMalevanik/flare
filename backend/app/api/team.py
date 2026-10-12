@@ -71,6 +71,10 @@ class InvitationAccept(StrictModel):
     accept: Literal[True]
 
 
+class InvitationToken(StrictModel):
+    token: str = Field(pattern=r'^[A-Za-z0-9_-]{43}$')
+
+
 class MembershipChange(StrictModel):
     action: Literal['remove', 'leave', 'role', 'transfer']
     role: Literal['editor', 'viewer'] | None = None
@@ -162,6 +166,11 @@ def accept_invite(payload: InvitationAccept, request: Request, user: Annotated[A
     return invoke(service(request, user), 'accept', sha256(payload.token.encode()).hexdigest())
 
 
+@router.post('/invitations/preview')
+def preview_invite(payload: InvitationToken, request: Request, user: Annotated[AuthenticatedUser, Depends(verified_user)]):
+    return invoke(service(request, user), 'preview', sha256(payload.token.encode()).hexdigest())
+
+
 @router.post('/verify-email')
 def verify_team_email(request: Request, user: Annotated[AuthenticatedUser, Depends(verified_user)]):
     svc = service(request, user)
@@ -206,3 +215,8 @@ def write_task(workspace_id: UUID, payload: TaskWrite, request: Request, user: A
 @router.get('/projects/{workspace_id}/tasks/{task_id}/history')
 def history(workspace_id: UUID, task_id: UUID, request: Request, user: Annotated[AuthenticatedUser, Depends(verified_user)]):
     return invoke(service(request, user), 'history', workspace_id, task_id)
+
+
+@router.get('/projects/{workspace_id}/tasks/{task_id}')
+def get_task(workspace_id: UUID, task_id: UUID, request: Request, user: Annotated[AuthenticatedUser, Depends(verified_user)]):
+    return invoke(service(request, user), 'task_get', workspace_id, task_id)

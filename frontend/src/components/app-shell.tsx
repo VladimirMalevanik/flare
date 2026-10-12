@@ -59,7 +59,7 @@ function Shell({ children }: { children: ReactNode }) {
   const sidebar = (
     <>
       <div>
-        <Link href="/insights" className="brand">
+        <Link href={projectHref("/insights")} className="brand">
           <span className="brand-mark">
             <BrandMark size={32} />
           </span>
@@ -108,7 +108,7 @@ function Shell({ children }: { children: ReactNode }) {
           />
         </label>
         <div className="profile-row">
-          <Link href="/settings" className="profile" onClick={() => setDrawer(false)}>
+          <Link href={projectHref("/settings")} className="profile" onClick={() => setDrawer(false)}>
             <span className="avatar">{initials}</span>
             <span className="profile-copy">
               {profile.name || t("unnamedProfile")}
@@ -116,7 +116,7 @@ function Shell({ children }: { children: ReactNode }) {
             </span>
           </Link>
           <Link
-            href="/settings"
+            href={projectHref("/settings")}
             className="button icon-button profile-settings"
             aria-label={t("settings")}
             title={t("settings")}

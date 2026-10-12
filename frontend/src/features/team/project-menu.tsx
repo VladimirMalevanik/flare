@@ -11,6 +11,7 @@ export function ProjectMenu() {
   const session = useSession();
   const { locale } = useI18n();
   const es = locale === "es";
+  const copy = (en: string, spanish: string) => es ? spanish : en;
   const [data, setData] = useState<ProjectsResponse | null>(null);
   const [create, setCreate] = useState(false);
   const [name, setName] = useState("");
@@ -43,24 +44,24 @@ export function ProjectMenu() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not create project."); setBusy(false); }
   }
   return <div className="team-project-menu">
-    <Select value={value} aria-label={es ? "Proyecto actual" : "Current project"} onValueChange={choose}
-      options={[...data.projects.map(p => ({ value:p.id, label:p.name, description:p.kind === "team" ? (es ? "Proyecto de equipo" : "Team project") : (es ? "Personal" : "Personal") })),
-        { value:"create", label:es ? "Crear proyecto" : "Create project", description:data.capability.canCreate ? "Team" : (es ? "Requiere Team" : "Requires Team") }]}/>
-    {create && <Dialog title={es ? "Crear proyecto de equipo" : "Create team project"} onClose={() => { if (!busy) setCreate(false); }} className="team-dialog">
-      <h2>{es ? "Crear proyecto de equipo" : "Create team project"}</h2>
-      <p>{es ? "Un espacio vacío para tu equipo. Tus notas personales se mantienen privadas." : "An empty home for your team. Your personal notes stay private."}</p>
+    <Select value={value} aria-label={copy("Current project", "Proyecto actual")} onValueChange={choose}
+      options={[...data.projects.map(p => ({ value:p.id, label:p.name, description:p.kind === "team" ? (copy("Team project", "Proyecto de equipo")) : (copy("Personal", "Personal")) })),
+        { value:"create", label:copy("Create project", "Crear proyecto"), description:data.capability.canCreate ? "Team" : (copy("Requires Team", "Requiere Team")) }]}/>
+    {create && <Dialog title={copy("Create team project", "Crear proyecto de equipo")} onClose={() => { if (!busy) setCreate(false); }} className="team-dialog">
+      <h2>{copy("Create team project", "Crear proyecto de equipo")}</h2>
+      <p>{copy("An empty home for your team. Your personal notes stay private.", "Un espacio vacío para tu equipo. Tus notas personales se mantienen privadas.")}</p>
       {data.capability.canCreate ? <form onSubmit={e => { e.preventDefault(); void save(); }}>
-        <label className="team-field">{es ? "Nombre del proyecto" : "Project name"}<input autoFocus value={name} maxLength={100} onChange={e => setName(e.target.value)} required disabled={busy}/></label>
-        <p className="muted">{data.capability.limits.members} {es ? "miembros, propietario incluido" : "members, including the owner"}</p>
+        <label className="team-field">{copy("Project name", "Nombre del proyecto")}<input autoFocus value={name} maxLength={100} onChange={e => setName(e.target.value)} required disabled={busy}/></label>
+        <p className="muted">{data.capability.limits.members} {copy("members, including the owner", "miembros, propietario incluido")}</p>
         {error && <p role="alert" className="team-error">{error}</p>}
-        <div className="team-actions"><button type="button" className="button" disabled={busy} onClick={() => setCreate(false)}>{es ? "Cancelar" : "Cancel"}</button>
-          <button className="button primary" disabled={busy || !name.trim()}>{busy ? (es ? "Creando…" : "Creating…") : (es ? "Crear proyecto" : "Create project")}</button></div>
+        <div className="team-actions"><button type="button" className="button" disabled={busy} onClick={() => setCreate(false)}>{copy("Cancel", "Cancelar")}</button>
+          <button className="button primary" disabled={busy || !name.trim()}>{busy ? (copy("Creating…", "Creando…")) : (copy("Create project", "Crear proyecto"))}</button></div>
       </form> : <>
-        <p>{data.capability.requiresVerification ? (es ? "Confirma tu correo desde la sección Equipo antes de crear un proyecto." : "Verify your email in Team before creating a project.")
-          : data.capability.projectCount >= data.capability.limits.projects ? (es ? "Tu suscripción ha alcanzado el límite de proyectos." : "Your subscription has reached its project limit.")
-          : (es ? "Necesitas una suscripción Team activa para crear un proyecto. Los invitados no necesitan su propia suscripción." : "You need an active Team subscription to create a project. Invited members do not need their own subscription.")}</p>
-        <div className="team-actions"><button className="button" onClick={() => setCreate(false)}>{es ? "Cerrar" : "Close"}</button>
-          <a className="button primary" href="/settings#subscription">{es ? "Ver suscripción" : "View subscription"}</a></div>
+        <p>{data.capability.requiresVerification ? (copy("Verify your email in Team before creating a project.", "Confirma tu correo desde la sección Equipo antes de crear un proyecto."))
+          : data.capability.projectCount >= data.capability.limits.projects ? (copy("Your subscription has reached its project limit.", "Tu suscripción ha alcanzado el límite de proyectos."))
+          : (copy("You need an active Team subscription to create a project. Invited members do not need their own subscription.", "Necesitas una suscripción Team activa para crear un proyecto. Los invitados no necesitan su propia suscripción."))}</p>
+        <div className="team-actions"><button className="button" onClick={() => setCreate(false)}>{copy("Close", "Cerrar")}</button>
+          <a className="button primary" href="/settings#subscription">{copy("View subscription", "Ver suscripción")}</a></div>
       </>}
     </Dialog>}
   </div>;

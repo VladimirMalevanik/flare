@@ -431,6 +431,7 @@ test("public adapter loads the official SDK lazily and shares one controller wit
   const paddle = { Initialized: true, Checkout: { open: (value) => opened.push(value), close() {} } };
   const adapter = load("../src/lib/billing/paddle-sandbox.ts", {
     "./checkout-controller": { createSandboxCheckoutClient },
+    "../team-context": { projectApiUrl: url => url },
     "@/lib/auth/session": { apiBaseUrl: "/api" },
     "./billing-api": { createBillingApi: () => ({ getStatus() {}, createCheckoutIntent: async () => ({
       environment: "sandbox", priceId, quantity: 1, email: user.email,

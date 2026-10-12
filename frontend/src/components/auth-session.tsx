@@ -1,6 +1,7 @@
 "use client";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { apiBaseUrl, type Session } from "@/lib/auth/session";
+import { useI18n } from "@/i18n/provider";
 import { selectedProject } from "@/lib/team-context";
 import { teamRequest, type ProjectsResponse } from "@/features/team/api";
 
@@ -8,6 +9,8 @@ const Context = createContext<Session | null>(null);
 export const useSession = () => useContext(Context);
 
 export function AuthSession({ session, children }: { session: Session | null; children: ReactNode }) {
+  const { locale } = useI18n();
+  const copy = (en: string, es: string) => locale === "es" ? es : en;
   const [selected, setSelected] = useState<Session | null | undefined>(undefined);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -63,7 +66,7 @@ export function AuthSession({ session, children }: { session: Session | null; ch
       window.removeEventListener("pageshow", check);
     };
   }, [session]);
-  if (error) return <main className="page"><h1>Project unavailable</h1><p role="alert">{error}</p><a className="button primary" href="/vault">Return to personal project</a></main>;
-  if (selected === undefined && session) return <main className="page" aria-busy="true"><p role="status">Opening your project…</p></main>;
+  if (error) return <main className="page"><h1>{copy("Project unavailable","Proyecto no disponible")}</h1><p role="alert">{error}</p><a className="button primary" href="/vault">{copy("Return to personal project","Volver al proyecto personal")}</a></main>;
+  if (selected === undefined && session) return <main className="page" aria-busy="true"><p role="status">{copy("Opening your project…","Abriendo tu proyecto…")}</p></main>;
   return <Context.Provider value={selected ?? session}>{children}</Context.Provider>;
 }

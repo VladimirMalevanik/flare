@@ -17,6 +17,9 @@ function load(relative, mocks = {}, globals = {}) {
   const exports = {};
   vm.runInNewContext(code, { exports, Intl, ...globals, require(name) {
     if (name in mocks) return mocks[name];
+      if (name === '@/lib/team-context') return { projectApiUrl: url => url, projectHref: path => path };
+      if (name === '@/features/team/project-menu') return { ProjectMenu: () => null };
+
     if (name === './developer-mail') return { DeveloperMail: () => null };
     if (name === 'react/jsx-runtime') return jsx;
     if (name === 'next/link') return { default: 'a' };
@@ -268,7 +271,7 @@ test('all Capture sizes stay anchored inside every required viewport at centers,
 test('visible JSX strings use i18n apart from legal copy, names, and technical notation', () => {
   const root = path.join(__dirname, '../src');
   const allowed = new Set([
-    'Flare', 'Flares', 'Vault', 'FLARES', 'VAULT', 'VM', 'Velocity Labs', '© 2026 Flare',
+    'Flare', 'Flares', 'Vault', 'Team', 'FLARES', 'VAULT', 'VM', 'Velocity Labs', '© 2026 Flare',
     'URL', 'KB', 'Esc', '⌘K', 'Apple silicon', 'Intel', 'M', 'i', 'DMG · arm64', 'DMG · x64',
     'Europe/Moscow', 'America/Los_Angeles', 'Europe/London', 'Asia/Singapore',
   ]);

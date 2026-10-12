@@ -23,6 +23,8 @@ class TeamService:
             'tasks': 'SELECT public.team_tasks_list(%s,%s,%s) AS result',
             'task': 'SELECT public.team_task_write(%s,%s,%s,%s,%s) AS result',
             'history': 'SELECT public.team_task_history_list(%s,%s) AS result',
+            'task_get': 'SELECT public.team_task_get(%s,%s) AS result',
+            'preview': 'SELECT public.team_invitation_preview(%s) AS result',
             'license': 'SELECT public.team_license_snapshots(%s) AS result',
         }
         with self.database.connection(timeout=3) as connection, connection.transaction():
