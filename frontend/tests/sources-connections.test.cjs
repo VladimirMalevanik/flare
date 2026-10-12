@@ -86,3 +86,13 @@ test('source badge follows live connection and retry status instead of the catal
   assert.equal(sourceConnectionBadge(source, {status:'error',job:{status:'retry_wait'}}).label, 'Waiting for source');
   assert.equal(sourceConnectionBadge(source, {status:'disabled',job:null}).label, 'Not connected');
 });
+
+
+test('cancelled run displays its saved partial counts and preserves the last completed timestamp', () => {
+  const app = harness(); app.props.connection.enabled = true; app.props.connection.status = 'ready';
+  app.props.connection.lastResult = {added: 10, updated: 0, unchanged: 0, skipped: 0, conflicts: 0, more: false};
+  app.props.connection.job = {id: 'j', status: 'cancelled', added: 3, updated: 0, unchanged: 0, skipped: 0, conflicts: 0, more: true};
+  const tree = app.render(); assert.ok(tree.some(node => text(node).includes('Added: 3')));
+  assert.ok(tree.some(node => text(node).includes('Sync cancelled. Context already saved in Vault is kept.')));
+  assert.equal(app.button('Cancel sync'), undefined);
+});

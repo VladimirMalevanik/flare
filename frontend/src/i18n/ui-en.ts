@@ -1,4 +1,12 @@
 export const uiEn = {
+  "Sync cancelled. Context already saved in Vault is kept.": "Sync cancelled. Context already saved in Vault is kept.",
+  "Last completed sync": "Last completed sync",
+  "Always excluded": "Always excluded",
+  "Slack sync excludes direct messages and private channels.": "Slack sync excludes direct messages and private channels.",
+  "Private Slack conversations": "Private Slack conversations",
+  "Choose shared context and manage sync on Sources.": "Choose shared context and manage sync on Sources.",
+  "Source connections": "Source connections",
+  "Manage connections, analytics, and saved workspace data.": "Manage connections, analytics, and saved workspace data.",
   "Selection saved. Sync is paused.": "Selection saved. Sync is paused.",
   "Waiting for source": "Waiting for source",
   "Syncing": "Syncing",

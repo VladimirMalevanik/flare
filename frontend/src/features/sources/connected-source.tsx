@@ -53,14 +53,15 @@ export function ConnectedSource({ provider, connection, available, syncAvailable
   }
   function close() { if (busy) return; dialogEpoch.current++; pending.current?.abort(); pending.current = null; setLoading(false); setOpen(false); }
   function choose() { setSelected(connection?.resources.map(item => item.id) ?? []); setConsent(false); setOpen(true); void loadResources(); }
-  const counts = active ? connection?.job : connection?.lastResult;
+  const counts = connection?.job ?? connection?.lastResult;
   return <div className="github-source-controls">
     <p className="muted meta">{!available ? t("Connection is not enabled yet.") : !connected ? t("Read-only sync of selected context.") : connection?.owner ? connection.accountLabel : t("Managed by a teammate.")}</p>
     {connected && <>
       <p className="muted meta">{active ? t("Syncing selected context…") : connection?.status === "error" ? t("Sync needs attention.") : connection?.enabled ? t(syncAvailable ? "Selected context syncs automatically." : "Selection saved. Sync is paused.") : t("Choose context to start syncing.")}</p>
+      {connection?.job?.status === "cancelled" && <p role="status" className="muted meta">{t("Sync cancelled. Context already saved in Vault is kept.")}</p>}
       {connection?.resources.length ? <div className="tags">{connection.resources.map(item => <span key={item.id}>{item.name}</span>)}</div> : null}
       {counts && <p className="muted meta" role="status">{t("sourceSyncCounts", {added: counts.added, updated: counts.updated, unchanged: counts.unchanged, skipped: counts.skipped, conflicts: counts.conflicts})}{counts.more ? ` ${t("More context will continue in the next batch.")}` : ""}</p>}
-      {connection?.lastSyncAt && <p className="muted meta">{t("Last sync")}: {new Date(connection.lastSyncAt).toLocaleString()}</p>}
+      {connection?.lastSyncAt && <p className="muted meta">{t("Last completed sync")}: {new Date(connection.lastSyncAt).toLocaleString()}</p>}
       {connection?.errorCode && <p role="status" className="error-text">{t(connection.errorCode === "workspace_storage_limit" ? "Workspace storage limit reached. Sync is paused." : connection.errorCode === "authorization_lost" ? "Reconnect this source to restore access." : connection.errorCode === "rate_limited" ? "The source asked us to wait. Check status later." : "Sync needs attention.")}</p>}
       {!syncAvailable && <p className="muted meta">{t("Sync is temporarily unavailable. Your selection is saved.")}</p>}
     </>}

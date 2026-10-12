@@ -1,6 +1,14 @@
 import type { uiEn } from "./ui-en";
 
 export const uiEs = {
+  "Sync cancelled. Context already saved in Vault is kept.": "Sincronización cancelada. El contexto ya guardado en Vault se conserva.",
+  "Last completed sync": "Última sincronización completada",
+  "Always excluded": "Siempre excluidos",
+  "Slack sync excludes direct messages and private channels.": "La sincronización de Slack excluye mensajes directos y canales privados.",
+  "Private Slack conversations": "Conversaciones privadas de Slack",
+  "Choose shared context and manage sync on Sources.": "Elige el contexto compartido y gestiona la sincronización en Fuentes.",
+  "Source connections": "Conexiones de fuentes",
+  "Manage connections, analytics, and saved workspace data.": "Gestiona conexiones, analítica y datos guardados del espacio de trabajo.",
   "Selection saved. Sync is paused.": "Selección guardada. La sincronización está pausada.",
   "Waiting for source": "Esperando a la fuente",
   "Syncing": "Sincronizando",

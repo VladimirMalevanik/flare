@@ -415,22 +415,16 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
       </SettingsSection>
       <SettingsSection
         title={t("Data & Privacy")}
-        subtitle={t("Preferences for future connected sources; no live ingestion is running.")}
+        subtitle={t("Manage connections, analytics, and saved workspace data.")}
         icon="settings"
       >
         <AnalyticsPreferences compact />
         <AcquisitionPreferences account />
-        <SettingRow
-          title={t("Exclude direct messages and private channels")}
-          description={t("Keep connected context scoped to public team conversations.")}
-        >
-          <input
-            type="checkbox"
-            className="switch"
-            aria-label={t("Exclude private channels")}
-            checked={settings.privateChannels}
-            onChange={(e) => update("privateChannels", e.target.checked)}
-          />
+        <SettingRow title={t("Source connections")} description={t("Choose shared context and manage sync on Sources.")}>
+          <Link className="button" href="/sources">{t("Open Sources")}</Link>
+        </SettingRow>
+        <SettingRow title={t("Private Slack conversations")} description={t("Slack sync excludes direct messages and private channels.")}>
+          <span className="badge">{t("Always excluded")}</span>
         </SettingRow>
         <SettingRow
           title={t("Workspace data retention")}

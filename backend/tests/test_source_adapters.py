@@ -301,3 +301,10 @@ def test_invalid_unicode_is_a_redacted_provider_error():
     from app.integrations.sources.http import plain_text
     with pytest.raises(SourceProviderError) as error: plain_text('\ud800',maximum=100)
     assert error.value.code=='invalid_provider_response'
+
+
+@pytest.mark.parametrize('code,expected',[('ratelimited','rate_limited'),('internal_error','provider_unavailable'),('channel_not_found','resource_unavailable')])
+def test_slack_transient_errors_do_not_silently_skip_selected_context(source_settings,code,expected):
+    reader=fixture_reader(source_settings,'slack',lambda r:httpx.Response(200,json={'ok':False,'error':code}))
+    with pytest.raises(SourceProviderError) as error: reader.resources()
+    assert error.value.code==expected

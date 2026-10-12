@@ -81,8 +81,11 @@ class SlackReader(Reader):
         value=obj(self.get('https://slack.com/api/'+method,params).json())
         if value.get('ok') is not True:
             code=value.get('error')
-            if code in ('invalid_auth','token_revoked','token_expired','missing_scope','not_allowed_token_type'):
+            if code in ('invalid_auth','token_revoked','token_expired','missing_scope','not_allowed_token_type','not_authed','account_inactive'):
                 raise SourceProviderError('authorization_lost',reconnect=True)
+            if code=='ratelimited': raise SourceProviderError('rate_limited',retry_after=60)
+            if code not in ('channel_not_found','thread_not_found','access_denied','no_permission','not_in_channel'):
+                raise SourceProviderError('provider_unavailable',retry_after=60)
             raise SourceProviderError('resource_unavailable')
         return value
     def resources(self,cursor=None):
