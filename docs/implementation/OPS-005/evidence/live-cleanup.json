@@ -1,0 +1,28 @@
+{
+  "checkedAt": 1791738226.166419,
+  "currentReleaseVerified": true,
+  "databaseCredentialsAccessed": false,
+  "evidenceKind": "scoped_committed_cleanup_kudu_log",
+  "logBytesRead": 128887,
+  "logFilesScanned": 6,
+  "noRawLogsOutput": true,
+  "notDatabasePayloadCount": true,
+  "notFreshRuntimeProof": true,
+  "objectRef": "9cca1f8cb3a78bb6ed45d6e7bcb3691783d29bcc2982984fcaba3e2dacb68345",
+  "packageCreatedAt": 1791738025.390095,
+  "packageRef": "5318779464b72978035a371ae2bd26a146e7bf3701768180efd0b6ad4e663563",
+  "packageStatus": "duplicate",
+  "passed": true,
+  "priorRuntimeEvidenceCheckedAt": 1791736350.9202373,
+  "priorRuntimeSourceVerified": true,
+  "readOnly": true,
+  "receiptCount": 1,
+  "receiptObserved": true,
+  "receiptTimestampEpochs": [
+    1791738028.141393
+  ],
+  "referenceEvidenceSha256": "3ddc7ee9fc02b069969630b1f15cfa871afbf999b4d554ddfedbb821b8dffe31",
+  "sourceSha": "d109c094d6dbb8a77dd200020d16f3f07d626665",
+  "transportCallerSha256": "b2f8b8320d13a5c629161579fcd5d5c25bba7b1882b336d98a416c18708e5fbc",
+  "workerRuntimeEvidenceSha256": "bb9ad4fd79cad4e3ad0678e8919192dd5da0d43f86f2ba5cf10eb3144871f794"
+}

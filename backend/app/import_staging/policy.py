@@ -45,6 +45,33 @@ class ImportPolicy:
         if self.attempts > 10 or self.report_page > 100 or self.chunk_bytes > self.file_bytes:
             raise ValueError("Invalid import policy bounds")
 
+    def validate_postgres(self):
+        """OPS-005 ceilings for the existing shared B1/PG17 deployment.
+
+        Operators must still supply every field explicitly. These ceilings prevent
+        a settings typo from removing the bounds measured for this staging tier.
+        SQL independently caps live reserved bytes and rolling upload admissions.
+        """
+        ceilings = {
+            'compressed_bytes': 8_388_608, 'expanded_bytes': 25_165_824,
+            'entries': 500, 'directory_bytes': 1_000_000,
+            'manifest_bytes': 2_000_000, 'file_bytes': 200_000,
+            'path_bytes': 1_024, 'segment_bytes': 255, 'path_depth': 32,
+            'expansion_ratio': 500, 'csv_rows': 20_000,
+            'csv_field_bytes': 100_000, 'csv_row_bytes': 200_000,
+            'chunks_file': 2_000, 'chunks_package': 10_000, 'chunk_bytes': 4_000,
+            'upload_seconds': 120, 'inspect_seconds': 15, 'file_seconds': 15,
+            'job_seconds': 180, 'cpu_seconds': 60,
+            'memory_bytes': 268_435_456, 'scratch_bytes': 67_108_864,
+            'staged_quota_bytes': 16_777_216, 'source_quota_bytes': 67_108_864,
+            'workspace_concurrency': 1, 'global_concurrency': 1, 'attempts': 3,
+            'lease_seconds': 60, 'backoff_seconds': 5,
+            'staging_seconds': 3_600, 'cleanup_seconds': 3_600, 'report_page': 100,
+        }
+        for name, maximum in ceilings.items():
+            if getattr(self, name) > maximum:
+                raise ValueError(f"PostgreSQL staging policy exceeds OPS-005 {name} ceiling")
+
     @classmethod
     def from_environment(cls, *, production: bool = False):
         values = {}

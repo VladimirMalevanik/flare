@@ -18,6 +18,8 @@ class Settings:
     cors_origins: list[str]
     environment: str = "production"
     import_staging_root: str | None = None
+    import_enabled: bool = False
+    import_storage_provider: str | None = None
     # Persistent sign-in has a fixed 30-day ceiling; activity never extends it.
     session_lifetime_seconds: int = 2_592_000
     session_idle_seconds: int = 2_592_000
@@ -65,6 +67,10 @@ class Settings:
             raise RuntimeError("PADDLE_PRO_PRICE_ID is invalid")
         if self.environment not in {"production", "development", "test"}:
             raise RuntimeError("FLARE_ENV must be production, development or test")
+        if self.import_storage_provider not in {None, "postgres"}:
+            raise RuntimeError("FLARE_IMPORT_STORAGE_PROVIDER must be postgres")
+        if self.import_enabled and (self.import_storage_provider != "postgres" or not self.database_url):
+            raise RuntimeError("ZIP import requires PostgreSQL staging and DATABASE_URL")
         if self.dev_mode and self.environment == "production":
             raise RuntimeError("Production cannot enable development identity")
         if not 0 < self.session_idle_seconds <= self.session_lifetime_seconds:
@@ -158,6 +164,8 @@ def load_settings() -> Settings:
     environment = os.getenv("FLARE_ENV", "production")
     configured = Settings(
         import_staging_root=os.getenv("FLARE_IMPORT_STAGING_ROOT"),
+        import_enabled=_optional_bool("FLARE_IMPORT_ENABLED") or False,
+        import_storage_provider=os.getenv("FLARE_IMPORT_STORAGE_PROVIDER") or None,
         database_url=os.getenv("DATABASE_URL"),
         environment=environment,
         session_lifetime_seconds=int(os.getenv("SESSION_LIFETIME_SECONDS", "2592000")),

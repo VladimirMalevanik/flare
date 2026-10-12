@@ -7,6 +7,7 @@ from uuid import UUID
 
 import psycopg
 
+from app.models.database import CURRENT_SCHEMA_REVISION
 
 WORKSPACE_ID = UUID("00000000-0000-4000-8000-000000000015")
 USER_ID = "auth:00000000-0000-4000-8000-000000000015"
@@ -85,7 +86,7 @@ def main() -> None:
                 )
             return
 
-        assert revision == ("0021",), revision
+        assert revision == (CURRENT_SCHEMA_REVISION,), revision
         quotas = connection.execute(
             """SELECT q.local_date::text,q.mode,q.scheduled_for,q.created_at
                  FROM public.analysis_daily_quotas q
@@ -115,7 +116,7 @@ def main() -> None:
         connection.execute(
             "DELETE FROM public.workspaces WHERE id=%s", (WORKSPACE_ID,)
         )
-        print("PASS: 0014 -> 0021; legacy analysis run consumed its UTC daily slot")
+        print(f"PASS: 0014 -> {CURRENT_SCHEMA_REVISION}; legacy analysis run consumed its UTC daily slot")
 
 
 if __name__ == "__main__":

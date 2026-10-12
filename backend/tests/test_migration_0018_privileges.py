@@ -7,6 +7,7 @@ import psycopg
 import pytest
 from psycopg import sql
 
+from app.models.database import CURRENT_SCHEMA_REVISION
 from test_analysis_jobs import admin_url
 from test_yandex_migrations import load_migration
 
@@ -32,7 +33,7 @@ def test_0018_upgrade_does_not_require_executor_create_on_public(admin_url, monk
         try:
             assert connection.execute(
                 "SELECT version_num FROM public.alembic_version"
-            ).fetchone() == ("0021",)
+            ).fetchone() == (CURRENT_SCHEMA_REVISION,)
 
             admin_role, is_superuser = connection.execute(
                 "SELECT current_user, rolsuper FROM pg_roles WHERE rolname = current_user"

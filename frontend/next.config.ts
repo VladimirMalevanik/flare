@@ -58,6 +58,9 @@ const nextConfig: NextConfig = {
   turbopack: { root: __dirname },
   agentRules: false,
   poweredByHeader: false,
+  // ZIP streaming is bounded at 120s in the API, plus short claim/seal/abort
+  // transactions. Keep the same-origin rewrite alive within Azure's 240s limit.
+  experimental: { proxyTimeout: 150_000 },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
