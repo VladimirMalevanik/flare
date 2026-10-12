@@ -308,3 +308,15 @@ def test_slack_transient_errors_do_not_silently_skip_selected_context(source_set
     reader=fixture_reader(source_settings,'slack',lambda r:httpx.Response(200,json={'ok':False,'error':code}))
     with pytest.raises(SourceProviderError) as error: reader.resources()
     assert error.value.code==expected
+
+
+def test_remote_titles_get_editable_portable_file_names():
+    from app.integrations.sources.contracts import SourceDocument
+    from app.services.import_service import ImportService
+    job={'provider':'drive','connection_id':'c1'}
+    result=SourceProcessor.prepare(SourceDocument('account:file','Folder\\Notes/Feedback:\nUpdate','Context'),job)
+    name=result['metadata']['fileName']
+    assert not any(ch in name for ch in ('\\','/','\n',':'))
+    # Vault's existing text-file editing path accepts the generated name.
+    prepared=ImportService.prepare_content(format='txt',file_name=name,file_type='text/plain',file_size=7,content='Context')
+    assert prepared.content=='Context'

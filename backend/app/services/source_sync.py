@@ -2,6 +2,7 @@
 from dataclasses import replace
 from hashlib import sha256
 import json
+import re
 import secrets
 import time
 from uuid import uuid4
@@ -144,7 +145,7 @@ class SourceProcessor:
         raw=document.content.encode('utf-8')
         prepared=ImportService.prepare_content(format='txt',file_name='source.txt',file_type='text/plain',file_size=len(raw),content=document.content)
         title=('['+job['provider'].title()+'] '+document.title)[:300]
-        metadata=document.metadata|{'sourceType':'file','fileName':title.replace('/','-')+'.txt','fileType':'text/plain',
+        metadata=document.metadata|{'sourceType':'file','fileName':re.sub(r'[\x00-\x1f\x7f/\\<>:"|?*]', '-', title)[:240].strip()+'.txt','fileType':'text/plain',
             'fileSize':len(raw),'sourceProvider':job['provider'],'sourceConnectionId':job['connection_id'],'externalId':document.external_id}
         hash_value=sha256(json.dumps([title,prepared.content,document.source_url,metadata],ensure_ascii=False,sort_keys=True).encode()).hexdigest()
         return {'externalId':document.external_id,'title':title,'url':document.source_url,'hash':hash_value,'contentHash':prepared.content_hash,
