@@ -1,6 +1,9 @@
 import type { uiEn } from "./ui-en";
 
 export const uiEs = {
+  "Selection saved. Sync is paused.": "Selección guardada. La sincronización está pausada.",
+  "Waiting for source": "Esperando a la fuente",
+  "Syncing": "Sincronizando",
 
   "Connect": "Conectar",
   "Close": "Cerrar",

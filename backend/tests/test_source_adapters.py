@@ -277,3 +277,21 @@ def test_github_mints_repository_only_read_token(source_settings,monkeypatch):
     from types import SimpleNamespace
     result=github_access({'account_id':'a','installation_id':9001,'repository_id':101},SimpleNamespace(validate=lambda:None),ProviderHTTP(source_settings,transport=httpx.MockTransport(send)))
     assert result['access_token']=='synthetic-repository-token'
+
+
+def test_slack_continues_by_time_bounds_without_expiring_history_cursor(source_settings):
+    histories=[]
+    def send(request):
+        method=request.url.path.split('/')[-1]
+        if method=='conversations.info': return httpx.Response(200,json={'ok':True,'channel':{'id':'C1','name':'product','is_member':True}})
+        if method=='conversations.history':
+            histories.append(request.url.params)
+            return httpx.Response(200,json={'ok':True,'messages':[{'ts':'123.000001','text':'Feedback','user':'U1','reply_count':1}],'has_more':len(histories)==1,'response_metadata':{'next_cursor':'would-expire'} if len(histories)==1 else {}})
+        if method=='conversations.replies':return httpx.Response(200,json={'ok':True,'messages':[],'has_more':False})
+        return httpx.Response(200,json={'ok':True,'permalink':'https://example.slack.com/archives/C1/p123'})
+    reader=fixture_reader(source_settings,'slack',send)
+    page=reader.documents({'id':'C1','name':'#product'})
+    reply=reader.documents({'id':'C1','name':'#product'},page.cursor)
+    assert reply.cursor is not None
+    reader.documents({'id':'C1','name':'#product'},reply.cursor)
+    assert histories[1]['latest']=='123.000001' and histories[1]['oldest']==histories[0]['oldest'] and 'cursor' not in histories[1]

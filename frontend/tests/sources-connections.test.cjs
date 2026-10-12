@@ -75,3 +75,14 @@ test('connection decoder exposes only known public fields and rejects unsafe cap
   assert.throws(() => componentModule.mapSourceConnections({providers:[{provider:'unknown',available:true,syncAvailable:true}],connections:[]}));
   assert.throws(() => componentModule.mapSourceConnections({providers:[],connections:[{...conn,status:'pretend-success'}]}));
 });
+
+
+test('source badge follows live connection and retry status instead of the catalog', () => {
+  const { sourceConnectionBadge } = load('../src/features/sources/sources-page.tsx', {
+    react: {}, 'next/link': {}, './connected-source': {}, './zip-import': {}, '@/i18n/provider': {}, '@/lib/data': {}, '@/components/icons': {}, '@/components/select': {}, '@/components/workspace-context': {},
+  });
+  const source = { status: 'disconnected' };
+  assert.equal(sourceConnectionBadge(source, {status:'ready',job:null}).label, 'Connected');
+  assert.equal(sourceConnectionBadge(source, {status:'error',job:{status:'retry_wait'}}).label, 'Waiting for source');
+  assert.equal(sourceConnectionBadge(source, {status:'disabled',job:null}).label, 'Not connected');
+});

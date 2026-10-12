@@ -99,24 +99,33 @@ class SlackReader(Reader):
         threads=cursor.get('threads',[])
         if not isinstance(threads,list) or len(threads)>15: raise SourceProviderError('invalid_provider_response')
         params={'channel':channel,'limit':self.settings.page_items}
+        snapshot=cursor.get('snapshot') or str(time.time())
+        oldest=cursor.get('oldest') or str(time.time()-self.settings.lookback_days*86400)
+        latest=cursor.get('latest') or snapshot
         if threads:
-            params['ts']=threads[0]
-            if cursor.get('reply'): params['cursor']=cursor['reply']
+            params.update(ts=threads[0],latest=snapshot)
+            if cursor.get('replyAfter'): params['oldest']=cursor['replyAfter']
             value=self.api('conversations.replies',params)
-            pending=next_cursor(obj(value.get('response_metadata',{})).get('next_cursor'))
-            if value.get('has_more') and not pending: raise SourceProviderError('invalid_provider_response')
-            following={'threads':threads if pending else threads[1:],'reply':pending,'history':cursor.get('history'),'historyDone':cursor.get('historyDone',False),'latest':cursor.get('latest')}
         else:
-            params['oldest']=str(time.time()-self.settings.lookback_days*86400)
-            latest=cursor.get('latest') or str(time.time()); params['latest']=latest
-            if cursor.get('history'): params['cursor']=cursor['history']
+            params.update(oldest=oldest,latest=latest)
             value=self.api('conversations.history',params)
-            pending=next_cursor(obj(value.get('response_metadata',{})).get('next_cursor'))
-            if value.get('has_more') and not pending: raise SourceProviderError('invalid_provider_response')
-            messages=rows(value,'messages',15)
-            following={'threads':[identifier(x['ts']) for x in messages if x.get('reply_count',0)>0 and x.get('ts')],'history':pending,'historyDone':not pending,'latest':latest}
+        messages=rows(value,'messages',15)
+        pending=bool(value.get('has_more')) or bool(next_cursor(obj(value.get('response_metadata',{})).get('next_cursor')))
+        # Timestamp bounds survive pauses between batches; opaque Slack cursors
+        # may expire while the commercially limited reader waits on threads.
+        boundary=identifier(messages[-1].get('ts')) if messages else None
+        if pending and (not boundary or not re.fullmatch(r"[0-9]{1,12}\.[0-9]{1,12}",boundary)):
+            raise SourceProviderError('invalid_provider_response')
+        if pending and (threads and cursor.get('replyAfter') and float(boundary)<=float(cursor['replyAfter']) or not threads and float(boundary)>=float(latest)):
+            raise SourceProviderError('invalid_provider_response')
+        if threads:
+            following={'threads':threads if pending else threads[1:], 'replyAfter':boundary if pending else None,
+                       'historyDone':cursor.get('historyDone',False),'latest':latest,'oldest':oldest,'snapshot':snapshot}
+        else:
+            following={'threads':[identifier(x['ts']) for x in messages if x.get('reply_count',0)>0 and x.get('ts')],
+                       'historyDone':not pending,'latest':boundary if pending else latest,'oldest':oldest,'snapshot':snapshot}
         docs=[]; skipped=0
-        for row in rows(value,'messages',15):
+        for row in messages:
             if not row.get('text','').strip() or row.get('subtype') in ('channel_join','channel_leave','message_deleted'):
                 skipped+=1; continue
             ts=identifier(row.get('ts'))

@@ -1,4 +1,7 @@
 export const uiEn = {
+  "Selection saved. Sync is paused.": "Selection saved. Sync is paused.",
+  "Waiting for source": "Waiting for source",
+  "Syncing": "Syncing",
 
   "Connect": "Connect",
   "Close": "Close",

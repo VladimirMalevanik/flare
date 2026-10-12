@@ -57,7 +57,7 @@ export function ConnectedSource({ provider, connection, available, syncAvailable
   return <div className="github-source-controls">
     <p className="muted meta">{!available ? t("Connection is not enabled yet.") : !connected ? t("Read-only sync of selected context.") : connection?.owner ? connection.accountLabel : t("Managed by a teammate.")}</p>
     {connected && <>
-      <p className="muted meta">{active ? t("Syncing selected context…") : connection?.status === "error" ? t("Sync needs attention.") : connection?.enabled ? t("Selected context syncs automatically.") : t("Choose context to start syncing.")}</p>
+      <p className="muted meta">{active ? t("Syncing selected context…") : connection?.status === "error" ? t("Sync needs attention.") : connection?.enabled ? t(syncAvailable ? "Selected context syncs automatically." : "Selection saved. Sync is paused.") : t("Choose context to start syncing.")}</p>
       {connection?.resources.length ? <div className="tags">{connection.resources.map(item => <span key={item.id}>{item.name}</span>)}</div> : null}
       {counts && <p className="muted meta" role="status">{t("sourceSyncCounts", {added: counts.added, updated: counts.updated, unchanged: counts.unchanged, skipped: counts.skipped, conflicts: counts.conflicts})}{counts.more ? ` ${t("More context will continue in the next batch.")}` : ""}</p>}
       {connection?.lastSyncAt && <p className="muted meta">{t("Last sync")}: {new Date(connection.lastSyncAt).toLocaleString()}</p>}
@@ -81,13 +81,13 @@ export function ConnectedSource({ provider, connection, available, syncAvailable
       <header className="zip-dialog-header"><div><p className="eyebrow">{label(provider === "drive" ? "Google Drive" : provider === "github" ? "GitHub" : provider === "gmail" ? "Gmail" : provider === "notion" ? "Notion" : "Slack")}</p><h2>{t("Choose context")}</h2></div><button className="icon-button" type="button" disabled={busy} aria-label={t("Close")} onClick={close}><Icon name="close" /></button></header>
       <p className="muted">{t("Only your selection is copied into this workspace. Up to 20 sources.")}</p>
       <div style={{ maxHeight: "40vh", overflowY: "auto" }}>
-        {resources.map(resource => <label className="setting-row" key={resource.id} style={{ display: "flex", gap: 12, padding: "12px 0" }}>
-          <input type="checkbox" checked={selected.includes(resource.id)} disabled={busy || !selected.includes(resource.id) && selected.length >= 20} onChange={event => setSelected(previous => event.target.checked ? [...previous, resource.id] : previous.filter(id => id !== resource.id))} /><span style={{ overflowWrap: "anywhere" }}>{resource.name}</span>
+        {resources.map(resource => <label className="setting-row" key={resource.id} style={{ display: "flex", justifyContent: "flex-start", gap: 12, padding: "12px 0" }}>
+          <input type="checkbox" style={{ width: 18, height: 18, flexShrink: 0, margin: 0 }} checked={selected.includes(resource.id)} disabled={busy || !selected.includes(resource.id) && selected.length >= 20} onChange={event => setSelected(previous => event.target.checked ? [...previous, resource.id] : previous.filter(id => id !== resource.id))} /><span style={{ overflowWrap: "anywhere" }}>{resource.name}</span>
         </label>)}
       </div>
       {loading ? <p className="muted" role="status">{t("Loading context…")}</p> : resources.length === 0 ? <p className="muted">{t("No accessible context found.")}</p> : null}
       {cursor && <button type="button" className="button" disabled={loading || busy} onClick={() => void loadResources(cursor)}>{t("Load more")}</button>}
-      <label className="setting-row" style={{ display: "flex", gap: 12, padding: "16px 0" }}><input type="checkbox" checked={consent} disabled={busy} onChange={event => setConsent(event.target.checked)} /><span>{t("I agree to share the selected content with everyone in this workspace, including after disconnecting.")}</span></label>
+      <label className="setting-row" style={{ display: "flex", justifyContent: "flex-start", gap: 12, padding: "16px 0" }}><input type="checkbox" style={{ width: 18, height: 18, flexShrink: 0, margin: 0 }} checked={consent} disabled={busy} onChange={event => setConsent(event.target.checked)} /><span>{t("I agree to share the selected content with everyone in this workspace, including after disconnecting.")}</span></label>
       <p className="muted meta">{t("Sync saves context. Analysis follows your workspace schedule.")}</p>
       {error && <p className="error-text" role="alert">{message(error)}</p>}
       <button type="button" className="button primary" disabled={busy || loading || !revision || selected.length > 0 && !consent} onClick={() => { if (!connection) return; void action(async signal => { await dataProvider.selectSourceResources(connection.id, revision, selected, consent, signal); setOpen(false); }); }}>{busy ? t("Saving…") : t("Save selection")}</button>
