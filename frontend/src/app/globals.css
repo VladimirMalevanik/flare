@@ -1162,6 +1162,10 @@ blockquote {
   margin: 0;
   text-wrap: pretty;
 }
+.settings-section [data-analytics-choice] {
+  display: grid;
+  gap: 10px;
+}
 .settings-section > [data-preferences] button {
   max-width: 100%;
   white-space: normal;
@@ -1555,9 +1559,11 @@ blockquote {
 }
 .schedule-actions {
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
 }
 .schedule-actions p {
+  flex: 1 1 240px;
   margin-right: auto;
 }
 .import-guide-steps {
