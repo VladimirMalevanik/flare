@@ -60,6 +60,7 @@ TENANT_TABLES = (
     "scheduled_analysis_notifications",
     "billing_checkout_intents",
     "billing_subscriptions",
+    "source_connections", "source_auth_states", "source_jobs", "source_items",
 )
 
 
@@ -147,6 +148,10 @@ def _connection_is_ready(connection: Connection) -> bool:
                UNION ALL SELECT 1 FROM public.scheduled_analysis_notifications
                UNION ALL SELECT 1 FROM (SELECT workspace_id FROM public.billing_checkout_intents) visible_billing_intents
                UNION ALL SELECT 1 FROM public.billing_subscriptions
+               UNION ALL SELECT 1 FROM (SELECT workspace_id FROM public.source_connections) source_connections_visible
+               UNION ALL SELECT 1 FROM (SELECT workspace_id FROM public.source_auth_states) source_states_visible
+               UNION ALL SELECT 1 FROM (SELECT workspace_id FROM public.source_jobs) source_jobs_visible
+               UNION ALL SELECT 1 FROM (SELECT workspace_id FROM public.source_items) source_items_visible
            )"""
     ).fetchone()
     if customer_rows_are_hidden != (True,):
@@ -184,6 +189,9 @@ def _connection_is_ready(connection: Connection) -> bool:
         AND (SELECT relrowsecurity AND relforcerowsecurity FROM pg_class
             WHERE oid='public.billing_webhook_events'::regclass)""").fetchone()
     if billing_safe != (True,):
+        return False
+
+    if not _source_storage_is_safe(connection):
         return False
 
     if not _import_staging_is_safe(connection):
@@ -242,6 +250,37 @@ def _import_staging_is_safe(connection: Connection) -> bool:
         ),
     ).fetchone()
     return grants == (True,)
+
+
+def _source_storage_is_safe(connection: Connection) -> bool:
+    tables = ["source_connections", "source_auth_states", "source_jobs", "source_items", "source_worker_health"]
+    table_safety = connection.execute("""SELECT count(*)=5 AND bool_and(relrowsecurity AND relforcerowsecurity
+      AND NOT has_table_privilege('flare_app',oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      AND NOT has_table_privilege('flare_worker',oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      AND NOT has_any_column_privilege('flare_worker',oid,'SELECT,INSERT,UPDATE,REFERENCES')
+      AND NOT has_table_privilege('public',oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      AND NOT has_any_column_privilege('public',oid,'SELECT,INSERT,UPDATE,REFERENCES'))
+      FROM pg_class WHERE relnamespace='public'::regnamespace AND relname=ANY(%s)""", (tables,)).fetchone()
+    if table_safety != (True,): return False
+    columns_private = connection.execute("""SELECT bool_and(NOT has_column_privilege('flare_app',table_name,column_name,'SELECT,INSERT,UPDATE,REFERENCES'))
+      FROM (SELECT 'public.'||c.relname AS table_name,a.attname AS column_name FROM pg_class c JOIN pg_attribute a ON a.attrelid=c.oid WHERE c.relnamespace='public'::regnamespace AND c.relname=ANY(%s) AND a.attnum>0 AND NOT a.attisdropped AND a.attname<>'workspace_id') columns""", (tables,)).fetchone()
+    if columns_private != (True,): return False
+    signatures = ['public.source_api(text,uuid,jsonb)','public.claim_source_job(text[],integer)',
+                  'public.source_worker_step(uuid,uuid,bigint,text,jsonb)']
+    functions_safe = connection.execute("""SELECT count(*)=3 AND bool_and(p.prosecdef
+      AND p.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']
+      AND r.rolname IN ('flare_owner','flare_job_executor') AND NOT r.rolsuper AND NOT r.rolbypassrls
+      AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND (r.rolname='flare_owner' OR NOT r.rolcanlogin)
+      AND NOT EXISTS(SELECT 1 FROM pg_auth_members WHERE member=r.oid))
+      FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner WHERE p.oid=ANY(%s::regprocedure[])""", (signatures,)).fetchone()
+    if functions_safe != (True,): return False
+    grants_safe = connection.execute("""SELECT bool_and(
+      has_function_privilege('flare_app',signature,'EXECUTE')=app_allowed
+      AND has_function_privilege('flare_worker',signature,'EXECUTE')=worker_allowed
+      AND NOT has_function_privilege('public',signature,'EXECUTE'))
+      FROM unnest(%s::text[],%s::boolean[],%s::boolean[]) AS f(signature,app_allowed,worker_allowed)""",
+      (signatures,[True,False,False],[False,True,True])).fetchone()
+    return grants_safe == (True,)
 
 
 class Database:

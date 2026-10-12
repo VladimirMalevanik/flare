@@ -46,6 +46,7 @@ function harness(initialSource, available = []) {
     if (name === '@/components/select') return { Select: 'custom-select' };
     if (name === '@/components/workspace-context') return { useWorkspace: () => ({ openCapture() {} }) };
     if (name === "./zip-import") return { ZipImport: () => null };
+    if (name === "./connected-source") return { ConnectedSource: () => null };
     throw Error(`Unexpected import ${name}`);
   } };
   vm.runInNewContext(code, sandbox);

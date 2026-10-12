@@ -10,6 +10,7 @@ from urllib.parse import quote, urlsplit
 from .contracts import Resource, ResourcePage, SourceDocument, DocumentPage, SourceProviderError
 from .http import ProviderHTTP, identifier, plain_text, next_cursor
 from .settings import SourceSettings
+from .oauth import SourceOAuth
 
 
 class TextHTML(HTMLParser):
@@ -53,10 +54,21 @@ def source_url(value, hosts):
 class Reader:
     def __init__(self, settings: SourceSettings, http: ProviderHTTP, credentials: dict):
         self.settings,self.http,self.credentials=settings,http,credentials
-    def get(self,url,params=None,headers=None):
+        self.persist=None
+        self.refreshed=False
+    def request(self,method,url,params=None,headers=None,json_body=None):
         token=plain_text(self.credentials.get('access_token'),maximum=6000)
         if any(ord(c)<32 for c in token): raise SourceProviderError('authorization_lost',reconnect=True)
-        return self.http.request('GET',url,params=params,headers={'Authorization':'Bearer '+token,**(headers or {})})
+        response=self.http.request(method,url,params=params,json_body=json_body,headers={'Authorization':'Bearer '+token,**(headers or {})})
+        if response.status==401 and not self.refreshed and self.credentials.get('refresh_token'):
+            self.refreshed=True
+            provider=next(name for name,reader in READERS.items() if isinstance(self,reader))
+            self.credentials=SourceOAuth(provider,self.settings,self.http).refresh(self.credentials)
+            if self.persist: self.persist(self.credentials)
+            return self.request(method,url,params,headers,json_body)
+        return response
+    def get(self,url,params=None,headers=None):
+        return self.request('GET',url,params,headers)
     def document(self,key,title,content,url=None,metadata=None):
         content=plain_text(content,maximum=self.settings.max_document_bytes)
         title=plain_text(title,maximum=1200)[:280]
@@ -92,6 +104,7 @@ class SlackReader(Reader):
             if cursor.get('reply'): params['cursor']=cursor['reply']
             value=self.api('conversations.replies',params)
             pending=next_cursor(obj(value.get('response_metadata',{})).get('next_cursor'))
+            if value.get('has_more') and not pending: raise SourceProviderError('invalid_provider_response')
             following={'threads':threads if pending else threads[1:],'reply':pending,'history':cursor.get('history'),'historyDone':cursor.get('historyDone',False),'latest':cursor.get('latest')}
         else:
             params['oldest']=str(time.time()-self.settings.lookback_days*86400)
@@ -99,6 +112,7 @@ class SlackReader(Reader):
             if cursor.get('history'): params['cursor']=cursor['history']
             value=self.api('conversations.history',params)
             pending=next_cursor(obj(value.get('response_metadata',{})).get('next_cursor'))
+            if value.get('has_more') and not pending: raise SourceProviderError('invalid_provider_response')
             messages=rows(value,'messages',15)
             following={'threads':[identifier(x['ts']) for x in messages if x.get('reply_count',0)>0 and x.get('ts')],'history':pending,'historyDone':not pending,'latest':latest}
         docs=[]; skipped=0
@@ -188,7 +202,7 @@ class NotionReader(Reader):
     def resources(self,cursor=None):
         body={'filter':{'property':'object','value':'page'},'page_size':100,'sort':{'direction':'descending','timestamp':'last_edited_time'}}
         if cursor: body['start_cursor']=cursor
-        value=obj(self.http.request('POST',self.root+'/search',headers={'Authorization':'Bearer '+self.credentials['access_token'],'Notion-Version':'2026-03-11'},json_body=body).json())
+        value=obj(self.request('POST',self.root+'/search',headers={'Notion-Version':'2026-03-11'},json_body=body).json())
         return ResourcePage(tuple(Resource(identifier(x.get('id')),self.title(x),'page') for x in rows(value,'results')),next_cursor(value.get('next_cursor')) if value.get('has_more') else None)
     def title(self,row):
         for prop in obj(row.get('properties',{})).values():
@@ -258,7 +272,7 @@ class GitHubReader(Reader):
             if type(number) is not int or number<=0: raise SourceProviderError('invalid_provider_response')
             title=plain_text(row.get('title'),maximum=1200); author=obj(row.get('user',{})).get('login','Unknown')
             content=title+'\nState: '+str(row.get('state'))+'\nAuthor: '+str(author)+'\nUpdated: '+str(row.get('updated_at'))+'\n\n'+str(row.get('body') or '')
-            docs.append(self.document('issue:'+str(number),('#'+str(number)+' '+title),content,source_url(row.get('html_url'),('github.com',)),{'kind':'pull_request' if row.get('pull_request') else 'issue','updatedAt':row.get('updated_at'),'author':author}))
+            docs.append(self.document('issue:'+str(number),('#'+str(number)+' '+title),content,source_url(row.get('html_url'),('github.com',)),{'kind':'pull_request' if 'pull_request' in row else 'issue','updatedAt':row.get('updated_at'),'author':author}))
         return DocumentPage(tuple(docs),cursor|{'page':page+1} if len(values)==self.settings.page_items else None)
 
 

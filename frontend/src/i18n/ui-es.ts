@@ -1,6 +1,9 @@
 import type { uiEn } from "./ui-en";
 
 export const uiEs = {
+
+  "Connect": "Conectar",
+  "Close": "Cerrar",
   "Connection is not enabled yet.": "La conexión aún no está habilitada.",
   "Read-only sync of selected context.": "Sincronización de solo lectura del contexto seleccionado.",
   "Managed by a teammate.": "Gestionado por un miembro del equipo.",

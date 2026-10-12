@@ -14,7 +14,7 @@ from app.integrations.sources.contracts import SourceProviderError
 
 @pytest.fixture
 def source_settings():
-    return SourceSettings(enabled=True, public_api_url='http://localhost:8000/api', frontend_url='http://localhost:8000/sources',
+    return SourceSettings(enabled=True, public_api_url='http://localhost:8000/api', frontend_url='http://localhost:8000',
                           token_keys=(Fernet.generate_key().decode(),), google_client_id='test-google-client', google_client_secret='test-google-secret',
                           slack_client_id='test-slack-client', slack_client_secret='test-slack-secret',
                           notion_client_id='test-notion-client', notion_client_secret='test-notion-secret')
@@ -141,3 +141,139 @@ def test_missing_google_offline_access_is_not_fake_connected_success(source_sett
     with pytest.raises(SourceProviderError) as raised:
         flow.exchange('test-code', 'a'*64)
     assert raised.value.code == 'offline_access_unavailable'
+
+from app.integrations.sources.adapters import READERS, TextHTML
+from app.services.source_sync import SourceProcessor, SourceService
+
+
+def fixture_reader(settings,provider,handler,**credentials):
+    return READERS[provider](settings,ProviderHTTP(settings,transport=httpx.MockTransport(handler)),{'access_token':'synthetic','account_id':'account',**credentials})
+
+
+def test_slack_history_threads_cursor_links_and_no_private_channels(source_settings):
+    calls=[]
+    def send(request):
+        method=request.url.path.split('/')[-1]; calls.append(method)
+        if method=='conversations.list': return httpx.Response(200,json={'ok':True,'channels':[{'id':'C1','name':'product','is_member':True},{'id':'C2','name':'private','is_member':True,'is_private':True},{'id':'C3','name':'other','is_member':False}]})
+        if method=='conversations.info': return httpx.Response(200,json={'ok':True,'channel':{'id':'C1','name':'product','is_member':True}})
+        if method=='conversations.history':
+            assert request.url.params['limit']=='15'
+            return httpx.Response(200,json={'ok':True,'messages':[{'ts':'123.000001','text':'Feedback','user':'U1','reply_count':1}],'response_metadata':{'next_cursor':''}})
+        if method=='conversations.replies': return httpx.Response(200,json={'ok':True,'messages':[{'ts':'123.000002','text':'Reply','user':'U2','thread_ts':'123.000001'}]})
+        if method=='chat.getPermalink': return httpx.Response(200,json={'ok':True,'permalink':'https://example.slack.com/archives/C1/p123'})
+        pytest.fail(method)
+    reader=fixture_reader(source_settings,'slack',send)
+    assert [r.id for r in reader.resources().resources]==['C1']
+    page=reader.documents({'id':'C1','name':'#product'})
+    assert page.cursor['threads']==['123.000001'] and page.delay_seconds==60
+    reply=reader.documents({'id':'C1','name':'#product'},page.cursor)
+    assert reply.cursor is None and 'Reply' in reply.documents[0].content
+    assert all(x in ('conversations.list','conversations.info','conversations.history','conversations.replies','chat.getPermalink') for x in calls)
+
+
+def test_slack_oauth_uses_user_credential_for_channel_replies(source_settings):
+    def send(request):
+        return httpx.Response(200,json={'ok':True,'access_token':'bot-not-used','authed_user':{'access_token':'user-used'},'team':{'id':'T1','name':'Test'}})
+    credentials,_=SourceOAuth('slack',source_settings,ProviderHTTP(source_settings,transport=httpx.MockTransport(send))).exchange('code','v'*64)
+    assert credentials['access_token']=='user-used' and credentials['account_id']=='T1'
+
+
+def test_gmail_mime_html_attachments_label_pagination_and_account_dedupe(source_settings):
+    import base64
+    def send(request):
+        if '/labels/' in request.url.path: return httpx.Response(200,json={'id':request.url.path.split('/')[-1],'name':'Support'})
+        if request.url.path.endswith('/messages'):
+            assert request.url.params['labelIds'] in ('L1','L2') and 'newer_than:30d' in request.url.params['q']
+            return httpx.Response(200,json={'messages':[{'id':'msg1'}],'nextPageToken':'opaque+/=='})
+        return httpx.Response(200,json={'id':'msg1','labelIds':['L1','L2'],'payload':{'mimeType':'multipart/mixed','headers':[{'name':'Subject','value':'Feedback'},{'name':'From','value':'person@example.invalid'}],'parts':[{'mimeType':'text/html','body':{'data':base64.urlsafe_b64encode(b'<p>Useful feedback</p><script>BAD</script>').decode()}},{'filename':'private.pdf','mimeType':'text/plain','body':{'data':base64.urlsafe_b64encode(b'ATTACHMENT').decode()}}]}})
+    reader=fixture_reader(source_settings,'gmail',send)
+    first=reader.documents({'id':'L1','name':'Support'}); second=reader.documents({'id':'L2','name':'Sales'})
+    assert first.cursor['page']=='opaque+/==' and first.documents[0].external_id==second.documents[0].external_id
+    assert 'Useful feedback' in first.documents[0].content and 'BAD' not in first.documents[0].content and 'ATTACHMENT' not in first.documents[0].content
+
+
+def test_drive_selected_docs_export_text_files_and_rejects_binaries(source_settings):
+    calls=[]
+    def send(request):
+        calls.append(str(request.url))
+        if request.url.path.endswith('/export'): return httpx.Response(200,content='Привет 👋'.encode())
+        if request.url.params.get('alt')=='media': return httpx.Response(200,content=b'Text file')
+        key=request.url.path.split('/')[-1]
+        return httpx.Response(200,json={'id':key,'name':'Doc','mimeType':'application/pdf' if key=='pdf' else 'text/plain' if key=='txt' else 'application/vnd.google-apps.document','webViewLink':'https://docs.google.com/document/d/doc/edit','modifiedTime':'2026-10-12T00:00:00Z'})
+    reader=fixture_reader(source_settings,'drive',send)
+    assert reader.documents({'id':'doc','name':'Doc'}).documents[0].content=='Привет 👋'
+    assert reader.documents({'id':'txt','name':'Text'}).documents[0].content=='Text file'
+    with pytest.raises(SourceProviderError): reader.resource('pdf')
+    assert not any('/permissions' in x for x in calls)
+
+
+def test_notion_current_version_nested_blocks_and_opaque_continuation(source_settings,monkeypatch):
+    monkeypatch.setattr('app.integrations.sources.http.time.sleep',lambda *_:None)
+    def send(request):
+        assert request.headers['notion-version']=='2026-03-11'
+        if '/pages/' in request.url.path: return httpx.Response(200,json={'id':'p1','url':'https://notion.so/p1','properties':{'Name':{'type':'title','title':[{'plain_text':'Roadmap'}]}}})
+        block=request.url.path.split('/')[-2]
+        if block=='p1' and request.url.params.get('start_cursor')!='opaque+/=':
+            return httpx.Response(200,json={'results':[{'id':'child','type':'paragraph','paragraph':{'rich_text':[{'plain_text':'Parent'}]},'has_children':True}],'has_more':True,'next_cursor':'opaque+/='})
+        return httpx.Response(200,json={'results':[{'id':'text','type':'paragraph','paragraph':{'rich_text':[{'plain_text':'Nested' if block=='child' else 'Next page'}]}}],'has_more':False})
+    reader=fixture_reader(source_settings,'notion',send)
+    result=reader.documents({'id':'p1','name':'Roadmap'})
+    assert result.cursor is None and all(text in result.documents[0].content for text in ('Parent','Nested','Next page'))
+
+
+def test_github_selected_readme_issues_prs_and_repository_identity(source_settings):
+    import base64
+    def send(request):
+        assert request.url.path.startswith('/repos/acme/project')
+        if request.url.path.endswith('/readme'): return httpx.Response(200,json={'content':base64.b64encode(b'README context').decode(),'html_url':'https://github.com/acme/project/blob/main/README.md'})
+        if request.url.path.endswith('/issues'): return httpx.Response(200,json=[{'number':5,'title':'Fix import','body':'Report','state':'closed','updated_at':'2026-10-12','user':{'login':'test'},'pull_request':{},'html_url':'https://github.com/acme/project/pull/5'}])
+        return httpx.Response(200,json={'id':101,'full_name':'acme/project'})
+    reader=fixture_reader(source_settings,'github',send,repository='acme/project',repository_id=101)
+    first=reader.documents({'id':'101','name':'acme/project'})
+    assert first.cursor['stage']=='issues' and first.documents[0].content=='README context'
+    second=reader.documents({'id':'101','name':'acme/project'},first.cursor)
+    assert second.cursor is None and 'State: closed' in second.documents[0].content
+    # A new selected repo does not overwrite the prior repo's source rows.
+    other=fixture_reader(source_settings,'github',send,repository='acme/project',repository_id=102)
+    assert reader.document('readme','t','body').external_id!=other.document('readme','t','body').external_id
+
+
+def test_cursor_ciphertext_is_not_a_credential_and_checkpoint_cancel_is_fenced(source_settings):
+    binding=CredentialScope('w','c','gmail','u'); cipher=CredentialCipher(source_settings.token_keys)
+    raw=cipher.encrypt(replace(binding,purpose='cursor'),{'resource':0,'page':None})
+    with pytest.raises(CredentialUnavailable): cipher.decrypt(binding,raw)
+    calls=[]
+    class Jobs:
+        def step(self,job,action,payload): calls.append((action,payload)); return {}
+    processor=SourceProcessor(Jobs(),source_settings)
+    job={'workspace_id':'w','connection_id':'c','provider':'gmail','user_id':'u','credential_blob':raw,'resources':[]}
+    processor.process(job)
+    assert calls==[('error',{'code':'authorization_lost','reconnect':True})]
+
+
+def test_source_401_refreshes_only_once_and_keeps_account(source_settings):
+    tokens=[]; saved=[]
+    def send(request):
+        if request.url.host=='oauth2.googleapis.com':
+            tokens.append(request); return httpx.Response(200,json={'access_token':'fresh','expires_in':3600})
+        if request.headers['authorization']=='Bearer synthetic': return httpx.Response(401,json={'error':'expired'})
+        return httpx.Response(200,json={'labels':[{'id':'L1','name':'Support'}]})
+    reader=fixture_reader(source_settings,'gmail',send,refresh_token='renewal')
+    reader.persist=lambda value:saved.append(value)
+    assert reader.resources().resources[0].id=='L1'
+    assert len(tokens)==1 and saved[0]['account_id']=='account' and saved[0]['access_token']=='fresh'
+
+
+def test_github_mints_repository_only_read_token(source_settings,monkeypatch):
+    import json
+    from app.services.source_sync import github_access
+    from app.integrations.github import GitHubClient
+    monkeypatch.setattr(GitHubClient,'_app_jwt',lambda self:'synthetic-app-jwt')
+    def send(request):
+        assert request.url.path=='/app/installations/9001/access_tokens'
+        body=json.loads(request.content)
+        assert body['repository_ids']==[101] and all(value=='read' for value in body['permissions'].values())
+        return httpx.Response(201,json={'token':'synthetic-repository-token'})
+    from types import SimpleNamespace
+    result=github_access({'account_id':'a','installation_id':9001,'repository_id':101},SimpleNamespace(validate=lambda:None),ProviderHTTP(source_settings,transport=httpx.MockTransport(send)))
+    assert result['access_token']=='synthetic-repository-token'

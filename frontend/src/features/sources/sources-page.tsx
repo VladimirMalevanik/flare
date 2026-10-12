@@ -151,7 +151,7 @@ export function SourcesPage() {
                   ) : ["slack", "gmail", "drive"].includes(source.id) ? null : source.status === "manual-import" ? (
                     <Link className="button" href={`/settings/import-guides/${source.id}`}>
                       {t("View import guide")}</Link>
-                  ) : source.id === "github" && source.repository ? null : source.id === "github" && source.status !== "coming-soon" ? (
+                  ) : source.id === "github" && source.repository && connections.connections.some(item => item.provider === "github" && !["pending", "disabled"].includes(item.status)) ? null : source.id === "github" && source.status !== "coming-soon" ? (
                     <GitHubControls
                       source={source}
                       repositories={repositories}

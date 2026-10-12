@@ -66,7 +66,7 @@ export function ConnectedSource({ provider, connection, available, syncAvailable
     </>}
     {error && <p className="error-text" role="alert">{message(error)}</p>}
     <div className="tags">
-      {!connected && <button type="button" className="button" disabled={!available || busy || !!connection && !connection.owner} onClick={() => void action(async signal => { const result = await dataProvider.connectSource(provider, signal); if (result.url) window.location.assign(result.url); })}>{busy ? t("Connecting…") : t("connect")}</button>}
+      {!connected && <button type="button" className="button" disabled={!available || busy || !!connection && !connection.owner} onClick={() => void action(async signal => { const result = await dataProvider.connectSource(provider, signal); if (result.url) window.location.assign(result.url); })}>{busy ? t("Connecting…") : t("Connect")}</button>}
       {connected && connection?.owner && <>
         <button type="button" className="button" disabled={!available || busy} onClick={choose}>{t("Choose context")}</button>
         <button type="button" className="button" disabled={!syncAvailable || busy || !connection.enabled || active} onClick={() => void action(signal => dataProvider.sourceConnectionAction(connection.id, "sync", signal))}>{t("Sync now")}</button>
@@ -78,7 +78,7 @@ export function ConnectedSource({ provider, connection, available, syncAvailable
     </div>
     {connected && <p className="muted meta">{t("Disconnect stops future sync. Saved Vault context stays available.")}</p>}
     {open && <Dialog title={t("Choose context")} onClose={close} className="zip-dialog">
-      <header className="zip-dialog-header"><div><p className="eyebrow">{label(provider === "drive" ? "Google Drive" : provider === "github" ? "GitHub" : provider === "gmail" ? "Gmail" : provider === "notion" ? "Notion" : "Slack")}</p><h2>{t("Choose context")}</h2></div><button className="icon-button" type="button" disabled={busy} aria-label={t("close")} onClick={close}><Icon name="close" /></button></header>
+      <header className="zip-dialog-header"><div><p className="eyebrow">{label(provider === "drive" ? "Google Drive" : provider === "github" ? "GitHub" : provider === "gmail" ? "Gmail" : provider === "notion" ? "Notion" : "Slack")}</p><h2>{t("Choose context")}</h2></div><button className="icon-button" type="button" disabled={busy} aria-label={t("Close")} onClick={close}><Icon name="close" /></button></header>
       <p className="muted">{t("Only your selection is copied into this workspace. Up to 20 sources.")}</p>
       <div style={{ maxHeight: "40vh", overflowY: "auto" }}>
         {resources.map(resource => <label className="setting-row" key={resource.id} style={{ display: "flex", gap: 12, padding: "12px 0" }}>

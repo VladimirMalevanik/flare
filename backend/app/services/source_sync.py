@@ -35,7 +35,9 @@ def reader_for(provider, credentials, settings, http, github_settings=None, pers
     elif credentials.get('expires_at') and credentials['expires_at']<=time.time()+60:
         credentials=SourceOAuth(provider,settings,http).refresh(credentials)
         if persist: persist(credentials)
-    return READERS[provider](settings,http,credentials)
+    reader=READERS[provider](settings,http,credentials)
+    reader.persist=persist
+    return reader
 
 
 class SourceService:

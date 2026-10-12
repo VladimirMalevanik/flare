@@ -18,7 +18,8 @@ def upgrade():
         REVOKE ALL ON public.{table} FROM PUBLIC,flare_app,flare_worker;
         GRANT SELECT(workspace_id) ON public.{table} TO flare_app;
         GRANT SELECT,INSERT,UPDATE,DELETE ON public.{table} TO {owner};
-        CREATE POLICY source_member ON public.{table} TO flare_app USING (
+        CREATE POLICY source_member ON public.{table} TO flare_app USING(true);
+        CREATE POLICY source_tenant ON public.{table} AS RESTRICTIVE TO flare_app USING (
           workspace_id=nullif(current_setting('app.workspace_id',true),'')::uuid
           AND EXISTS(SELECT 1 FROM public.workspace_members m WHERE m.workspace_id={table}.workspace_id
             AND m.user_id=nullif(current_setting('app.user_id',true),'')));

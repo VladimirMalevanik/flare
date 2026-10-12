@@ -1,4 +1,7 @@
 export const uiEn = {
+
+  "Connect": "Connect",
+  "Close": "Close",
   "Connection is not enabled yet.": "Connection is not enabled yet.",
   "Read-only sync of selected context.": "Read-only sync of selected context.",
   "Managed by a teammate.": "Managed by a teammate.",

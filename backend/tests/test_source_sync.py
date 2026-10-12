@@ -121,6 +121,7 @@ def test_shared_consent_revision_owner_and_worker_health(db):
     assert api(db,'select',id,expectedRevision=2,resources=[{'id':'x'}],shareWithWorkspace=False)['error']=='selection_consent_required'
     assert api(db,'select',id,expectedRevision=1,resources=[],shareWithWorkspace=True)['error']=='selection_changed'
     api(db,'select',id,expectedRevision=2,resources=[{'id':'x'}],shareWithWorkspace=True)
+    db.execute('RESET ROLE'); db.execute("UPDATE source_worker_health SET last_seen_at=now()-interval '1 day'"); actor(db,w,u)
     assert api(db,'enqueue',id)['error']=='source_worker_unavailable'
     db.execute('RESET ROLE'); second='source-test|'+uuid4().hex
     db.execute("INSERT INTO auth_users(id,email,name,password_hash,initial_workspace_id) VALUES(%s,%s,'Test','test',%s)",(second,second+'@example.invalid',w))

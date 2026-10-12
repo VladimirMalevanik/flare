@@ -18,6 +18,7 @@ function load(relative, mocks) {
     if (name === '@/features/funny/funny-state') return load('../src/features/funny/funny-state.ts', {});
     if (name === '@/features/funny/funny-sounds') return { playFunnySound() {} };
     if (name === "./zip-import") return { ZipImport: () => null };
+    if (name === "./connected-source") return { ConnectedSource: () => null };
     throw Error(`Unexpected import ${name}`);
   } });
   return exports;
@@ -152,7 +153,7 @@ test('Sources loads through provider with headings outside grids and margin-safe
   assert.equal(groups.length, 2);
   const grids = tree.filter(n => n.props?.className === 'source-grid');
   assert.equal(grids.length, 2);
-  assert.equal(grids[0].props.children.length, 5);
+  assert.equal(grids[0].props.children.length, 8);
   for (const grid of grids) assert.ok(grid.props.children.every(n => n.type === 'article'));
   assert.equal(sourceCatalog[0].scope, 'Notes, links, and text imports');
   assert.equal(sourceCatalog[0].channels.join(','), 'Notes,Links,CSV,TXT,Markdown');
@@ -174,7 +175,7 @@ test('Sources loads through provider with headings outside grids and margin-safe
       status: 'manual-import',
       primary: 'ZIP snapshot',
       description: 'Import a Notion ZIP export with Markdown, TXT and CSV sources.',
-      muted: 'Automatic workspace sync is not available yet.',
+      muted: 'Connect selected pages for read-only sync, or import a ZIP snapshot.',
     },
   );
   const articles = tree.filter(n => n.type === 'article');
@@ -195,7 +196,7 @@ test('Sources loads through provider with headings outside grids and margin-safe
   }));
   assert.match(textContent(githubControls), /flare\/example/);
   assert.match(textContent(githubControls), /Read-only connection/);
-  assert.ok(sourceCatalog.filter(s => !['manual-capture', 'voice', 'obsidian', 'notion'].includes(s.id)).every(s => s.status === 'coming-soon'));
+  assert.ok(sourceCatalog.filter(s => !['manual-capture', 'voice', 'obsidian', 'notion', 'slack', 'gmail', 'drive', 'github'].includes(s.id)).every(s => s.status === 'coming-soon'));
   assert.ok(nodes(grids[1]).filter(n => n.type === 'button').every(n => n.props.disabled));
 });
 

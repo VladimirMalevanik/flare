@@ -38,6 +38,8 @@ class SourceSettings:
             if (parsed.scheme != 'https' and not (local and parsed.scheme == 'http')) or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
                 raise ValueError('Invalid source callback configuration')
         api, frontend = urlsplit(self.public_api_url), urlsplit(self.frontend_url)
+        if frontend.path not in ("", "/"):
+            raise ValueError("Source frontend URL must be the authenticated origin")
         if (api.scheme, api.hostname, api.port) != (frontend.scheme, frontend.hostname, frontend.port):
             raise ValueError('Source callbacks must return through the same authenticated origin')
         if not self.token_keys or len(self.token_keys) > 3:

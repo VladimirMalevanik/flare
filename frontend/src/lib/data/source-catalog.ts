@@ -2,8 +2,6 @@ import type { Source } from "./types";
 
 /** Truthful product capability catalog. This is not workspace/demo state. */
 export const sourceCatalog: Source[] = [
-  { id: "slack", name: "Slack", scope: "Project conversations", description: "Sync recent messages and thread replies from selected public channels you belong to.", channels: [], status: "disconnected", updated: "Not connected" },
-  { id: "drive", name: "Google Drive", scope: "Project documents", description: "Sync selected Google Docs and text files. Your other Drive files stay outside Flare.", channels: [], status: "disconnected", updated: "Not connected" },
   {
     id: "manual-capture",
     name: "Manual capture",
@@ -22,6 +20,8 @@ export const sourceCatalog: Source[] = [
     status: "ready",
     updated: "Ready to use",
   },
+  { id: "slack", name: "Slack", scope: "Project conversations", description: "Sync recent messages and thread replies from selected public channels you belong to.", channels: [], status: "disconnected", updated: "Not connected" },
+  { id: "drive", name: "Google Drive", scope: "Project documents", description: "Sync selected Google Docs and text files. Your other Drive files stay outside Flare.", channels: [], status: "disconnected", updated: "Not connected" },
   {
     id: "obsidian",
     name: "Obsidian import",
@@ -46,7 +46,7 @@ export const sourceCatalog: Source[] = [
     scope: "Project activity",
     description: "Authorize the Flare GitHub App and choose one repository. Sync README, issues and pull request summaries from that repository.",
     channels: [],
-    status: "coming-soon",
+    status: "disconnected",
     updated: "Connection available",
   },
   {

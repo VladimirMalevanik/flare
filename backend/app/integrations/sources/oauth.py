@@ -47,7 +47,7 @@ class SourceOAuth:
             response = self.http.request('POST', 'https://slack.com/api/oauth.v2.access', data=grant)
         else:
             response = self.http.request('POST', 'https://api.notion.com/v1/oauth/token', json_body=grant,
-                                         auth=(self.settings.notion_client_id, self.settings.notion_client_secret))
+                                         auth=(self.settings.notion_client_id, self.settings.notion_client_secret), headers={'Notion-Version':'2026-03-11'})
         if response.status == 400:
             # A failed credential exchange is never a reason to replay the code.
             raise SourceProviderError('authorization_lost', reconnect=True)
