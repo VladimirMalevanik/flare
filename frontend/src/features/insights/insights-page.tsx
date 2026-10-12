@@ -1,12 +1,13 @@
 "use client";
 import { useI18n } from "@/i18n/provider";
 import Link from "next/link";
-import { AnalyzeAction } from "@/features/analyze/analyze-action";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   dataProvider,
   type Insight,
+  type AnalysisSchedule,
+  type DailyAnalysisStatus,
 } from "@/lib/data";
 import { Icon } from "@/components/icons";
 import { useWorkspace } from "@/components/workspace-context";
@@ -17,6 +18,58 @@ const plural: Record<FlareType, string> = {
   Reminder: "Reminders", Warning: "Warnings", Recommendation: "Recommendations",
 };
 const flareTypeFor = (insight: Insight): FlareType => insight.type;
+
+export function ScheduledAnalysisStatus() {
+  const { t, locale } = useI18n();
+  const { refresh } = useWorkspace();
+  const [status, setStatus] = useState<{ schedule: AnalysisSchedule; daily: DailyAnalysisStatus } | null>(null);
+  const [error, setError] = useState(false);
+  const refreshedRun = useRef<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    let timer: number | undefined;
+    const controller = new AbortController();
+    const load = async () => {
+      let delay = 60_000;
+      try {
+        const [schedule, daily] = await Promise.all([
+          dataProvider.getAnalysisSchedule(controller.signal),
+          dataProvider.getDailyAnalysisStatus(controller.signal),
+        ]);
+        if (!live) return;
+        setStatus({ schedule, daily }); setError(false);
+        if (["refreshing", "ready", "queued", "processing"].includes(daily.state)) delay = 15_000;
+        if (daily.state === "completed" && daily.runId && refreshedRun.current !== daily.runId) {
+          refreshedRun.current = daily.runId;
+          refresh();
+        }
+      } catch {
+        if (live) setError(true);
+      } finally {
+        if (live) timer = window.setTimeout(() => void load(), delay);
+      }
+    };
+    void load();
+    return () => { live = false; controller.abort(); if (timer !== undefined) window.clearTimeout(timer); };
+  }, [refresh]);
+  const current = status?.daily.state;
+  const date = status?.schedule.nextRunAt
+    ? `${new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", timeZone: status.schedule.timezone }).format(new Date(status.schedule.nextRunAt))} (${status.schedule.timezone})`
+    : null;
+  const copy = error ? t("Analysis schedule status is unavailable. Check Settings or try again later.")
+    : !status ? t("Loading daily insight schedule…")
+    : current === "refreshing" ? t("Flare is preparing context for the scheduled insight.")
+    : current === "ready" ? t("Context is ready. Analysis will start at the scheduled time.")
+    : current === "queued" || current === "processing" ? t("Analysis is running. Flares will update when it finishes.")
+    : status.daily.state === "failed" && status.daily.mode === "scheduled" ? t("The latest scheduled analysis did not complete. Check the schedule in Settings.")
+    : !status.schedule.enabled ? t("Scheduled analysis is off. Enable it in Settings.")
+    : date ? t("Next scheduled insight: {date}", { date })
+    : t("Waiting for the next scheduled insight.");
+  return <div className="analyze-action">
+    <Link className="button" href="/settings">{t("Analysis schedule")}</Link>
+    <p className={error ? "error-text meta" : "muted meta"} role={error ? "alert" : "status"}>{copy}</p>
+  </div>;
+}
 export function InsightsPage() {
   const { t, locale, label, message } = useI18n();
 
@@ -138,7 +191,7 @@ export function InsightsPage() {
             <h1>Flares</h1>
             <p>{t("Things you might have missed, forgotten, or contradicted.")}</p>
           </header>
-          <AnalyzeAction />
+          <ScheduledAnalysisStatus />
         </div>
         <div className="filters">
           <button

@@ -93,10 +93,13 @@ Do not copy these values into source, chat, exports or command-line arguments.
    not delete existing references or silently overwrite another activation.
 6. Confirm `/api/acquisition/policy` shows the exact enabled notice/revision. Run
    owner-authorized disposable-account smoke: allow a tagged link, register,
-   verify email, save a note, manually Analyze, explicitly inspect a Flare/evidence;
+   verify email, save a note, enable the workspace analysis schedule in Settings,
+   wait for its scheduled run, then explicitly inspect a Flare/evidence;
    later-day inspection requires waiting for another UTC day. Decline/withdrawal
    and failed-collection cases must keep product behavior intact. Production
-   email and Analyze allowances are unchanged. Use synthetic fixtures for full
+   email and daily analysis allowances are unchanged. Manual POST /analyze is
+   retired by WEB-009; deploy its API and web together and keep the existing
+   scheduler operational. Use synthetic fixtures for full
    attribution disclosure testing rather than manufacturing real performance.
 7. Export a past, explicit-timezone window with `report --since ... --until ...
    --basis first --unit account --output NEW_FILE.json` (or `.csv`). The command

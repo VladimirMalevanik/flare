@@ -1,25 +1,18 @@
-"""Authenticated enqueue/status only; no provider invocation in the API process."""
-import logging
+"""Historical run status; new analyses are started by the scheduler only."""
 from typing import Annotated, Literal
 from uuid import UUID
 
 import psycopg
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.auth import verified_user
 from app.api.routes import _database
-from app.config import load_ai_settings
-from app.ai_engine.flare_config import load_flare_settings
 from app.models.database import Database, MembershipRequiredError, WritePermissionRequiredError
-from app.models.analysis_jobs import AnalysisJobs
 from app.models.analysis_runs import DailyLimitReached, NoEligibleContext
-from app.services.analysis_jobs import AnalysisJobService
 from app.services.auth_service import AuthenticatedUser
-from app.workers.config import load_worker_settings
 
 router = APIRouter(tags=['analysis'])
-logger = logging.getLogger(__name__)
 
 
 class EmptyRequest(BaseModel):
@@ -44,13 +37,6 @@ def cookie_user(
     return user
 
 
-def service(database: Annotated[Database, Depends(_database)]):
-    try:
-        return AnalysisJobService(AnalysisJobs(database), load_ai_settings(), load_worker_settings())
-    except ValueError:
-        raise HTTPException(503, 'configuration') from None
-
-
 def failure(error):
     if isinstance(error, (MembershipRequiredError, WritePermissionRequiredError, psycopg.errors.InsufficientPrivilege)):
         raise HTTPException(403, 'permission_denied') from None
@@ -63,27 +49,13 @@ def failure(error):
     raise HTTPException(503, 'database_unavailable') from None
 
 
-@router.post('/analyze', response_model=RunResponse, status_code=202)
-def analyze(payload: EmptyRequest, response: Response,
+@router.post('/analyze', deprecated=True, responses={410: {'description': 'Manual analysis was removed; configure a daily schedule.'}})
+def analyze(payload: EmptyRequest,
             user: Annotated[AuthenticatedUser, Depends(cookie_user)],
-            jobs: Annotated[AnalysisJobService, Depends(service)],
             idempotency_key: Annotated[UUID, Header(alias='Idempotency-Key')]):
-    try:
-        generation = load_flare_settings().revision(jobs.ai)
-        result = jobs.start_run(user.identity, idempotency_key, generation)
-    except ValueError as error:
-        if isinstance(error, (NoEligibleContext, DailyLimitReached)):
-            failure(error)
-        raise HTTPException(503, 'configuration') from None
-    except (psycopg.Error, MembershipRequiredError, WritePermissionRequiredError) as error:
-        failure(error)
-    response.status_code = 200 if result['status'] in ('completed', 'failed') else 202
-    logger.info(
-        "analysis_request status=accepted workspace_id=%s run_id=%s",
-        user.identity.workspace_id,
-        result["id"],
-    )
-    return result
+    # Keep authentication/origin/body checks for old clients, but never resolve
+    # AI settings or reserve a cycle/job/provider budget for a manual request.
+    raise HTTPException(410, 'scheduled_analysis_only')
 
 
 @router.get('/analysis-runs/{run_id}', response_model=RunResponse)
