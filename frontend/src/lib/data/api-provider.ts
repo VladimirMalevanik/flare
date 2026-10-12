@@ -429,8 +429,8 @@ export class ApiDataProvider implements FlareDataProvider {
     return mapAnalysisRun(await this.request(`/analysis-runs/${encodeURIComponent(id)}`, { signal }));
   }
 
-  async getAnalysisSchedule(): Promise<AnalysisSchedule> {
-    return mapAnalysisSchedule(await this.request("/analysis-schedule"));
+  async getAnalysisSchedule(signal?: AbortSignal): Promise<AnalysisSchedule> {
+    return mapAnalysisSchedule(await importRequest((signal) => this.request("/analysis-schedule", { signal }), signal));
   }
 
   async updateAnalysisSchedule(input: {
@@ -445,8 +445,8 @@ export class ApiDataProvider implements FlareDataProvider {
     }));
   }
 
-  async getDailyAnalysisStatus(): Promise<DailyAnalysisStatus> {
-    return mapDailyAnalysisStatus(await this.request("/analysis/daily-status"));
+  async getDailyAnalysisStatus(signal?: AbortSignal): Promise<DailyAnalysisStatus> {
+    return mapDailyAnalysisStatus(await importRequest((signal) => this.request("/analysis/daily-status", { signal }), signal));
   }
 
   async listSources(): Promise<Source[]> {

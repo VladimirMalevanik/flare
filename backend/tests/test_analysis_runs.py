@@ -1,4 +1,4 @@
-"""Public Analyze acceptance through restricted runtime connections, no Groq network."""
+"""Scheduled-only API and historical run invariants; no Groq network."""
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from uuid import UUID, uuid4
@@ -91,7 +91,7 @@ def test_public_auth_body_and_headers(jobs):
         assert c.get('/analysis-runs/' + str(uuid4())).status_code == 401
 
 
-@pytest.mark.parametrize('role,status', [('owner',202),('editor',202),('viewer',403)])
+@pytest.mark.parametrize('role,status', [('owner',410),('editor',410),('viewer',410)])
 def test_role_permissions(jobs, admin_url, role, status):
     with psycopg.connect(admin_url) as conn:
         conn.execute('UPDATE workspace_members SET role=%s WHERE workspace_id=%s AND user_id=%s', (role,jobs[2][0].workspace_id,jobs[2][0].user_id))
@@ -102,9 +102,11 @@ def test_role_permissions(jobs, admin_url, role, status):
 def test_no_eligible_notes_and_no_partial_job(jobs, admin_url):
     with psycopg.connect(admin_url) as c:
         c.execute('UPDATE documents SET deleted_at=now() WHERE workspace_id=%s', (jobs[2][0].workspace_id,))
+    with pytest.raises(NoEligibleContext) as raised:
+        start(jobs)
+    assert raised.value.code == 'no_context'
     with client_for(jobs) as c:
-        response = post(c)
-        assert response.status_code == 422 and response.json()['detail'] == 'no_context'
+        assert post(c).status_code == 410
     with psycopg.connect(admin_url) as c:
         assert c.execute('SELECT count(*) FROM analysis_jobs').fetchone() == (0,)
 
@@ -140,8 +142,9 @@ def test_idempotency_concurrency_and_snapshot(jobs, admin_url):
     assert snapshot(admin_url, run_id) == before
     assert asyncio.run(AnalysisProcessor(jobs[1], FakeAnalyzer(), AISettings(), WorkerSettings()).process_one()) == 'failed'
     with client_for(jobs) as c:
-        response = post(c, key)
+        response = c.get('/analysis-runs/' + run_id)
         assert response.status_code == 200 and response.json()['error'] == 'source_invalid'
+        assert post(c, key).status_code == 410
     with psycopg.connect(admin_url) as c:
         assert c.execute('SELECT count(*) FROM analysis_jobs').fetchone() == (1,)
         assert c.execute('SELECT count(*) FROM analysis_runs').fetchone() == (1,)
@@ -303,9 +306,10 @@ def test_register_notes_analyze_worker_flares_e2e(jobs, admin_url, empty):
                      )''',
                 (jobs[2][-1].workspace_id,),
             )
-        key=uuid4(); response=post(c,key)
-        assert response.status_code == 202, response.text
-        run=response.json()
+        # Legacy run fixtures stay readable after removing public manual enqueue.
+        key=uuid4()
+        run=service(jobs).start_run(jobs[2][-1], key, FlareSettings().revision(AISettings()))
+        assert post(c,key).status_code == 410
         assert asyncio.run(AnalysisProcessor(jobs[1],FakeAnalyzer(),AISettings(),WorkerSettings()).process_one()) == 'completed'
         assert c.get('/analysis-runs/'+run['id']).json()['stage']=='flare_generation'
         assert asyncio.run(FlareProcessor(FlareRuns(jobs[1]._database_url),Detector(empty=empty),AISettings(),FlareSettings(),WorkerSettings()).process_one())=='completed'
@@ -318,7 +322,8 @@ def test_register_notes_analyze_worker_flares_e2e(jobs, admin_url, empty):
             with psycopg.connect(admin_url) as db:
                 evidence=db.execute('SELECT chunk_id FROM insight_sources WHERE insight_id=%s',(flares[0]['id'],)).fetchall()
             assert set(evidence).issubset(set(snapshot(admin_url,run['id'])))
-        assert post(c,key).status_code==200
+        assert c.get('/analysis-runs/'+run['id']).status_code == 200
+        assert post(c,key).status_code == 410
 
 
 def test_terminal_failure_keeps_daily_slot_consumed(jobs):
@@ -393,5 +398,24 @@ def test_safe_database_failure(jobs, monkeypatch):
     monkeypatch.setattr(AnalysisRuns, 'start', unavailable)
     with client_for(jobs) as c:
         response = post(c)
-        assert response.status_code == 503
-        assert response.json() == {'detail': 'database_unavailable'}
+        assert response.status_code == 410
+        assert response.json() == {'detail': 'scheduled_analysis_only'}
+    with pytest.raises(HTTPException) as raised:
+        failure(psycopg.OperationalError('private connection details must not escape'))
+    assert raised.value.status_code == 503
+    assert raised.value.detail == 'database_unavailable'
+
+
+@pytest.mark.parametrize('role', ['owner', 'editor', 'viewer'])
+def test_public_manual_analysis_never_creates_work_or_consumes_quota(jobs, admin_url, role):
+    with psycopg.connect(admin_url) as conn:
+        conn.execute('UPDATE workspace_members SET role=%s WHERE workspace_id=%s AND user_id=%s', (role,jobs[2][0].workspace_id,jobs[2][0].user_id))
+        before = tuple(conn.execute('SELECT count(*) FROM ' + table).fetchone()[0] for table in ('analysis_jobs', 'analysis_runs', 'analysis_cycles', 'analysis_daily_quotas'))
+    with client_for(jobs) as c:
+        for _ in range(2):
+            response = post(c)
+            assert response.status_code == 410
+            assert response.json() == {'detail': 'scheduled_analysis_only'}
+    with psycopg.connect(admin_url) as conn:
+        after = tuple(conn.execute('SELECT count(*) FROM ' + table).fetchone()[0] for table in ('analysis_jobs', 'analysis_runs', 'analysis_cycles', 'analysis_daily_quotas'))
+    assert after == before

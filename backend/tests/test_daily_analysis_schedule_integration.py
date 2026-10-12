@@ -37,6 +37,14 @@ def _post_analyze(client, key):
     )
 
 
+
+def _legacy_run(jobs, key):
+    # Historical manual cycles still share quotas/retention with scheduled runs.
+    from app.services.analysis_jobs import AnalysisJobService
+    return AnalysisJobService(jobs[0], AISettings(), WorkerSettings()).start_run(
+        jobs[2][0], key, FlareSettings().revision(AISettings()))
+
+
 def _materialize_scheduled_cycle(jobs, admin_url):
     """Create a real near-future slot while staying inside the DB clock fence."""
     target = (datetime.now(UTC) + timedelta(minutes=32)).replace(second=0, microsecond=0)
@@ -173,10 +181,7 @@ def test_selection_history_survives_run_retention_and_rotates_again(jobs, admin_
 
     selections = []
     for round_number in range(3):
-        with client_for(jobs) as client:
-            response = _post_analyze(client, uuid4())
-        assert response.status_code == 202, response.text
-        run_id = response.json()["id"]
+        run_id = _legacy_run(jobs, uuid4())["id"]
         with psycopg.connect(admin_url) as connection:
             selected = {row[0] for row in connection.execute(
                 """SELECT s.chunk_id FROM public.analysis_cycle_sources s
@@ -261,19 +266,21 @@ def _insert_newer_processing_documents(admin_url, workspace_id, count=200):
         # scheduler's bounded candidate query.
 
 
-def test_manual_analysis_is_idempotent_and_second_key_cannot_bypass_daily_slot(jobs, admin_url):
+def test_legacy_cycle_is_idempotent_and_cannot_bypass_daily_slot(jobs, admin_url):
     first_key = uuid4()
     with client_for(jobs) as client:
-        first = _post_analyze(client, first_key)
-        assert first.status_code == 202
-        assert _post_analyze(client, first_key).json()["id"] == first.json()["id"]
+        first = _legacy_run(jobs, first_key)
+        assert _legacy_run(jobs, first_key)["id"] == first["id"]
+        from app.models.analysis_runs import DailyLimitReached
+        with pytest.raises(DailyLimitReached):
+            _legacy_run(jobs, uuid4())
         blocked = _post_analyze(client, uuid4())
-        assert blocked.status_code == 409
-        assert blocked.json() == {"detail": "daily_limit"}
+        assert blocked.status_code == 410
+        assert blocked.json() == {"detail": "scheduled_analysis_only"}
         status = client.get("/analysis/daily-status")
         assert status.status_code == 200
         assert status.json()["cycleId"] is not None
-        assert status.json()["runId"] == first.json()["id"]
+        assert status.json()["runId"] == first["id"]
         assert status.json()["canRequestToday"] is False
     with psycopg.connect(admin_url) as connection:
         assert connection.execute(
@@ -284,22 +291,21 @@ def test_manual_analysis_is_idempotent_and_second_key_cannot_bypass_daily_slot(j
             """SELECT count(*) FROM public.activity_events
                 WHERE target_id=%s AND event_type='analysis_requested'
                   AND metadata=jsonb_build_object('mode','manual')""",
-            (first.json()["id"],),
+            (first["id"],),
         ).fetchone() == (1,)
 
 
-def test_concurrent_manual_requests_create_one_run_and_report_daily_limit(jobs):
+def test_concurrent_public_manual_requests_are_rejected_without_work(jobs, admin_url):
     def request_once(_):
         with client_for(jobs) as client:
             response = _post_analyze(client, uuid4())
             return response.status_code, response.json()
-
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(request_once, range(2)))
-
-    assert sorted(status for status, _ in results) == [202, 409]
-    loser = next(payload for status, payload in results if status == 409)
-    assert loser == {"detail": "daily_limit"}
+    assert results == [(410, {"detail": "scheduled_analysis_only"})] * 2
+    with psycopg.connect(admin_url) as conn:
+        assert conn.execute('SELECT count(*) FROM analysis_runs').fetchone() == (0,)
+        assert conn.execute('SELECT count(*) FROM analysis_cycles').fetchone() == (0,)
 
 
 def test_job_retention_cascade_cannot_reopen_the_local_day(jobs, admin_url):
@@ -311,13 +317,12 @@ def test_job_retention_cascade_cannot_reopen_the_local_day(jobs, admin_url):
             json={"enabled": True, "timezone": "America/New_York", "localTime": "19:00"},
         )
         assert schedule.status_code == 200
-        first = _post_analyze(client, uuid4())
-        assert first.status_code == 202
+        first = _legacy_run(jobs, uuid4())
 
     with psycopg.connect(admin_url) as connection:
         job_id = connection.execute(
             "SELECT analysis_job_id FROM public.analysis_runs WHERE id=%s",
-            (first.json()["id"],),
+            (first["id"],),
         ).fetchone()[0]
         connection.execute(
             """UPDATE public.analysis_jobs
@@ -348,7 +353,7 @@ def test_job_retention_cascade_cannot_reopen_the_local_day(jobs, admin_url):
         status = client.get("/analysis/daily-status")
         assert status.status_code == 200
         assert status.json()["canRequestToday"] is False
-        assert _post_analyze(client, uuid4()).status_code == 409
+        assert _post_analyze(client, uuid4()).status_code == 410
 
     with psycopg.connect(admin_url) as connection:
         assert connection.execute(
@@ -363,8 +368,7 @@ def test_job_retention_cascade_cannot_reopen_the_local_day(jobs, admin_url):
 
 def test_timezone_change_cannot_make_recent_daily_cycle_look_available(jobs):
     with client_for(jobs) as client:
-        first = _post_analyze(client, uuid4())
-        assert first.status_code == 202
+        first = _legacy_run(jobs, uuid4())
         utc_hour = datetime.now(UTC).hour
         changed_zone = "Pacific/Kiritimati" if utc_hour >= 10 else "Pacific/Pago_Pago"
         changed = client.put(
@@ -377,14 +381,14 @@ def test_timezone_change_cannot_make_recent_daily_cycle_look_available(jobs):
         assert status.status_code == 200
         assert status.json()["cycleId"] is not None
         assert status.json()["canRequestToday"] is False
-        assert _post_analyze(client, uuid4()).status_code == 409
+        assert _post_analyze(client, uuid4()).status_code == 410
 
 
 def test_schedule_preview_and_materializer_share_recent_cycle_guard(jobs):
     now = datetime.now(UTC)
     target = (now + timedelta(minutes=32)).replace(second=0, microsecond=0)
     with client_for(jobs) as client:
-        assert _post_analyze(client, uuid4()).status_code == 202
+        _legacy_run(jobs, uuid4())
         schedule = client.put(
             "/analysis-schedule",
             headers={"Origin": "http://testserver"},

@@ -161,7 +161,7 @@ def recovery_behavior(admin, app_url, worker_url, fixture):
         assert client.get("/items/" + str(document)).status_code == 404
         assert "HIDDEN_PENDING_ZIP" not in client.get("/items").text
         blocked = client.post("/analyze", json={}, headers={"Idempotency-Key": str(uuid4())})
-        assert blocked.status_code == 409 and blocked.json() == {"detail": "daily_limit"}
+        assert blocked.status_code == 410 and blocked.json() == {"detail": "scheduled_analysis_only"}
         archive = client.get("/export")
         assert archive.status_code == 200
         with ZipFile(io.BytesIO(archive.content)) as zipped:

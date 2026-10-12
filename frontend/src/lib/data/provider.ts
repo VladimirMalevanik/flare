@@ -42,14 +42,14 @@ export interface FlareDataProvider {
   getImportPackageReport(id: string, after?: number, signal?: AbortSignal): Promise<ImportPackageReport>;
   startAnalysis(key: string, signal?: AbortSignal): Promise<AnalysisRun>;
   getAnalysisRun(id: string, signal?: AbortSignal): Promise<AnalysisRun>;
-  getAnalysisSchedule(): Promise<AnalysisSchedule>;
+  getAnalysisSchedule(signal?: AbortSignal): Promise<AnalysisSchedule>;
   updateAnalysisSchedule(input: {
     enabled: boolean;
     emailNotificationsEnabled: boolean;
     timezone: string;
     localTime: string;
   }): Promise<AnalysisSchedule>;
-  getDailyAnalysisStatus(): Promise<DailyAnalysisStatus>;
+  getDailyAnalysisStatus(signal?: AbortSignal): Promise<DailyAnalysisStatus>;
   listSources(): Promise<Source[]>;
   saveSource(source: Source): Promise<Source>;
   getGitHubConnection(): Promise<GitHubConnection>;
