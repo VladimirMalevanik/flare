@@ -3,6 +3,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 import logging
+import psycopg
 from time import perf_counter
 
 from fastapi import FastAPI, Request
@@ -15,6 +16,7 @@ from app.api.acquisition import router as acquisition_router
 from app.api.analytics import router as analytics_router
 from app.api.auth import router as auth_router
 from app.api.billing import router as billing_router, WEBHOOK_PATH
+from app.api.team import router as team_router
 from app.api.flares import router as flares_router
 from app.api.analysis import router as analysis_router
 from app.api.analysis_schedule import router as analysis_schedule_router
@@ -124,7 +126,7 @@ def create_app(
             "/auth", "/items", "/imports", "/flares", "/analyze", "/analysis-runs",
             "/integrations", "/ops", "/analytics", "/voice",
             "/analysis-schedule", "/analysis/daily-status",
-            "/export", "/acquisition", "/billing",
+            "/export", "/acquisition", "/billing", "/team",
         )):
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -170,8 +172,21 @@ def create_app(
             for e in error.errors()
         ]}, status_code=422)
 
+    @application.exception_handler(psycopg.Error)
+    async def database_error(request: Request, error: psycopg.Error):
+        # Team storage/entitlement guards also protect existing capture and
+        # worker SQL. Return only fixed public errors, never SQL or row contents.
+        message = error.diag.message_primary
+        quota_messages = {'Project document limit reached', 'Project storage limit reached'}
+        if error.sqlstate == 'P0003' and message in quota_messages:
+            return JSONResponse({'detail': {'code': 'team_storage_limit', 'message': 'This project has reached its document or storage limit.'}}, status_code=409)
+        if error.sqlstate == 'P0001' and message == 'Team subscription required':
+            return JSONResponse({'detail': {'code': 'team_subscription_required', 'message': 'An active Team subscription is required.'}}, status_code=403)
+        return JSONResponse({'detail': {'code': 'database_unavailable', 'message': 'This action could not complete. Please retry.'}}, status_code=503)
+
     application.include_router(auth_router)
     application.include_router(billing_router)
+    application.include_router(team_router)
     application.include_router(import_packages_router)
     application.include_router(imports_router)
     application.include_router(flares_router)

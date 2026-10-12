@@ -16,6 +16,7 @@ const idleSnapshot: CheckoutSnapshot = Object.freeze({ phase: "idle", error: nul
 export function createSandboxCheckoutClient({
   token,
   proPriceId,
+  teamPriceId,
   initialize,
   getCheckoutIntent,
   getTheme = () => "light",
@@ -25,8 +26,9 @@ export function createSandboxCheckoutClient({
 }: {
   token: string | undefined;
   proPriceId: string | undefined;
+  teamPriceId?: string;
   initialize: (options: InitializePaddleOptions) => Promise<CheckoutPaddle | undefined>;
-  getCheckoutIntent: (signal: AbortSignal) => Promise<CheckoutIntent>;
+  getCheckoutIntent: (signal: AbortSignal, plan?: "pro" | "team") => Promise<CheckoutIntent>;
   getTheme?: () => "light" | "dark";
   loadTimeoutMs?: number;
   openTimeoutMs?: number;
@@ -130,11 +132,11 @@ export function createSandboxCheckoutClient({
       }
       publish({ phase: "idle", error: null });
     },
-    async openProCheckout(user: CheckoutUser | null, locale: "en" | "es") {
+    async openProCheckout(user: CheckoutUser | null, locale: "en" | "es", plan: "pro" | "team" = "pro") {
       // Synchronous lock, before the first await, including the success overlay.
       if (snapshot.phase !== "idle") return;
       const clientToken = token?.trim();
-      const priceId = proPriceId?.trim();
+      const priceId = (plan === "team" ? teamPriceId : proPriceId)?.trim();
       if (!clientToken || !priceId) return fail("configuration");
       if (!/^test_[A-Za-z0-9_-]+$/.test(clientToken)) return fail("sandbox-only");
       if (!/^pri_[a-z0-9]{26}$/.test(priceId)) return fail("price");
@@ -149,7 +151,7 @@ export function createSandboxCheckoutClient({
       let intentTimer: ReturnType<typeof setTimeout> | undefined;
       try {
         intent = await Promise.race([
-          getCheckoutIntent(controller.signal),
+          getCheckoutIntent(controller.signal, plan),
           new Promise<never>((_, reject) => {
             controller.signal.addEventListener("abort", () => reject(new BillingRequestError("backend")), { once: true });
             intentTimer = setTimeout(() => controller.abort(), intentTimeoutMs);

@@ -37,6 +37,8 @@ class Settings:
     developer_mail_accounts: str | None = field(default=None, repr=False)
     paddle_environment: str = "sandbox"
     paddle_pro_price_id: str | None = None
+    paddle_team_price_id: str | None = None
+    team_enabled: bool = False
     paddle_webhook_secret: str | None = field(default=None, repr=False)
 
     @property
@@ -66,6 +68,10 @@ class Settings:
             raise RuntimeError("Paddle billing supports Sandbox only")
         if self.paddle_pro_price_id and not re.fullmatch(r"pri_[a-z0-9]{26}", self.paddle_pro_price_id):
             raise RuntimeError("PADDLE_PRO_PRICE_ID is invalid")
+        if self.paddle_team_price_id and not re.fullmatch(r"pri_[a-z0-9]{26}", self.paddle_team_price_id):
+            raise RuntimeError("PADDLE_TEAM_PRICE_ID is invalid")
+        if self.paddle_team_price_id and self.paddle_team_price_id == self.paddle_pro_price_id:
+            raise RuntimeError("Team and Pro require different prices")
         if self.environment not in {"production", "development", "test"}:
             raise RuntimeError("FLARE_ENV must be production, development or test")
         if self.import_storage_provider not in {None, "postgres"}:
@@ -183,6 +189,8 @@ def load_settings() -> Settings:
         smtp_url=os.getenv("SMTP_URL"),
         email_from=os.getenv("EMAIL_FROM"),
         developer_mail_accounts=os.getenv("DEVELOPER_MAIL_ACCOUNTS"),
+        paddle_team_price_id=os.getenv("PADDLE_TEAM_PRICE_ID"),
+        team_enabled=_optional_bool("TEAM_ENABLED") or False,
         paddle_environment=os.getenv("PADDLE_ENVIRONMENT", "sandbox"),
         paddle_pro_price_id=os.getenv("PADDLE_PRO_PRICE_ID"),
         paddle_webhook_secret=os.getenv("PADDLE_WEBHOOK_SECRET"),

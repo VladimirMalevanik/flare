@@ -48,17 +48,18 @@ export function SubscriptionSection() {
   }, [userId, workspaceId]);
   const busy = checkout.phase === "loading" || checkout.phase === "open" || checkout.phase === "complete";
   const cachedStatus = billing.status?.workspaceId === workspaceId ? billing.status : null;
-  const verifiedStatus = cachedStatus?.plan === "pro" && !hasUnexpiredProAccess(cachedStatus) ? null : cachedStatus;
+  const verifiedStatus = cachedStatus && cachedStatus.plan !== "free" && !hasUnexpiredProAccess(cachedStatus) ? null : cachedStatus;
   const currentPlan = verifiedStatus?.plan ?? null;
   const canBuyPro = billing.phase === "ready" && verifiedStatus?.checkoutAvailable
     && verifiedStatus.canManageBilling && currentPlan === "free" && !billing.pendingConfirmation
     && !billing.confirmationTimedOut;
+  const canBuyTeam = canBuyPro && verifiedStatus?.teamCheckoutAvailable === true;
 
-  async function buyPro() {
-    if (!canBuyPro || busy) return;
+  async function buyPro(plan: "pro" | "team" = "pro") {
+    if (!(plan === "team" ? canBuyTeam : canBuyPro) || busy) return;
     setNotice(null);
     try {
-      await paddleSandboxCheckout.openProCheckout(session?.user ?? null, locale);
+      await paddleSandboxCheckout.openProCheckout(session?.user ?? null, locale, plan);
     } catch {
       setNotice("open");
     }
@@ -73,6 +74,7 @@ export function SubscriptionSection() {
       : checkout.phase === "loading" ? copy.loadingStatus
       : checkout.phase === "open" ? copy.openStatus
       : currentPlan === "pro" ? copy.proConfirmed
+      : currentPlan === "team" ? (locale === "es" ? "Team está confirmado para esta licencia." : "Team is confirmed for this license.")
       : billing.pendingConfirmation ? copy.confirming
       : billing.confirmationTimedOut ? copy.confirmationDelayed
       : checkout.phase === "complete" ? copy.completeStatus
@@ -80,7 +82,7 @@ export function SubscriptionSection() {
   const billingMessage = billing.error ? copy.billingErrors[billing.error]
     : billing.phase === "loading" && !verifiedStatus ? copy.checking
     : verifiedStatus && !verifiedStatus.canManageBilling ? copy.ownerOnly
-    : verifiedStatus && !verifiedStatus.checkoutAvailable && currentPlan !== "pro" ? copy.backendSetup
+    : verifiedStatus && !verifiedStatus.checkoutAvailable && currentPlan === "free" ? copy.backendSetup
     : null;
 
   return (
@@ -117,7 +119,7 @@ export function SubscriptionSection() {
                 disabled={selected || busy || (plan === "pro" && !canBuyPro) || (plan === "free" && !currentPlan)}
                 aria-label={(selected ? copy.currentPlan : copy.buyPlan).replace("{plan}", details.name)}
                 aria-busy={plan === "pro" && checkout.phase === "loading"}
-                onClick={plan === "pro" ? () => void buyPro() : () => setNotice(plan === "free" ? "free" : "team")}
+                onClick={plan === "pro" ? () => void buyPro() : plan === "team" && canBuyTeam ? () => void buyPro("team") : () => setNotice(plan === "free" ? "free" : "team")}
               >
                 {buttonText}
               </button>

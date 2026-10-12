@@ -14,7 +14,7 @@ from psycopg_pool import ConnectionPool
 from pwdlib import PasswordHash
 
 
-CURRENT_SCHEMA_REVISION = "0022"
+CURRENT_SCHEMA_REVISION = "0024"
 IMPORT_STAGING_TABLES = ("import_staging_blocks", "import_staging_health")
 # These are private tables, rather than member-readable tenant projections. The
 # API and worker get only their exact capabilities; even a column SELECT grant
@@ -101,6 +101,30 @@ def _connection_is_ready(connection: Connection) -> bool:
         "SELECT version_num FROM public.alembic_version"
     ).fetchone()
     if revision != (CURRENT_SCHEMA_REVISION,):
+        return False
+
+    team_tables = ['team_policy','team_projects','team_invitations','team_tasks','team_task_history','team_member_events']
+    team_private = connection.execute('''SELECT count(*)=6 AND bool_and(relrowsecurity AND relforcerowsecurity
+        AND NOT has_table_privilege('flare_app',c.oid,'SELECT')
+        AND NOT has_table_privilege('flare_app',c.oid,'INSERT')
+        AND NOT has_table_privilege('flare_app',c.oid,'UPDATE')
+        AND NOT has_table_privilege('flare_worker',c.oid,'SELECT'))
+        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE n.nspname='public' AND c.relname=ANY(%s)''',(team_tables,)).fetchone()
+    if team_private != (True,):
+        return False
+    team_functions = connection.execute('''SELECT count(*)>=16 AND bool_and(p.prosecdef
+        AND p.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']
+        AND r.rolname IN ('flare_owner','flare_team_executor') AND NOT r.rolsuper AND NOT r.rolbypassrls
+        AND NOT r.rolcreatedb AND NOT r.rolcreaterole
+        AND (r.rolname='flare_owner' OR NOT r.rolcanlogin AND NOT r.rolinherit)
+        AND NOT EXISTS(SELECT 1 FROM pg_auth_members WHERE member=r.oid)
+        AND NOT has_function_privilege('public',p.oid,'EXECUTE')
+        AND NOT has_function_privilege('flare_worker',p.oid,'EXECUTE')
+        AND has_function_privilege('flare_app',p.oid,'EXECUTE')=(left(p.proname,6)<>'_team_' AND p.proname<>'guard_team_content'))
+        FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
+        WHERE n.nspname='public' AND (left(p.proname,5)='team_' OR left(p.proname,6)='_team_' OR p.proname='guard_team_content')''').fetchone()
+    if team_functions != (True,):
         return False
 
     protected_tables = connection.execute(

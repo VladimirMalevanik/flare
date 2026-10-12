@@ -16,6 +16,7 @@ import { useI18n } from "@/i18n/provider";
 import { AnalyticsPreferences } from "@/features/telemetry/analytics-preferences";
 import { AcquisitionPreferences } from "@/features/acquisition/preferences";
 import { DeveloperMail } from "./developer-mail";
+import { projectApiUrl } from "@/lib/team-context";
 import {
   dataErrorMessage,
   dataProvider,
@@ -448,7 +449,7 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
           description={t("Download active workspace Notes and Flares as Markdown and JSON in a ZIP file.")}
         >
           {session?.workspace.role === "owner" ? (
-            <a className="button" href={`${apiBaseUrl}/export`} download>
+            <a className="button" href={projectApiUrl(`${apiBaseUrl}/export`)} download>
               {t("Download ZIP")}</a>
           ) : (
             <span className="muted">{t("Owner only")}</span>

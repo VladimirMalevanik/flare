@@ -1,7 +1,8 @@
 export interface BillingStatus {
   environment: "sandbox";
   workspaceId: string;
-  plan: "free" | "pro";
+  plan: "free" | "pro" | "team";
+  teamCheckoutAvailable?: boolean;
   status: string | null;
   canManageBilling: boolean;
   checkoutAvailable: boolean;
@@ -37,10 +38,10 @@ function record(value: unknown): value is Record<string, unknown> {
 export function parseBillingStatus(value: unknown): BillingStatus {
   if (!record(value) || value.environment !== "sandbox"
     || typeof value.workspaceId !== "string" || !value.workspaceId
-    || (value.plan !== "free" && value.plan !== "pro")
+    || (value.plan !== "free" && value.plan !== "pro" && value.plan !== "team")
     || !(value.status === null || typeof value.status === "string")
     || typeof value.canManageBilling !== "boolean" || typeof value.checkoutAvailable !== "boolean"
-    || (value.plan === "pro" && (typeof value.accessUntil !== "string" || !Number.isFinite(Date.parse(value.accessUntil))))
+    || (value.plan !== "free" && (typeof value.accessUntil !== "string" || !Number.isFinite(Date.parse(value.accessUntil))))
     || ![value.accessUntil, value.trialEndsAt, value.currentPeriodEndsAt].every((date) => date === null || typeof date === "string")
     || !(value.scheduledChange === null || (record(value.scheduledChange)
       && typeof value.scheduledChange.action === "string" && typeof value.scheduledChange.effectiveAt === "string"))) {
@@ -50,6 +51,7 @@ export function parseBillingStatus(value: unknown): BillingStatus {
     environment: "sandbox", workspaceId: value.workspaceId, plan: value.plan,
     status: value.status, canManageBilling: value.canManageBilling,
     checkoutAvailable: value.checkoutAvailable,
+    ...(typeof value.teamCheckoutAvailable === "boolean" ? { teamCheckoutAvailable: value.teamCheckoutAvailable } : {}),
     accessUntil: value.accessUntil as string | null,
     trialEndsAt: value.trialEndsAt as string | null,
     currentPeriodEndsAt: value.currentPeriodEndsAt as string | null,
@@ -76,11 +78,12 @@ export function parseCheckoutIntent(value: unknown): CheckoutIntent {
 export function createBillingApi({
   baseUrl,
   request = fetch,
-}: { baseUrl: string; request?: typeof fetch }) {
-  async function call(path: string, method: "GET" | "POST", signal: AbortSignal) {
-    const response = await request(`${baseUrl}/billing/${path}`, {
+  requestUrl = (url: string) => url,
+}: { baseUrl: string; request?: typeof fetch; requestUrl?: (url: string) => string }) {
+  async function call(path: string, method: "GET" | "POST", signal: AbortSignal, plan: "pro" | "team" = "pro") {
+    const response = await request(requestUrl(`${baseUrl}/billing/${path}`), {
       method, credentials: "include", cache: "no-store", signal,
-      ...(method === "POST" ? { headers: { "Content-Type": "application/json" }, body: "{}" } : {}),
+      ...(method === "POST" ? { headers: { "Content-Type": "application/json" }, body: plan === "team" ? '{"plan":"team"}' : "{}" } : {}),
     });
     if (!response.ok) {
       const detail: unknown = await response.json().catch(() => null);
@@ -94,6 +97,6 @@ export function createBillingApi({
   }
   return {
     getStatus: async (signal: AbortSignal) => parseBillingStatus(await call("status", "GET", signal)),
-    createCheckoutIntent: async (signal: AbortSignal) => parseCheckoutIntent(await call("checkout-intents", "POST", signal)),
+    createCheckoutIntent: async (signal: AbortSignal, plan: "pro" | "team" = "pro") => parseCheckoutIntent(await call("checkout-intents", "POST", signal, plan)),
   };
 }
