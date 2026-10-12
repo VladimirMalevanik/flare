@@ -15,6 +15,7 @@ import { Select } from "@/components/select";
 import { useI18n } from "@/i18n/provider";
 import { AnalyticsPreferences } from "@/features/telemetry/analytics-preferences";
 import { AcquisitionPreferences } from "@/features/acquisition/preferences";
+import { DeveloperMail } from "./developer-mail";
 import {
   dataErrorMessage,
   dataProvider,
@@ -221,6 +222,7 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
         {session && <button className="button" onClick={logout} disabled={loggingOut}>{loggingOut ? t("Signing out…") : t("Sign out")}</button>}
       </SettingsSection>
       {subscription}
+      <DeveloperMail />
       <SettingsSection
         title={t("Appearance & Theme")}
         subtitle={t("Customize how Flare looks on your display.")}

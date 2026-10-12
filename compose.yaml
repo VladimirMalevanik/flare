@@ -39,6 +39,7 @@ services:
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:3000}
       SMTP_URL: ${SMTP_URL:-}
       EMAIL_FROM: ${EMAIL_FROM:-Flare <no-reply@localhost>}
+      DEVELOPER_MAIL_ACCOUNTS: ${DEVELOPER_MAIL_ACCOUNTS:-}
       GITHUB_APP_ID: ${GITHUB_APP_ID:-}
       GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
       GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}

@@ -18,9 +18,11 @@ from app.services.analytics_service import AnalyticsService, track_event_best_ef
 from app.api.routes import _analytics_service
 from app.services.auth_service import AuthenticatedUser
 from app.services.ops_service import QueueHealth, QueueMaintenance, QueueService
+from app.api.developer_mail import router as developer_mail_router
 
 
 router = APIRouter(prefix="/ops", tags=["ops"])
+router.include_router(developer_mail_router)
 
 
 def _owner_required(
