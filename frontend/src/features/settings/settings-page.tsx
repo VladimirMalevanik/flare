@@ -418,7 +418,7 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
         subtitle={t("Preferences for future connected sources; no live ingestion is running.")}
         icon="settings"
       >
-        <AnalyticsPreferences compact />
+        <AnalyticsPreferences compact={false} />
         <AcquisitionPreferences account />
         <SettingRow
           title={t("Exclude direct messages and private channels")}

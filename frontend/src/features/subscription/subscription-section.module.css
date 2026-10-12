@@ -101,15 +101,28 @@
   box-shadow: none;
 }
 
+.feedback {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.feedback > button {
+  max-width: 100%;
+  white-space: normal;
+}
+
 .note {
-  margin-top: 14px;
+  margin: 0;
   color: var(--secondary);
   font-size: 12px;
   line-height: 1.6;
 }
 
 .status {
-  margin-top: 12px;
+  width: 100%;
+  margin: 0;
   padding: 10px 12px;
   border-radius: 8px;
   background: var(--accent-wash);
