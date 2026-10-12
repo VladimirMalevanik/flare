@@ -17,7 +17,7 @@ const navigation = [
   { href: "/vault", label: "vault", icon: "vault" },
   { href: "/sources", label: "sources", icon: "sources" },
   { href: "/settings", label: "settings", icon: "settings" },
-  { href: "/team", label: "Team", icon: "sources" },
+  { href: "/team", label: "Team", icon: "team" },
 ] as const;
 export function AppShell({ children }: { children: ReactNode }) {
   return (
