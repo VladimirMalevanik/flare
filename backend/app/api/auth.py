@@ -169,7 +169,7 @@ def verified_user(
             "Review and accept the current Terms of Service and Privacy Policy to continue.",
         )
     selected = request.query_params.getlist("workspace")
-    if not selected and request.app.state.settings.team_enabled and request.url.path.endswith('/callback'):
+    if not selected and request.url.path.endswith('/callback') and getattr(request.app.state.settings,'team_enabled',False):
         provider = 'github-app' if request.url.path == '/integrations/github/callback' else (
             request.url.path.split('/')[-2] if request.url.path.startswith('/integrations/sources/') else None)
         states = request.query_params.getlist('state')
