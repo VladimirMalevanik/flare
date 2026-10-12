@@ -382,3 +382,37 @@ def test_sharing_and_acceptance_require_literal_true(team):
     assert c.post(f'/team/projects/{wid}/invitations',json={'email':member.email,'sharingAcknowledged':1}).status_code==422
     token,_=team.invite(c,wid,member)
     assert m.post('/team/invitations/accept',json={'token':token,'accept':1}).status_code==422
+
+
+def test_sources_integration_removal_retires_credentials_states_and_leases(team):
+    if team.query("SELECT to_regclass('public.source_connections')")[0][0] is None:pytest.skip('Requires DATA-003 integration tree')
+    owner,c=team.account();member,m=team.account();wid=team.create(owner,c);token,_=team.invite(c,wid,member);team.accept(m,token)
+    cid=uuid4();jid=uuid4();lease=uuid4();digest=sha256(uuid4().bytes).hexdigest()
+    try:
+        team.query("INSERT INTO source_connections(id,workspace_id,provider,owner_user_id,credential_blob,cursor_blob,status,enabled) VALUES(%s,%s,'gmail',%s,'synthetic-cipher','synthetic-draft','ready',true)",cid,UUID(wid),member.user_id)
+        team.query("INSERT INTO source_auth_states(state_hash,workspace_id,connection_id,user_id,scope_revision,pending_blob,expires_at) VALUES(%s,%s,%s,%s,1,'synthetic-state',now()+interval '5 minutes')",digest,UUID(wid),cid,member.user_id)
+        assert TeamService(team.db,member.user_id).call('oauth',digest,'gmail')==UUID(wid)
+        assert TeamService(team.db,owner.user_id).call('oauth',digest,'gmail') is None
+        team.query("INSERT INTO source_jobs(id,workspace_id,connection_id,owner_user_id,scope_revision,status,lease_token,lease_expires_at,cursor_blob) VALUES(%s,%s,%s,%s,1,'processing',%s,now()+interval '2 minutes','synthetic-draft')",jid,UUID(wid),cid,member.user_id,lease)
+        assert c.post(f'/team/projects/{wid}/members/{member.user_id}',json={'action':'remove'}).status_code==200
+        assert team.query('SELECT credential_blob,cursor_blob,enabled FROM source_connections WHERE id=%s',cid)==[(None,None,False)]
+        assert team.query('SELECT count(*) FROM source_auth_states WHERE workspace_id=%s',UUID(wid))==[(0,)]
+        assert team.query('SELECT status,lease_token,cursor_blob FROM source_jobs WHERE id=%s',jid)==[('cancelled',None,None)]
+    finally:
+        for table in ('source_items','source_jobs','source_auth_states','source_connections'):
+            team.query(f'DELETE FROM {table} WHERE workspace_id=%s',UUID(wid))
+
+
+def test_sources_integration_expiry_stops_provider_admission(team):
+    if team.query("SELECT to_regclass('public.source_connections')")[0][0] is None:pytest.skip('Requires DATA-003 integration tree')
+    owner,c=team.account();wid=team.create(owner,c);cid=uuid4()
+    try:
+        team.query("INSERT INTO source_connections(id,workspace_id,provider,owner_user_id,credential_blob,status,enabled) VALUES(%s,%s,'gmail',%s,'synthetic-cipher','ready',true)",cid,UUID(wid),owner.user_id)
+        team.query("UPDATE billing_subscriptions SET status='canceled' WHERE workspace_id=%s",owner.workspace_id)
+        with psycopg.connect(os.environ['WORKER_DATABASE_URL']) as worker:
+            assert worker.execute("SELECT claim_source_job(ARRAY['gmail'],1)").fetchone()[0] is None
+        assert team.query('SELECT credential_blob,enabled FROM source_connections WHERE id=%s',cid)==[(None,False)]
+        assert team.query('SELECT count(*) FROM source_jobs WHERE workspace_id=%s',UUID(wid))==[(0,)]
+    finally:
+        for table in ('source_items','source_jobs','source_auth_states','source_connections'):
+            team.query(f'DELETE FROM {table} WHERE workspace_id=%s',UUID(wid))

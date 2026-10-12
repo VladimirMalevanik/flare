@@ -65,23 +65,19 @@ def upgrade():
       GRANT UPDATE(status) ON public.billing_subscriptions TO {owner};
       GRANT SELECT,UPDATE(updated_by_user_id) ON public.analysis_schedules TO {owner};''')
     for table in ('workspaces','workspace_members','billing_subscriptions','documents','chunks','analysis_schedules','github_connection_states'):
-        access = "current_setting('application_name',true)='flare-team-management'" if managed else 'true'
+        access = "current_setting('search_path')='pg_catalog, public, flare_team_scope, pg_temp'" if managed else 'true'
         op.execute(f'CREATE POLICY team_executor_access ON public.{table} TO {owner} USING({access}) WITH CHECK({access})')
     if managed:
-        # Managed PostgreSQL uses the existing migration owner, not a new role.
-        # Pin the management marker on this function family only. Every other
-        # owner function resets it, even if a caller forges the transaction GUC.
-        op.execute('''DO $$ DECLARE f record; BEGIN
-          FOR f IN SELECT p.oid::regprocedure AS signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-            WHERE n.nspname='public' AND p.proowner='flare_owner'::regrole AND p.prosecdef LOOP
-            EXECUTE format('ALTER FUNCTION %s SET application_name TO %L',f.signature,'flare-runtime');
-          END LOOP;
-        END $$;''')
+        # An empty private schema marks only this hardened function family.
+        # Other owner capabilities retain their existing pinned search_path, so
+        # a caller cannot carry this marker into unrelated security-definer SQL.
+        op.execute("CREATE SCHEMA flare_team_scope AUTHORIZATION flare_owner")
+        op.execute("REVOKE ALL ON SCHEMA flare_team_scope FROM PUBLIC,flare_app,flare_worker")
         op.execute('''ALTER POLICY executor_identity ON public.workspace_members USING(
-          user_id=nullif(current_setting('app.user_id',true),'') OR current_setting('application_name',true)='flare-team-management');''')
+          user_id=nullif(current_setting('app.user_id',true),'') OR current_setting('search_path')='pg_catalog, public, flare_team_scope, pg_temp');''')
         for table in ('documents','document_versions','chunks'):
             op.execute(f'''ALTER POLICY executor_member ON public.{table} USING(
-              current_setting('application_name',true)='flare-team-management' OR EXISTS(SELECT 1 FROM public.workspace_members m
+              current_setting('search_path')='pg_catalog, public, flare_team_scope, pg_temp' OR EXISTS(SELECT 1 FROM public.workspace_members m
                 WHERE m.workspace_id={table}.workspace_id AND m.user_id=nullif(current_setting('app.user_id',true),'') AND m.role IN ('owner','editor')));''')
     if not managed:
         op.execute(f'GRANT CREATE ON SCHEMA public TO {owner}')
@@ -93,7 +89,7 @@ def upgrade():
       END IF;
     END $$;''')
     for table in ('source_connections','source_auth_states','source_jobs'):
-        access = "current_setting('application_name',true)='flare-team-management'" if managed else 'true'
+        access = "current_setting('search_path')='pg_catalog, public, flare_team_scope, pg_temp'" if managed else 'true'
         op.execute(f'''DO $$ BEGIN
           IF to_regclass('public.{table}') IS NOT NULL THEN
             CREATE POLICY team_retirement_access ON public.{table} TO {owner} USING({access}) WITH CHECK({access});
@@ -107,7 +103,7 @@ def upgrade():
         op.execute(f"ALTER FUNCTION public.{signature} SET statement_timeout='5s'")
         op.execute(f"ALTER FUNCTION public.{signature} SET lock_timeout='2s'")
         if managed:
-            op.execute(f"ALTER FUNCTION public.{signature} SET application_name='flare-team-management'")
+            op.execute(f"ALTER FUNCTION public.{signature} SET search_path=pg_catalog,public,flare_team_scope,pg_temp")
     for table in ('documents','document_versions','chunks'):
         op.execute(f'''CREATE TRIGGER team_content_guard BEFORE INSERT OR UPDATE OR DELETE ON public.{table}
           FOR EACH ROW EXECUTE FUNCTION public.guard_team_content()''')

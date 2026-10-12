@@ -54,6 +54,6 @@ def test_managed_owner_marker_cannot_be_inherited_by_other_capabilities(connecti
     owner=connection.execute("SELECT pg_get_userbyid(proowner) FROM pg_proc WHERE oid='team_projects_list()'::regprocedure").fetchone()[0]
     if owner!='flare_owner':pytest.skip('Managed owner only')
     settings=connection.execute("SELECT proconfig FROM pg_proc WHERE oid='provision_workspace(uuid,text)'::regprocedure").fetchone()[0]
-    assert 'application_name=flare-runtime' in settings
-    connection.execute('ALTER FUNCTION provision_workspace(uuid,text) RESET application_name')
+    assert any(v.startswith('search_path=') and 'flare_team_scope' not in v for v in settings)
+    connection.execute('ALTER FUNCTION provision_workspace(uuid,text) RESET search_path')
     assert not ready(connection)

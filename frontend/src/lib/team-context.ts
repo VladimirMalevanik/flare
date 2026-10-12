@@ -1,4 +1,5 @@
 /** An explicit URL project belongs to this tab. Never change a global auth cookie. */
+import type { Route } from "next";
 export function selectedProject(): string | null {
   if (typeof window === "undefined") return null;
   return new URLSearchParams(window.location.search).get("project");
@@ -13,12 +14,12 @@ export function projectApiUrl(url: string): string {
   return `${base}${base.includes("?") ? "&" : "?"}workspace=${encodeURIComponent(project)}${fragment}`;
 }
 
-export function projectHref(path: string, project = selectedProject()): string {
-  if (!project) return path;
+export function projectHref(path: string, project = selectedProject()): Route {
+  if (!project) return path as Route;
   const hashIndex = path.indexOf("#");
   const base = hashIndex === -1 ? path : path.slice(0,hashIndex);
   const fragment = hashIndex === -1 ? "" : path.slice(hashIndex);
-  return `${base}${base.includes("?") ? "&" : "?"}project=${encodeURIComponent(project)}${fragment}`;
+  return `${base}${base.includes("?") ? "&" : "?"}project=${encodeURIComponent(project)}${fragment}` as Route;
 }
 
 export function switchProject(id: string | null, pathname = "/vault") {

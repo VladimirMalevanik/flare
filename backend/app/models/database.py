@@ -114,12 +114,11 @@ def _connection_is_ready(connection: Connection) -> bool:
     if team_private != (True,):
         return False
     team_functions = connection.execute('''SELECT count(*)=25 AND bool_and(p.prosecdef
-        AND p.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']
+        AND p.proconfig @> ARRAY[CASE WHEN r.rolname='flare_owner' THEN 'search_path=pg_catalog, public, flare_team_scope, pg_temp' ELSE 'search_path=pg_catalog, public, pg_temp' END]
         AND r.rolname IN ('flare_owner','flare_team_executor') AND NOT r.rolsuper AND NOT r.rolbypassrls
         AND NOT r.rolcreatedb AND NOT r.rolcreaterole
         AND (r.rolname='flare_owner' OR NOT r.rolcanlogin AND NOT r.rolinherit)
         AND NOT EXISTS(SELECT 1 FROM pg_auth_members WHERE member=r.oid)
-        AND (r.rolname<>'flare_owner' OR p.proconfig @> ARRAY['application_name=flare-team-management'])
         AND NOT has_function_privilege('public',p.oid,'EXECUTE')
         AND NOT has_function_privilege('flare_worker',p.oid,'EXECUTE')
         AND has_function_privilege('flare_app',p.oid,'EXECUTE')=(left(p.proname,6)<>'_team_' AND p.proname<>'guard_team_content'))
@@ -131,8 +130,19 @@ def _connection_is_ready(connection: Connection) -> bool:
         SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
         WHERE n.nspname='public' AND r.rolname='flare_owner' AND p.prosecdef
           AND left(p.proname,5)<>'team_' AND left(p.proname,6)<>'_team_' AND p.proname<>'guard_team_content'
-          AND NOT coalesce(p.proconfig @> ARRAY['application_name=flare-runtime'],false))''').fetchone()
+          AND NOT EXISTS(SELECT 1 FROM unnest(p.proconfig) setting WHERE setting LIKE 'search_path=%' AND position('flare_team_scope' IN setting)=0))''').fetchone()
     if managed_team_guard != (True,):
+        return False
+    marker_schema = connection.execute("""SELECT
+        (NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
+            WHERE p.proname='team_projects_list' AND r.rolname='flare_owner')
+         OR EXISTS(SELECT 1 FROM pg_namespace WHERE nspname='flare_team_scope'))
+        AND NOT EXISTS(SELECT 1 FROM pg_namespace n
+        WHERE n.nspname='flare_team_scope' AND (pg_get_userbyid(n.nspowner)<>'flare_owner'
+          OR has_schema_privilege('flare_app',n.oid,'CREATE') OR has_schema_privilege('flare_worker',n.oid,'CREATE')
+          OR EXISTS(SELECT 1 FROM pg_class WHERE relnamespace=n.oid)
+          OR EXISTS(SELECT 1 FROM pg_proc WHERE pronamespace=n.oid)))""").fetchone()
+    if marker_schema != (True,):
         return False
     team_worker_admission = connection.execute('''SELECT count(*)=5 AND bool_and(
         position('public._team_workspace_paid' IN pg_get_functiondef(p.oid))>0)

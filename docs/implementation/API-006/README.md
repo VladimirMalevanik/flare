@@ -91,15 +91,16 @@ billing status allow row locks; public Team functions do not modify billing rows
 Migration checks reject unsafe role attributes/memberships and retire temporary
 ownership authority.
 
-Managed PostgreSQL retains the established `flare_owner` function owner. Team
-functions pin the USERSET `application_name=flare-team-management`; other owner
-security-definer functions pin `application_name=flare-runtime`. Only the private
-function family gets the broader membership view. Runtime callers cannot carry
-a forged marker through other owner capabilities. Readiness verifies these pins,
-private grants, 25 exact Team functions and worker admission guards. This avoids
-requiring a new privileged managed-cloud role or superuser custom-GUC privileges.
-Function-local settings restore the caller's prior value; see
-[PostgreSQL CREATE FUNCTION](https://www.postgresql.org/docs/17/sql-createfunction.html).
+Managed PostgreSQL retains the established `flare_owner` function owner. An empty,
+private `flare_team_scope` schema marks the Team function family's pinned
+`search_path=pg_catalog,public,flare_team_scope,pg_temp`. Other owner capabilities
+retain their existing hardened search paths without that schema. A forged caller
+search path therefore cannot carry the broader membership view into another
+security-definer capability. Readiness verifies both pins, the empty marker schema,
+private grants, 25 exact Team functions and worker admission guards. This requires
+no new managed-cloud role, superuser custom-GUC privileges or changes to worker
+application names/monitoring. Function-local search paths restore prior settings;
+see [PostgreSQL CREATE FUNCTION](https://www.postgresql.org/docs/17/sql-createfunction.html).
 
 Both profiles need normal migration ownership; application and worker roles cannot
 run this migration. Forward-only migration: restore a reviewed backup instead of
