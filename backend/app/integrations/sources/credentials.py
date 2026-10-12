@@ -34,17 +34,20 @@ class CredentialCipher:
         if not isinstance(value, dict):
             raise CredentialUnavailable
         raw = json.dumps({'scope': scope.envelope(), 'credentials': value}, ensure_ascii=False, separators=(',', ':')).encode()
-        if len(raw) > 16_000:
+        if len(raw) > (450_000 if scope.purpose == 'cursor' else 16_000):
             raise CredentialUnavailable
         return self._cipher.encrypt(raw).decode('ascii')
 
     def decrypt(self, scope: CredentialScope, ciphertext: str) -> dict:
         try:
-            if not isinstance(ciphertext, str) or len(ciphertext) > 24_000:
+            if not isinstance(ciphertext, str) or len(ciphertext) > (620_000 if scope.purpose == 'cursor' else 24_000):
                 raise CredentialUnavailable
-            value = json.loads(self._cipher.decrypt(ciphertext.encode('ascii')))
+            raw = self._cipher.decrypt(ciphertext.encode('ascii'))
+            if len(raw) > (450_000 if scope.purpose == 'cursor' else 16_000):
+                raise CredentialUnavailable
+            value = json.loads(raw)
             if value.get('scope') != scope.envelope() or not isinstance(value.get('credentials'), dict):
                 raise CredentialUnavailable
             return value['credentials']
-        except (InvalidToken, ValueError, TypeError, UnicodeError, AttributeError):
+        except (InvalidToken, ValueError, TypeError, UnicodeError, AttributeError, RecursionError):
             raise CredentialUnavailable from None

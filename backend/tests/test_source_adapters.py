@@ -320,3 +320,17 @@ def test_remote_titles_get_editable_portable_file_names():
     # Vault's existing text-file editing path accepts the generated name.
     prepared=ImportService.prepare_content(format='txt',file_name=name,file_type='text/plain',file_size=7,content='Context')
     assert prepared.content=='Context'
+
+
+def test_large_notion_text_checkpoint_is_encrypted_bounded_and_credentials_stay_small(source_settings,monkeypatch):
+    cipher=CredentialCipher(source_settings.token_keys); binding=CredentialScope('w','c','notion','u',purpose='cursor')
+    state={'stack':[['page',None]],'text':['private source '*3000],'bytes':42000}
+    blob=cipher.encrypt(binding,state)
+    assert 'private source' not in blob and cipher.decrypt(binding,blob)==state
+    with pytest.raises(CredentialUnavailable): cipher.encrypt(replace(binding,purpose='credentials'),state)
+    monkeypatch.setattr('app.integrations.sources.http.time.sleep',lambda *_:None)
+    def send(request):
+        if '/pages/' in request.url.path:return httpx.Response(200,json={'id':'page','url':'https://notion.so/page','properties':{}})
+        return httpx.Response(200,json={'results':[{'id':'block','type':'paragraph','paragraph':{'rich_text':[{'plain_text':'x'*2000} for _ in range(20)]}}],'has_more':False})
+    reader=fixture_reader(source_settings,'notion',send)
+    assert len(reader.documents({'id':'page','name':'Page'}).documents[0].content)==40000

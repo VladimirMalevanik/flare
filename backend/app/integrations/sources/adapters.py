@@ -243,11 +243,11 @@ class NotionReader(Reader):
                 value=''.join(str(x.get('plain_text','')) for x in rich)
                 if kind=='child_page': continue
                 if value: text.append(value); size+=len(value.encode())+1
-                if size>min(self.settings.max_document_bytes,8000) or len(json.dumps({'stack':stack,'text':text},ensure_ascii=False).encode())>12000: raise SourceProviderError('document_too_large')
+                if size>self.settings.max_document_bytes or len(json.dumps({'stack':stack,'text':text},ensure_ascii=False).encode())>400000: raise SourceProviderError('document_too_large')
                 if item.get('has_children'): children.append([identifier(item.get('id')),None])
             # Child blocks are included; their parent text remains immediately identifiable.
             stack.extend(reversed(children))
-            if len(stack)>100 or len(json.dumps({'stack':stack,'text':text},ensure_ascii=False).encode())>12000: raise SourceProviderError('document_too_large')
+            if len(stack)>100 or len(json.dumps({'stack':stack,'text':text},ensure_ascii=False).encode())>400000: raise SourceProviderError('document_too_large')
         if stack: return DocumentPage((),{'stack':stack,'text':text,'bytes':size})
         if not text: return DocumentPage((),skipped=1)
         return DocumentPage((self.document(resource['id'],self.title(row),'\n'.join(text),source_url(row.get('url'),('notion.so','notion.site')),{'modifiedAt':row.get('last_edited_time')}),))

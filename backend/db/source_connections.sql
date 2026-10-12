@@ -3,7 +3,7 @@ CREATE TABLE public.source_connections (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), workspace_id uuid NOT NULL REFERENCES public.workspaces(id),
  provider text NOT NULL CHECK(provider IN ('slack','gmail','drive','notion','github')),
  owner_user_id text NOT NULL REFERENCES public.auth_users(id), account_label text,
- credential_blob text CHECK(length(credential_blob)<=24000), cursor_blob text CHECK(length(cursor_blob)<=24000),
+ credential_blob text CHECK(length(credential_blob)<=24000), cursor_blob text CHECK(length(cursor_blob)<=620000),
  scope_revision bigint NOT NULL DEFAULT 1, enabled boolean NOT NULL DEFAULT false,
  resources jsonb NOT NULL DEFAULT '[]' CHECK(jsonb_typeof(resources)='array' AND jsonb_array_length(resources)<=20),
  policy jsonb NOT NULL DEFAULT '{}', status text NOT NULL DEFAULT 'pending'
@@ -27,7 +27,7 @@ CREATE TABLE public.source_jobs (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), workspace_id uuid NOT NULL, connection_id uuid NOT NULL,
  owner_user_id text NOT NULL, scope_revision bigint NOT NULL, generation bigint NOT NULL DEFAULT 0,
  status text NOT NULL DEFAULT 'queued' CHECK(status IN ('queued','processing','retry_wait','completed','failed','cancelled')),
- cursor_blob text CHECK(length(cursor_blob)<=24000), lease_token uuid, lease_expires_at timestamptz,
+ cursor_blob text CHECK(length(cursor_blob)<=620000), lease_token uuid, lease_expires_at timestamptz,
  available_at timestamptz NOT NULL DEFAULT now(), deadline timestamptz NOT NULL DEFAULT now()+interval '1 hour',
  attempts integer NOT NULL DEFAULT 0, pages integer NOT NULL DEFAULT 0,
  added integer NOT NULL DEFAULT 0, updated integer NOT NULL DEFAULT 0, unchanged integer NOT NULL DEFAULT 0,
@@ -106,7 +106,7 @@ BEGIN
   UPDATE public.source_connections SET credential_blob=NULL,cursor_blob=NULL,resources='[]',enabled=false,
    scope_revision=scope_revision+1,status='disabled',error_code=NULL,updated_at=clock_timestamp() WHERE id=c.id;
   DELETE FROM public.source_auth_states WHERE workspace_id=w AND connection_id=c.id;
-  UPDATE public.source_jobs SET status='cancelled',lease_token=NULL,lease_expires_at=NULL,completed_at=clock_timestamp()
+  UPDATE public.source_jobs SET status='cancelled',lease_token=NULL,lease_expires_at=NULL,cursor_blob=NULL,completed_at=clock_timestamp()
    WHERE workspace_id=w AND connection_id=c.id AND status IN ('queued','processing','retry_wait');
   RETURN jsonb_build_object('ok',true);
  END IF;
@@ -133,7 +133,7 @@ BEGIN
   UPDATE public.source_connections SET credential_blob=p_payload->>'credentialBlob',account_label=p_payload->>'accountLabel',
    enabled=false,resources='[]',cursor_blob=NULL,status='connected',error_code=NULL,scope_revision=scope_revision+1,
    github_installation_id=g.installation_id,github_repository_id=g.repository_id,policy=p_payload->'policy',updated_at=clock_timestamp() WHERE id=c.id;
-  UPDATE public.source_jobs SET status='cancelled',lease_token=NULL,lease_expires_at=NULL,completed_at=clock_timestamp()
+  UPDATE public.source_jobs SET status='cancelled',lease_token=NULL,lease_expires_at=NULL,cursor_blob=NULL,completed_at=clock_timestamp()
    WHERE workspace_id=w AND connection_id=c.id AND status IN ('queued','processing','retry_wait');
   RETURN jsonb_build_object('ok',true);
  END IF;
@@ -146,7 +146,7 @@ BEGIN
  IF p_action='select' THEN
   selected_resources:=p_payload->'resources';
   IF jsonb_typeof(selected_resources) IS DISTINCT FROM 'array' OR jsonb_array_length(selected_resources)>20 OR (jsonb_array_length(selected_resources)>0 AND p_payload->'shareWithWorkspace' IS DISTINCT FROM 'true'::jsonb) THEN RETURN jsonb_build_object('error','selection_consent_required'); END IF;
-  UPDATE public.source_jobs SET status='cancelled',lease_token=NULL,lease_expires_at=NULL,completed_at=clock_timestamp()
+  UPDATE public.source_jobs SET status='cancelled',lease_token=NULL,lease_expires_at=NULL,cursor_blob=NULL,completed_at=clock_timestamp()
    WHERE workspace_id=w AND connection_id=c.id AND status IN ('queued','processing','retry_wait');
   UPDATE public.source_connections SET resources=selected_resources,cursor_blob=NULL,scope_revision=scope_revision+1,
    enabled=jsonb_array_length(selected_resources)>0,status=CASE WHEN jsonb_array_length(selected_resources)>0 THEN 'ready' ELSE 'connected' END,
@@ -154,7 +154,7 @@ BEGIN
   RETURN jsonb_build_object('ok',true);
  END IF;
  IF p_action='cancel' THEN
-  UPDATE public.source_jobs SET status='cancelled',lease_token=NULL,lease_expires_at=NULL,completed_at=clock_timestamp()
+  UPDATE public.source_jobs SET status='cancelled',lease_token=NULL,lease_expires_at=NULL,cursor_blob=NULL,completed_at=clock_timestamp()
    WHERE workspace_id=w AND connection_id=c.id AND status IN ('queued','processing','retry_wait');
   UPDATE public.source_connections SET scope_revision=scope_revision+1,status='ready',
    next_sync_at=clock_timestamp()+interval '1 hour',updated_at=clock_timestamp() WHERE id=c.id;
@@ -188,7 +188,7 @@ BEGIN
   IF NOT EXISTS(SELECT 1 FROM public.auth_users a JOIN public.workspace_members m ON m.user_id=a.id
    WHERE a.id=c.owner_user_id AND NOT a.disabled AND m.workspace_id=c.workspace_id AND m.role IN ('owner','editor')) THEN
    UPDATE public.source_connections SET credential_blob=NULL,cursor_blob=NULL,enabled=false,scope_revision=scope_revision+1,status='disabled',error_code='authorization_lost' WHERE id=c.id;
-   UPDATE public.source_jobs SET status='cancelled',lease_token=NULL,lease_expires_at=NULL,completed_at=clock_timestamp() WHERE connection_id=c.id AND status IN ('queued','processing','retry_wait');
+   UPDATE public.source_jobs SET status='cancelled',lease_token=NULL,lease_expires_at=NULL,cursor_blob=NULL,completed_at=clock_timestamp() WHERE connection_id=c.id AND status IN ('queued','processing','retry_wait');
   END IF;
   UPDATE public.source_connections SET auth_checked_at=clock_timestamp() WHERE id=c.id;
  END LOOP;
@@ -206,10 +206,10 @@ BEGIN
   SELECT * INTO j FROM public.source_jobs WHERE id=j.id FOR UPDATE;
   IF NOT FOUND OR j.status NOT IN ('queued','retry_wait','processing') OR (j.status='processing' AND j.lease_expires_at>clock_timestamp()) THEN CONTINUE; END IF;
   IF c.scope_revision<>j.scope_revision OR c.credential_blob IS NULL THEN
-   UPDATE public.source_jobs SET status='cancelled',completed_at=clock_timestamp() WHERE id=j.id; CONTINUE;
+   UPDATE public.source_jobs SET status='cancelled',cursor_blob=NULL,completed_at=clock_timestamp() WHERE id=j.id; CONTINUE;
   END IF;
   IF j.deadline<=clock_timestamp() OR j.attempts>=5 THEN
-   UPDATE public.source_jobs SET status='failed',error_code='sync_deadline',completed_at=clock_timestamp() WHERE id=j.id;
+   UPDATE public.source_jobs SET status='failed',cursor_blob=NULL,error_code='sync_deadline',completed_at=clock_timestamp() WHERE id=j.id;
    UPDATE public.source_connections SET status='error',error_code='sync_deadline',next_sync_at=clock_timestamp()+interval '1 hour' WHERE id=c.id; CONTINUE;
   END IF;
   IF EXISTS(SELECT 1 FROM public.source_jobs q WHERE q.workspace_id=j.workspace_id AND q.id<>j.id AND q.status='processing' AND q.lease_expires_at>clock_timestamp()) THEN CONTINUE; END IF;
@@ -217,13 +217,13 @@ BEGIN
   PERFORM id FROM public.auth_users a JOIN public.workspace_members m ON m.user_id=a.id WHERE a.id=j.owner_user_id AND NOT a.disabled AND m.workspace_id=j.workspace_id AND m.role IN ('owner','editor') FOR SHARE;
   IF NOT FOUND THEN
    UPDATE public.source_connections SET credential_blob=NULL,cursor_blob=NULL,enabled=false,scope_revision=scope_revision+1,status='disabled',error_code='authorization_lost' WHERE id=c.id;
-   UPDATE public.source_jobs SET status='cancelled',lease_token=NULL,lease_expires_at=NULL,completed_at=clock_timestamp() WHERE id=j.id; CONTINUE;
+   UPDATE public.source_jobs SET status='cancelled',lease_token=NULL,lease_expires_at=NULL,cursor_blob=NULL,completed_at=clock_timestamp() WHERE id=j.id; CONTINUE;
   END IF;
   IF c.provider='github' THEN
    SELECT * INTO g FROM public.github_connections WHERE workspace_id=j.workspace_id AND status='connected' AND installation_id=c.github_installation_id AND repository_id=c.github_repository_id FOR SHARE;
    IF NOT FOUND THEN
-    UPDATE public.source_connections SET credential_blob=NULL,enabled=false,status='error',scope_revision=scope_revision+1,error_code='repository_changed' WHERE id=c.id;
-    UPDATE public.source_jobs SET status='cancelled',completed_at=clock_timestamp() WHERE id=j.id; CONTINUE;
+    UPDATE public.source_connections SET credential_blob=NULL,cursor_blob=NULL,enabled=false,status='error',scope_revision=scope_revision+1,error_code='repository_changed' WHERE id=c.id;
+    UPDATE public.source_jobs SET status='cancelled',cursor_blob=NULL,completed_at=clock_timestamp() WHERE id=j.id; CONTINUE;
    END IF;
   END IF;
   UPDATE public.source_jobs SET status='processing',lease_token=gen_random_uuid(),lease_expires_at=clock_timestamp()+interval '180 seconds',generation=generation+1,attempts=attempts+1 WHERE id=j.id RETURNING * INTO j;
@@ -265,7 +265,7 @@ BEGIN
  IF p_action='error' THEN
   delay:=coalesce((p_payload->>'delay')::integer,60);
   IF delay<1 OR delay>86400 OR p_payload->'reconnect'='true'::jsonb OR j.attempts>=5 THEN
-   UPDATE public.source_jobs SET status='failed',error_code=p_payload->>'code',completed_at=clock_timestamp(),lease_token=NULL,lease_expires_at=NULL WHERE id=j.id;
+   UPDATE public.source_jobs SET status='failed',cursor_blob=NULL,error_code=p_payload->>'code',completed_at=clock_timestamp(),lease_token=NULL,lease_expires_at=NULL WHERE id=j.id;
    UPDATE public.source_connections SET status='error',enabled=CASE WHEN p_payload->'reconnect'='true'::jsonb OR delay>86400 THEN false ELSE enabled END,
     error_code=p_payload->>'code',next_sync_at=clock_timestamp()+interval '1 hour' WHERE id=c.id;
   ELSE
@@ -326,7 +326,7 @@ BEGIN
  IF has_more AND j.added+j.updated+j.unchanged+j.skipped+j.conflicts<200 AND j.pages<100 THEN
   UPDATE public.source_jobs SET status='queued',available_at=clock_timestamp()+make_interval(secs=>delay) WHERE id=j.id;
  ELSE
-  UPDATE public.source_jobs SET status='completed',completed_at=clock_timestamp() WHERE id=j.id;
+  UPDATE public.source_jobs SET status='completed',cursor_blob=NULL,completed_at=clock_timestamp() WHERE id=j.id;
   UPDATE public.source_connections SET status='ready',error_code=NULL,last_sync_at=clock_timestamp(),last_result=counts,
    next_sync_at=clock_timestamp()+make_interval(secs=>coalesce((c.policy->>'syncIntervalSeconds')::integer,3600)) WHERE id=c.id;
  END IF;

@@ -151,3 +151,19 @@ def test_reclaimed_lease_and_reselected_scope_reject_both_old_workers(db):
     assert step(db,first,'publish',documents=[document(first)])['error']=='lease_lost'
     actor(db,w,u); assert api(db,'select',id,expectedRevision=3,resources=[{'id':'L2','name':'Another','kind':'label'}],shareWithWorkspace=True)=={'ok':True}
     assert step(db,second,'publish',documents=[document(second)])['error']=='lease_lost'
+
+
+def test_large_encrypted_draft_cursor_survives_checkpoint_and_disconnect_erases_it(db):
+    from cryptography.fernet import Fernet
+    from app.integrations.sources.credentials import CredentialCipher,CredentialScope
+    w,u=tenant(db); id,job=connected(db,w,u)
+    cipher=CredentialCipher((Fernet.generate_key().decode(),)); binding=CredentialScope(str(w),id,'gmail',u,purpose='cursor')
+    blob=cipher.encrypt(binding,{'resource':0,'page':{'text':['draft '*8000]}})
+    assert len(blob)>24000
+    step(db,job,'publish',documents=[],cursorBlob=blob)
+    db.execute('RESET ROLE'); row=db.execute('SELECT cursor_blob FROM source_connections WHERE id=%s',(id,)).fetchone()
+    assert cipher.decrypt(binding,row['cursor_blob'])['page']['text'][0]=='draft '*8000
+    actor(db,w,u); api(db,'disconnect',id)
+    db.execute('RESET ROLE')
+    assert db.execute('SELECT cursor_blob FROM source_connections WHERE id=%s',(id,)).fetchone()['cursor_blob'] is None
+    assert db.execute('SELECT cursor_blob FROM source_jobs WHERE id=%s',(job['id'],)).fetchone()['cursor_blob'] is None
