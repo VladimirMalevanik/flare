@@ -295,3 +295,9 @@ def test_slack_continues_by_time_bounds_without_expiring_history_cursor(source_s
     assert reply.cursor is not None
     reader.documents({'id':'C1','name':'#product'},reply.cursor)
     assert histories[1]['latest']=='123.000001' and histories[1]['oldest']==histories[0]['oldest'] and 'cursor' not in histories[1]
+
+
+def test_invalid_unicode_is_a_redacted_provider_error():
+    from app.integrations.sources.http import plain_text
+    with pytest.raises(SourceProviderError) as error: plain_text('\ud800',maximum=100)
+    assert error.value.code=='invalid_provider_response'

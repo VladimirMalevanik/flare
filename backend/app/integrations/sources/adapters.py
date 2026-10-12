@@ -244,7 +244,7 @@ class NotionReader(Reader):
                 if item.get('has_children'): children.append([identifier(item.get('id')),None])
             # Child blocks are included; their parent text remains immediately identifiable.
             stack.extend(reversed(children))
-            if len(stack)>100: raise SourceProviderError('document_too_large')
+            if len(stack)>100 or len(json.dumps({'stack':stack,'text':text},ensure_ascii=False).encode())>12000: raise SourceProviderError('document_too_large')
         if stack: return DocumentPage((),{'stack':stack,'text':text,'bytes':size})
         if not text: return DocumentPage((),skipped=1)
         return DocumentPage((self.document(resource['id'],self.title(row),'\n'.join(text),source_url(row.get('url'),('notion.so','notion.site')),{'modifiedAt':row.get('last_edited_time')}),))

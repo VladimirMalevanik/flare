@@ -187,7 +187,7 @@ test('Sources loads through provider with headings outside grids and margin-safe
   assert.match(textContent(githubCard), /Connected/);
   assert.match(textContent(githubCard), /Repository connection is active\./);
   assert.match(textContent(githubCard), /flare\/example/);
-  assert.match(textContent(githubCard), /Repository activity ingestion is not available yet\./);
+  assert.doesNotMatch(textContent(githubCard), /Repository activity ingestion is not available yet\./);
   assert.doesNotMatch(textContent(githubCard), /Not available yet\./);
   const githubControls = nodes(GitHubControls({
     source: providerSources.find(s => s.id === 'github'),

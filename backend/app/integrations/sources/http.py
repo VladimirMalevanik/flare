@@ -103,8 +103,11 @@ class ProviderHTTP:
 
 
 def plain_text(value: object, *, maximum: int, allow_empty: bool = False) -> str:
-    if not isinstance(value, str) or '\x00' in value or len(value.encode('utf-8')) > maximum or not allow_empty and not value.strip():
-        raise SourceProviderError('invalid_provider_response')
+    try:
+        valid=isinstance(value,str) and '\x00' not in value and len(value.encode('utf-8'))<=maximum and (allow_empty or bool(value.strip()))
+    except UnicodeError:
+        valid=False
+    if not valid: raise SourceProviderError('invalid_provider_response')
     return value
 
 

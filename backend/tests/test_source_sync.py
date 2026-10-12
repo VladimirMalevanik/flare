@@ -141,3 +141,13 @@ def test_rate_limit_never_retries_early_and_storage_failure_rolls_back_page(db):
     with pytest.raises(psycopg.errors.ProgramLimitExceeded):
         with db.transaction(): step(db,job,'publish',documents=[document(job)])
     db.execute('RESET ROLE'); assert db.execute('SELECT count(*) AS n FROM documents WHERE workspace_id=%s',(w,)).fetchone()['n']==0
+
+
+def test_reclaimed_lease_and_reselected_scope_reject_both_old_workers(db):
+    w,u=tenant(db); id,first=connected(db,w,u)
+    db.execute('RESET ROLE'); db.execute("UPDATE source_jobs SET lease_expires_at=now()-interval '1 second' WHERE id=%s",(first['id'],))
+    actor(db,w,u,'flare_worker'); second=db.execute("SELECT claim_source_job(ARRAY['gmail'],1) AS value").fetchone()['value']
+    assert second['generation']==first['generation']+1
+    assert step(db,first,'publish',documents=[document(first)])['error']=='lease_lost'
+    actor(db,w,u); assert api(db,'select',id,expectedRevision=3,resources=[{'id':'L2','name':'Another','kind':'label'}],shareWithWorkspace=True)=={'ok':True}
+    assert step(db,second,'publish',documents=[document(second)])['error']=='lease_lost'

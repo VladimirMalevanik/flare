@@ -85,6 +85,12 @@ def test_real_oauth_single_use_selection_durable_sync_vault_no_ai(environment):
     result=client.get('/integrations/sources').json()['connections'][0]; assert result['lastResult']['added']==1
     with psycopg.connect(e.admin_url) as c:
         assert c.execute('SELECT count(*) FROM analysis_jobs WHERE workspace_id=ANY(%s)',(list(e.workspace_ids),)).fetchone()==(0,)
+    edit=client.patch('/items/'+items[0]['id'],json={'content':'Edited locally','expectedCurrentVersionId':items[0]['currentVersionId']}); assert edit.status_code==200,edit.text
+    assert client.post('/integrations/sources/connection/'+id+'/sync',json={}).status_code==200
+    job=jobs.claim(['gmail']); assert job
+    SourceProcessor(jobs,settings,http_factory=factory).process(job)
+    assert client.get('/items/'+items[0]['id']).json()['content']=='Edited locally'
+    assert client.get('/integrations/sources').json()['connections'][0]['lastResult']['conflicts']==1
     r=client.post('/integrations/sources/connection/'+id+'/disconnect',json={}); assert r.status_code==200
     assert len(client.get('/items').json())==1
 
