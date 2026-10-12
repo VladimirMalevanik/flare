@@ -14,6 +14,7 @@ const plans = ["free", "pro", "team"] as const;
 export function SubscriptionSection() {
   const { locale } = useI18n();
   const copy = subscriptionCopy[locale];
+  const teamBillingOwner = {en:"The license owner manages billing from their personal workspace.",es:"El titular de la licencia gestiona la facturación desde su espacio personal."}[locale];
   const teamConfirmed = {en:"Team is confirmed for this license.",es:"Team está confirmado para esta licencia."}[locale];
   const teamUpgradeUnavailable = {en:"This workspace already has Pro. A Team upgrade is not available here yet; contact Flare to change the existing subscription.",es:"Este espacio ya tiene Pro. La actualización a Team aún no está disponible aquí; contacta con Flare para cambiar la suscripción existente."}[locale];
   const session = useSession();
@@ -84,7 +85,7 @@ export function SubscriptionSection() {
       : null);
   const billingMessage = billing.error ? copy.billingErrors[billing.error]
     : billing.phase === "loading" && !verifiedStatus ? copy.checking
-    : verifiedStatus && !verifiedStatus.canManageBilling ? copy.ownerOnly
+    : verifiedStatus && !verifiedStatus.canManageBilling ? currentPlan === "team" ? teamBillingOwner : copy.ownerOnly
     : verifiedStatus && !verifiedStatus.checkoutAvailable && currentPlan === "free" ? copy.backendSetup
     : null;
 
@@ -110,7 +111,7 @@ export function SubscriptionSection() {
               <h3>{details.name}</h3>
               <p className={styles.description}>{details.description}</p>
               {plan === "pro" && <p className={styles.trial}>{copy.pro.trial}</p>}
-              <p className={styles.benefitLabel}>{plan === "free" ? copy.included : copy.planned}</p>
+              <p className={styles.benefitLabel}>{plan === "free" || plan === "team" && currentPlan === "team" ? copy.included : copy.planned}</p>
               <ul className={styles.benefits}>
                 {details.benefits.map((benefit) => (
                   <li key={benefit}><Icon name="check" /><span>{benefit}</span></li>
