@@ -32,7 +32,7 @@ runtime dependency, real invitation, provider call, payment or cloud deployment.
 
 ## Validation
 
-Product source 01d226e570079c3c63ad34c8c95baa723f2c6f65:
+Backend source 01d226e570079c3c63ad34c8c95baa723f2c6f65; final frontend ef5c652 preserves Team selection from Sources/import-guide links in Settings and updates synchronized-source analysis copy. A behavior regression checks the actual project helper and all four product links.
 
 | Check | Result |
 | --- | --- |
@@ -55,3 +55,22 @@ Source and Team remain disabled by default. Local synthetic preview is not proof
 of live provider authorization, delivery or billing. Activation checklist:
 [release-handoff.md](release-handoff.md). Service/account inventory and common
 Gmail setup: [service-register.md](service-register.md).
+
+## Combined local review
+
+Synthetic preview: http://localhost:8427/team?project=582a85ee-a4a4-41af-a856-7c6678625889.
+The account is a disposable Fedor owner with Ilyas editor and Vova viewer. Team,
+Sources, current Settings and shared Vault run against one restricted local DB.
+Provider connections remain unconfigured; the local mail recorder sends no emails.
+No daily/source worker is started and no real payment/AI request is made.
+
+Browser checks confirmed Team tasks, creator/assignee, role and project-aware
+navigation, current Team billing status, honest unconfigured source states and
+shared-project ZIP export. The downloaded ZIP contains workspace metadata, raw
+JSON and the expected synthetic interview note. Source/import guide navigation
+from Settings is additionally covered by the final behavior regression.
+Screenshot: local project outputs/closeout-qa/team.jpg.
+
+The backend/frontend code trees at the merged review head are the release source.
+Documentation-only follow-ups do not authorize using an older archive when the
+frontend code has changed. Operator activation stays in OPS-006.
