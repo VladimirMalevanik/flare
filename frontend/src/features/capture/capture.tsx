@@ -2,6 +2,7 @@
 import { useI18n } from "@/i18n/provider";
 
 import Link from "next/link";
+import { projectHref } from "@/lib/team-context";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { Icon } from "@/components/icons";
 import { useWorkspace } from "@/components/workspace-context";
@@ -697,7 +698,7 @@ export function Capture() {
       {saved && (
         <div className="toast capture-toast" role="status">
           <span>{t("Captured in Vault")}</span>
-          <Link href={`/vault?item=${saved}`} onClick={dismissToast}>
+          <Link href={projectHref(`/vault?item=${saved}`)} onClick={dismissToast}>
             {t("View item →")}</Link>
           <button
             className="icon-button"

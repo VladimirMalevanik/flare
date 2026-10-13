@@ -14,6 +14,9 @@ const plans = ["free", "pro", "team"] as const;
 export function SubscriptionSection() {
   const { locale } = useI18n();
   const copy = subscriptionCopy[locale];
+  const teamBillingOwner = {en:"The license owner manages billing from their personal workspace.",es:"El titular de la licencia gestiona la facturación desde su espacio personal."}[locale];
+  const teamConfirmed = {en:"Team is confirmed for this license.",es:"Team está confirmado para esta licencia."}[locale];
+  const teamUpgradeUnavailable = {en:"This workspace already has Pro. A Team upgrade is not available here yet; contact Flare to change the existing subscription.",es:"Este espacio ya tiene Pro. La actualización a Team aún no está disponible aquí; contacta con Flare para cambiar la suscripción existente."}[locale];
   const session = useSession();
   const checkout = useSyncExternalStore(
     paddleSandboxCheckout.subscribe,
@@ -48,17 +51,19 @@ export function SubscriptionSection() {
   }, [userId, workspaceId]);
   const busy = checkout.phase === "loading" || checkout.phase === "open" || checkout.phase === "complete";
   const cachedStatus = billing.status?.workspaceId === workspaceId ? billing.status : null;
-  const verifiedStatus = cachedStatus?.plan === "pro" && !hasUnexpiredProAccess(cachedStatus) ? null : cachedStatus;
+  const verifiedStatus = cachedStatus && cachedStatus.plan !== "free" && !hasUnexpiredProAccess(cachedStatus) ? null : cachedStatus;
   const currentPlan = verifiedStatus?.plan ?? null;
+  useEffect(() => { if(currentPlan === "team")window.dispatchEvent(new Event("flare:team-refresh")); }, [currentPlan]);
   const canBuyPro = billing.phase === "ready" && verifiedStatus?.checkoutAvailable
     && verifiedStatus.canManageBilling && currentPlan === "free" && !billing.pendingConfirmation
     && !billing.confirmationTimedOut;
+  const canBuyTeam = canBuyPro && verifiedStatus?.teamCheckoutAvailable === true;
 
-  async function buyPro() {
-    if (!canBuyPro || busy) return;
+  async function buyPro(plan: "pro" | "team" = "pro") {
+    if (!(plan === "team" ? canBuyTeam : canBuyPro) || busy) return;
     setNotice(null);
     try {
-      await paddleSandboxCheckout.openProCheckout(session?.user ?? null, locale);
+      await paddleSandboxCheckout.openProCheckout(session?.user ?? null, locale, plan);
     } catch {
       setNotice("open");
     }
@@ -68,19 +73,20 @@ export function SubscriptionSection() {
     ? copy.errors[checkout.error]
     : notice === "open" ? copy.errors.open : null;
   const statusMessage = errorMessage
-    ?? (notice === "team" ? copy.teamUnavailable
+    ?? (notice === "team" ? currentPlan === "pro" ? teamUpgradeUnavailable : copy.teamUnavailable
       : notice === "free" ? copy.freeUnavailable
       : checkout.phase === "loading" ? copy.loadingStatus
       : checkout.phase === "open" ? copy.openStatus
       : currentPlan === "pro" ? copy.proConfirmed
+      : currentPlan === "team" ? teamConfirmed
       : billing.pendingConfirmation ? copy.confirming
       : billing.confirmationTimedOut ? copy.confirmationDelayed
       : checkout.phase === "complete" ? copy.completeStatus
       : null);
   const billingMessage = billing.error ? copy.billingErrors[billing.error]
     : billing.phase === "loading" && !verifiedStatus ? copy.checking
-    : verifiedStatus && !verifiedStatus.canManageBilling ? copy.ownerOnly
-    : verifiedStatus && !verifiedStatus.checkoutAvailable && currentPlan !== "pro" ? copy.backendSetup
+    : verifiedStatus && !verifiedStatus.canManageBilling ? currentPlan === "team" ? teamBillingOwner : copy.ownerOnly
+    : verifiedStatus && !verifiedStatus.checkoutAvailable && currentPlan === "free" ? copy.backendSetup
     : null;
 
   return (
@@ -105,7 +111,7 @@ export function SubscriptionSection() {
               <h3>{details.name}</h3>
               <p className={styles.description}>{details.description}</p>
               {plan === "pro" && <p className={styles.trial}>{copy.pro.trial}</p>}
-              <p className={styles.benefitLabel}>{plan === "free" ? copy.included : copy.planned}</p>
+              <p className={styles.benefitLabel}>{plan === "free" || plan === "team" && currentPlan === "team" ? copy.included : copy.planned}</p>
               <ul className={styles.benefits}>
                 {details.benefits.map((benefit) => (
                   <li key={benefit}><Icon name="check" /><span>{benefit}</span></li>
@@ -117,7 +123,7 @@ export function SubscriptionSection() {
                 disabled={selected || busy || (plan === "pro" && !canBuyPro) || (plan === "free" && !currentPlan)}
                 aria-label={(selected ? copy.currentPlan : copy.buyPlan).replace("{plan}", details.name)}
                 aria-busy={plan === "pro" && checkout.phase === "loading"}
-                onClick={plan === "pro" ? () => void buyPro() : () => setNotice(plan === "free" ? "free" : "team")}
+                onClick={plan === "pro" ? () => void buyPro() : plan === "team" && canBuyTeam ? () => void buyPro("team") : () => setNotice(plan === "free" ? "free" : "team")}
               >
                 {buttonText}
               </button>

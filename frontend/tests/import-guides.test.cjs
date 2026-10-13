@@ -18,7 +18,12 @@ function text(node) {
   if (typeof node?.type === 'function') return text(node.type(node.props));
   return node ? text(node.props?.children) : '';
 }
-function harness(relative, locale) {
+function harness(relative, locale, project = null) {
+  const projectExports = {};
+  const projectCode = ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src/lib/team-context.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  vm.runInNewContext(projectCode, { exports: projectExports, URLSearchParams, window: { location: { search: project ? `?project=${project}` : '' } } });
   const state = [], effects = [];
   let cursor = 0;
   const exports = {};
@@ -50,6 +55,7 @@ function harness(relative, locale) {
     if (name === '@/features/funny/funny-sounds') return { playFunnySound() {} };
     if (name === '@/lib/auth/session') return { apiBaseUrl: '/api' };
     if (name === "./connected-source") return { ConnectedSource: () => null };
+    if (name === '@/lib/team-context') return projectExports;
     throw Error(`Unexpected import ${name}`);
   } });
   return { render(component, props = {}) { cursor = 0; return exports[component](props); },
@@ -82,7 +88,7 @@ for (const locale of ['en', 'es']) {
     assert.match(text(tree), /200 KB/);
     assert.match(text(tree), locale === 'en' ? /Open Capture.*attach that one file/ : /Abre Capturar.*adjunta el archivo/);
     assert.doesNotMatch(text(tree), /ZIP|asynchronously|asíncrono/);
-    assert.equal(nodes(tree).find(n => n.type === 'a' && n.props.className === 'button primary').props.href, '/dashboard');
+    assert.equal(nodes(tree).find(n => n.type === 'a' && n.props.className === 'button primary').props.href, '/vault');
   });
 
   test(`${locale} Sources ZIP forms retain a guide link for each provider`, async () => {
@@ -109,3 +115,21 @@ for (const locale of ['en', 'es']) {
     }
   });
 }
+
+
+test('Team Sources and import guides keep the selected project through a complete round trip', async () => {
+  const project = '582a85ee-a4a4-41af-a856-7c6678625889';
+  const app = harness('features/sources/sources-page.tsx', 'en', project);
+  app.render('SourcesPage'); await app.loadSources();
+  const links = nodes(app.render('SourcesPage')).filter(n => n.type === 'a');
+  for (const source of ['notion', 'obsidian', 'evernote']) {
+    const guideUrl = links.find(n => n.props.href.startsWith(`/settings/import-guides/${source}`)).props.href;
+    assert.equal(new URL(guideUrl, 'http://localhost').searchParams.get('project'), project);
+    const guide = harness('features/settings/import-guide-page.tsx', 'en', project);
+    const tree = guide.render('ImportGuidePage', { source: source[0].toUpperCase() + source.slice(1), preparation: 'Export a text file' });
+    const destinations = nodes(tree).filter(n => n.type === 'a').map(n => new URL(n.props.href, 'http://localhost'));
+    assert.ok(destinations.some(url => url.pathname === '/settings'));
+    assert.ok(destinations.some(url => url.pathname === (source === 'evernote' ? '/vault' : '/sources')));
+    assert.ok(destinations.every(url => url.searchParams.get('project') === project));
+  }
+});

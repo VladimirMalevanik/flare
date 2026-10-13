@@ -14,7 +14,7 @@ from psycopg_pool import ConnectionPool
 from pwdlib import PasswordHash
 
 
-CURRENT_SCHEMA_REVISION = "0023"
+CURRENT_SCHEMA_REVISION = "0024"
 IMPORT_STAGING_TABLES = ("import_staging_blocks", "import_staging_health")
 # These are private tables, rather than member-readable tenant projections. The
 # API and worker get only their exact capabilities; even a column SELECT grant
@@ -102,6 +102,55 @@ def _connection_is_ready(connection: Connection) -> bool:
         "SELECT version_num FROM public.alembic_version"
     ).fetchone()
     if revision != (CURRENT_SCHEMA_REVISION,):
+        return False
+
+    team_tables = ['team_policy','team_projects','team_invitations','team_tasks','team_task_history','team_member_events']
+    team_private = connection.execute('''SELECT count(*)=6 AND bool_and(relrowsecurity AND relforcerowsecurity
+        AND NOT has_table_privilege('flare_app',c.oid,'SELECT')
+        AND NOT has_table_privilege('flare_app',c.oid,'INSERT')
+        AND NOT has_table_privilege('flare_app',c.oid,'UPDATE')
+        AND NOT has_table_privilege('flare_worker',c.oid,'SELECT'))
+        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE n.nspname='public' AND c.relname=ANY(%s)''',(team_tables,)).fetchone()
+    if team_private != (True,):
+        return False
+    team_functions = connection.execute('''SELECT count(*)=25 AND bool_and(p.prosecdef
+        AND p.proconfig @> ARRAY[CASE WHEN r.rolname='flare_owner' THEN 'search_path=pg_catalog, public, flare_team_scope, pg_temp' ELSE 'search_path=pg_catalog, public, pg_temp' END]
+        AND r.rolname IN ('flare_owner','flare_team_executor') AND NOT r.rolsuper AND NOT r.rolbypassrls
+        AND NOT r.rolcreatedb AND NOT r.rolcreaterole
+        AND (r.rolname='flare_owner' OR NOT r.rolcanlogin AND NOT r.rolinherit)
+        AND NOT EXISTS(SELECT 1 FROM pg_auth_members WHERE member=r.oid)
+        AND NOT has_function_privilege('public',p.oid,'EXECUTE')
+        AND NOT has_function_privilege('flare_worker',p.oid,'EXECUTE')
+        AND has_function_privilege('flare_app',p.oid,'EXECUTE')=(left(p.proname,6)<>'_team_' AND p.proname<>'guard_team_content'))
+        FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
+        WHERE n.nspname='public' AND (left(p.proname,5)='team_' OR left(p.proname,6)='_team_' OR p.proname='guard_team_content')''').fetchone()
+    if team_functions != (True,):
+        return False
+    managed_team_guard = connection.execute('''SELECT NOT EXISTS(
+        SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace JOIN pg_roles r ON r.oid=p.proowner
+        WHERE n.nspname='public' AND r.rolname='flare_owner' AND p.prosecdef
+          AND left(p.proname,5)<>'team_' AND left(p.proname,6)<>'_team_' AND p.proname<>'guard_team_content'
+          AND NOT EXISTS(SELECT 1 FROM unnest(p.proconfig) setting WHERE setting LIKE 'search_path=%' AND position('flare_team_scope' IN setting)=0))''').fetchone()
+    if managed_team_guard != (True,):
+        return False
+    marker_schema = connection.execute("""SELECT
+        (NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
+            WHERE p.proname='team_projects_list' AND r.rolname='flare_owner')
+         OR EXISTS(SELECT 1 FROM pg_namespace WHERE nspname='flare_team_scope'))
+        AND NOT EXISTS(SELECT 1 FROM pg_namespace n
+        WHERE n.nspname='flare_team_scope' AND (pg_get_userbyid(n.nspowner)<>'flare_owner'
+          OR has_schema_privilege('flare_app',n.oid,'CREATE') OR has_schema_privilege('flare_worker',n.oid,'CREATE')
+          OR EXISTS(SELECT 1 FROM pg_class WHERE relnamespace=n.oid)
+          OR EXISTS(SELECT 1 FROM pg_proc WHERE pronamespace=n.oid)))""").fetchone()
+    if marker_schema != (True,):
+        return False
+    team_worker_admission = connection.execute('''SELECT count(*)=5 AND bool_and(
+        position('public._team_workspace_paid' IN pg_get_functiondef(p.oid))>0)
+        FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+        WHERE n.nspname='public' AND p.proname=ANY(%s)''',
+        (['materialize_analysis_cycles','claim_analysis_cycle_refresh','enqueue_due_analysis_cycles','claim_analysis_job','analysis_job_check'],)).fetchone()
+    if team_worker_admission != (True,):
         return False
 
     protected_tables = connection.execute(
@@ -332,13 +381,18 @@ class Database:
         identity: WorkspaceIdentity,
         *,
         write: bool = False,
+        snapshot: bool = False,
         timeout: float | None = None,
         statement_timeout_ms: int | None = None,
         lock_timeout_ms: int | None = None,
     ) -> Iterator[Connection]:
         """Select one workspace locally, verify membership, then yield a transaction."""
+        if snapshot and write:
+            raise ValueError("A workspace snapshot is read-only")
         with self._pool.connection(timeout=timeout) as connection:
             with connection.transaction():
+                if snapshot:
+                    connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
                 for name, value in (('statement_timeout', statement_timeout_ms), ('lock_timeout', lock_timeout_ms)):
                     if value is not None:
                         if type(value) is not int or value <= 0:

@@ -170,7 +170,7 @@ def _iso(value):
 
 
 def workspace_entitlement(subscriptions: list[dict], price_id: str | None,
-                          now: datetime | None = None) -> dict:
+                          now: datetime | None = None, team_price_id: str | None = None) -> dict:
     """Compute from persisted subscriptions on every request, never a sticky plan.
 
     Trial/period boundaries fail closed even if a cancellation webhook is delayed.
@@ -181,7 +181,7 @@ def workspace_entitlement(subscriptions: list[dict], price_id: str | None,
     for row in subscriptions:
         if row.get("environment", "sandbox") != "sandbox" or row.get("watermark_conflict"):
             continue
-        if row["price_id"] != price_id or type(row["quantity"]) is not int or row["quantity"] != 1:
+        if row["price_id"] not in {p for p in (price_id, team_price_id) if p} or type(row["quantity"]) is not int or row["quantity"] != 1:
             continue
         status = row["status"]
         if status not in {"trialing", "active"}:
@@ -199,8 +199,8 @@ def workspace_entitlement(subscriptions: list[dict], price_id: str | None,
             end = min(end, effective)
         eligible.append((end, row))
     if eligible:
-        access_until, selected = max(eligible, key=lambda pair: pair[0])
-        plan = "pro"
+        access_until, selected = max(eligible, key=lambda pair: (pair[1]["price_id"] == team_price_id, pair[0]))
+        plan = "team" if team_price_id and selected["price_id"] == team_price_id else "pro"
     else:
         selected = max(subscriptions, key=lambda row: row["occurred_at"], default=None)
         access_until, plan = None, "free"

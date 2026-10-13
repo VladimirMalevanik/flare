@@ -47,6 +47,7 @@ function harness(initialSource, available = []) {
     if (name === '@/components/workspace-context') return { useWorkspace: () => ({ openCapture() {} }) };
     if (name === "./zip-import") return { ZipImport: () => null };
     if (name === "./connected-source") return { ConnectedSource: () => null };
+    if (name === '@/lib/team-context') return { projectHref: url => url };
     throw Error(`Unexpected import ${name}`);
   } };
   vm.runInNewContext(code, sandbox);

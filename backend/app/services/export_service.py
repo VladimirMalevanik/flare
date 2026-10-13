@@ -61,7 +61,7 @@ class WorkspaceExportService:
         now = self._clock()
         file = SpooledTemporaryFile(max_size=SPOOL_LIMIT_BYTES, mode="w+b")
         try:
-            with self._database.workspace_transaction(self._identity) as connection:
+            with self._database.workspace_transaction(self._identity, snapshot=True) as connection:
                 workspace = connection.execute(
                     "SELECT id,name,created_at FROM public.workspaces WHERE id=%s",
                     (self._identity.workspace_id,),

@@ -10,11 +10,14 @@ import { dataProvider } from "@/lib/data";
 import { Dialog } from "./dialog";
 import { BrandMark } from "./brand-mark";
 import { useI18n } from "@/i18n/provider";
+import { ProjectMenu } from "@/features/team/project-menu";
+import { projectHref } from "@/lib/team-context";
 const navigation = [
   { href: "/insights", label: "flares", icon: "insights" },
   { href: "/vault", label: "vault", icon: "vault" },
   { href: "/sources", label: "sources", icon: "sources" },
   { href: "/settings", label: "settings", icon: "settings" },
+  { href: "/team", label: "Team", icon: "team" },
 ] as const;
 export function AppShell({ children }: { children: ReactNode }) {
   return (
@@ -56,7 +59,7 @@ function Shell({ children }: { children: ReactNode }) {
   const sidebar = (
     <>
       <div>
-        <Link href="/insights" className="brand">
+        <Link href={projectHref("/insights")} className="brand">
           <span className="brand-mark">
             <BrandMark size={32} />
           </span>
@@ -65,6 +68,7 @@ function Shell({ children }: { children: ReactNode }) {
             <small>{t("startupContext")}</small>
           </span>
         </Link>
+        <ProjectMenu />
         <button
           className="button primary sidebar-capture"
           onClick={() => {
@@ -79,13 +83,13 @@ function Shell({ children }: { children: ReactNode }) {
           {navigation.map((entry, i) => (
             <Link
               key={entry.href}
-              href={entry.href}
+              href={projectHref(entry.href)}
               onClick={() => setDrawer(false)}
               aria-current={pathname === entry.href ? "page" : undefined}
               className={`nav-link ${pathname === entry.href ? "active" : ""}`}
             >
               <Icon name={entry.icon} />
-              <span>{t(entry.label)}</span>
+              <span>{entry.label === "Team" ? "Team" : t(entry.label)}</span>
               {i < 3 && <span className="count">{counts[i]}</span>}
             </Link>
           ))}
@@ -104,7 +108,7 @@ function Shell({ children }: { children: ReactNode }) {
           />
         </label>
         <div className="profile-row">
-          <Link href="/settings" className="profile" onClick={() => setDrawer(false)}>
+          <Link href={projectHref("/settings")} className="profile" onClick={() => setDrawer(false)}>
             <span className="avatar">{initials}</span>
             <span className="profile-copy">
               {profile.name || t("unnamedProfile")}
@@ -112,7 +116,7 @@ function Shell({ children }: { children: ReactNode }) {
             </span>
           </Link>
           <Link
-            href="/settings"
+            href={projectHref("/settings")}
             className="button icon-button profile-settings"
             aria-label={t("settings")}
             title={t("settings")}

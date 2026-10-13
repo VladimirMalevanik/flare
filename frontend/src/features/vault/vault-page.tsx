@@ -1,6 +1,7 @@
 "use client";
 import { useI18n } from "@/i18n/provider";
 import Link from "next/link";
+import { projectHref } from "@/lib/team-context";
 import type { Route } from "next";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -526,7 +527,7 @@ export function VaultPage() {
                     <Icon name="arrow" />
                   </button>
                 ) : (
-                  <Link key={id} href={`/vault?item=${id}`}>
+                  <Link key={id} href={projectHref(`/vault?item=${encodeURIComponent(id)}`)}>
                     {t("Open related source")}</Link>
                 );
               })

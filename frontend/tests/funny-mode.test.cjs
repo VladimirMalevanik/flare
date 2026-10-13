@@ -16,6 +16,7 @@ function load(relative, mocks = {}, globals = {}) {
     if (name in mocks) return mocks[name];
     if (name === 'react/jsx-runtime') return jsx;
     if (name === '@/i18n/provider') return i18nMock();
+    if (name === '@/lib/team-context') return { projectHref: url => url };
     throw Error(`Unexpected import ${name}`);
   } });
   return exports;

@@ -58,7 +58,7 @@ export function createBillingStatusClient({
   }
   function scheduleExpiry(status: BillingStatus) {
     clearExpiry();
-    if (status.plan !== "pro" || !status.accessUntil) return;
+    if (status.plan === "free" || !status.accessUntil) return;
     const expiresAt = Date.parse(status.accessUntil);
     const attempt = generation;
     const schedule = () => {
@@ -84,7 +84,7 @@ export function createBillingStatusClient({
   }
   async function refresh() {
     if (!active) return;
-    if (snapshot.status?.plan === "pro" && !hasUnexpiredProAccess(snapshot.status, now())) {
+    if (snapshot.status && snapshot.status.plan !== "free" && !hasUnexpiredProAccess(snapshot.status, now())) {
       clearExpiry();
       publish({ ...snapshot, phase: "loading", status: null, error: null });
     }
@@ -107,20 +107,20 @@ export function createBillingStatusClient({
           }),
         ]);
         if (!active || attempt !== generation || controller.signal.aborted) return;
-        if (value.workspaceId !== workspaceId || (value.plan === "pro" && !hasUnexpiredProAccess(value, now()))) {
+        if (value.workspaceId !== workspaceId || (value.plan !== "free" && !hasUnexpiredProAccess(value, now()))) {
           throw new BillingRequestError("backend");
         }
         clearExpiry();
         publish({ ...snapshot, phase: "ready", status: value, error: null });
         scheduleExpiry(value);
-        if (value.plan === "pro") {
+        if (value.plan !== "free") {
           clearPolling();
           publish({ ...snapshot, pendingConfirmation: false, confirmationTimedOut: false });
         }
       } catch (error) {
         if (!active || attempt !== generation) return;
         const code = error instanceof BillingRequestError ? error.code : "backend";
-        if (snapshot.status?.plan === "pro" && !hasUnexpiredProAccess(snapshot.status, now())) {
+        if (snapshot.status && snapshot.status.plan !== "free" && !hasUnexpiredProAccess(snapshot.status, now())) {
           clearExpiry();
           publish({ ...snapshot, status: null });
         }
@@ -179,7 +179,7 @@ export function createBillingStatusClient({
     confirmCheckout(completion: number) {
       if (!active || completion <= lastCompletion || completion <= 0) return;
       lastCompletion = completion;
-      if (snapshot.status?.plan === "pro" && hasUnexpiredProAccess(snapshot.status, now())) return;
+      if (snapshot.status && snapshot.status.plan !== "free" && hasUnexpiredProAccess(snapshot.status, now())) return;
       clearPolling();
       publish({ ...snapshot, pendingConfirmation: true, confirmationTimedOut: false });
       const attempt = generation;

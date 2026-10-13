@@ -37,7 +37,8 @@ function harness(provider, history = [], sourceKind = 'obsidian') {
         useRef(initial){const i=cursor++;if(!(i in state))state[i]={current:initial};return state[i];},
         useEffect(fn,values){const i=cursor++;if(!deps[i]||values.some((v,j)=>v!==deps[i][j])){effects.push(()=>{cleanups[i]?.();cleanups[i]=fn();});deps[i]=values;}}
       };
-      throw Error(name);
+      if (name === '@/lib/team-context') return { projectHref: url => url };
+    throw Error(name);
     }});
   function render(){cursor=0;return exports.ZipImport({sourceKind});}
   return {render,buttons:()=>nodes(render()).filter(n=>n.type==='button'),

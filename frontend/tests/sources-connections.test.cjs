@@ -10,7 +10,8 @@ function nodes(node) { if (!node || typeof node !== 'object') return []; if (Arr
 function text(node) { if (typeof node === 'string') return node; if (Array.isArray(node)) return node.map(text).join(''); return node && typeof node === 'object' ? text(node.props?.children) : ''; }
 function load(relative, mocks, globals = {}) {
   const code = ts.transpileModule(fs.readFileSync(path.join(__dirname, relative), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
-  const exports = {}; vm.runInNewContext(code, { exports, AbortController, URL, setTimeout, clearTimeout, ...globals, require(name) { if (name in mocks) return mocks[name]; if (name === 'react/jsx-runtime') return jsx; throw Error(`Unexpected import ${name}`); } }); return exports;
+  const exports = {}; vm.runInNewContext(code, { exports, AbortController, URL, setTimeout, clearTimeout, ...globals, require(name) { if (name in mocks) return mocks[name]; if (name === 'react/jsx-runtime') return jsx; if (name === '@/lib/team-context') return { projectHref: url => url };
+    throw Error(`Unexpected import ${name}`); } }); return exports;
 }
 function harness(overrides = {}) {
   const values = [], refs = [], cleanups = [], calls = []; let cursor = 0, refCursor = 0, refreshes = 0;
@@ -68,7 +69,8 @@ test('double connect submits once; closing picker prevents late resource state',
 
 test('connection decoder exposes only known public fields and rejects unsafe capabilities', () => {
   const request = load('../src/lib/data/import-request.ts', {});
-  const componentModule = load('../src/lib/data/api-provider.ts', { './import-request': request });
+  const projectContext = load('../src/lib/team-context.ts', {});
+  const componentModule = load('../src/lib/data/api-provider.ts', { './import-request': request, '../team-context': projectContext });
   const conn = { id:'c', provider:'gmail', owner:true, canDisconnect:true, accountLabel:'Test', scopeRevision:1, status:'ready', enabled:true, resources:[], lastSyncAt:null, nextSyncAt:null, errorCode:null, lastResult:null, job:null, credentialBlob:'PRIVATE' };
   const dto = componentModule.mapSourceConnections({ providers:[{provider:'gmail',available:true,syncAvailable:false}],connections:[conn] });
   assert.ok(!JSON.stringify(dto).includes('PRIVATE'));

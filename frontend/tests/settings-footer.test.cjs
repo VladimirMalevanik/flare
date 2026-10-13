@@ -6,15 +6,18 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const { i18nMock } = require('./i18n-utils.cjs');
 const jsx = { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
-function load(file, mocks) {
+function load(file, mocks, globals = {}) {
   const exports = {};
   const source = ts.transpileModule(fs.readFileSync(path.join(__dirname, file), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  vm.runInNewContext(source, { exports, Intl, require(name) {
+  vm.runInNewContext(source, { exports, Intl, ...globals, require(name) {
     if (name === 'react/jsx-runtime') return jsx;
     if (name === '@/i18n/provider') return i18nMock();
     if (name in mocks) return mocks[name];
+      if (name === '@/lib/team-context') return { projectApiUrl: url => url, projectHref: path => path };
+      if (name === '@/features/team/project-menu') return { ProjectMenu: () => null };
+
     if (name === './developer-mail') return { DeveloperMail: () => null };
     throw Error(`Unexpected import ${name}`);
   } });
@@ -110,4 +113,28 @@ test('Settings keeps language and theme controls with both funny preference rows
   assert.equal(all.filter(node => node.type === 'language-selector').length, 1);
   assert.equal(all.filter(node => node.props?.className?.startsWith('theme-option ')).length, 3);
   assert.ok(all.every(node => !['Funny mode', 'Funny sounds'].includes(node.props?.title)));
+});
+
+
+test('Settings source and import guide navigation preserves the selected Team project', () => {
+  const project = '582a85ee-a4a4-41af-a856-7c6678625889';
+  const projectContext = load('../src/lib/team-context.ts', {}, {
+    URLSearchParams, window: { location: { search: `?project=${project}` } },
+  });
+  const { SettingsPage } = load('../src/features/settings/settings-page.tsx', {
+    react: { useState: value => [value, () => {}], useEffect() {}, useMemo: fn => fn() },
+    'next/link': { default: 'a' }, '@/components/auth-session': { useSession: () => null },
+    '@/lib/auth/session': { apiBaseUrl: '/api' }, '@/components/icons': { Icon: 'icon' },
+    '@/components/workspace-context': { useWorkspace: () => ({ profile: { name: 'Fedor', role: 'owner', timezone: 'UTC' }, theme: 'light' }) },
+    '@/lib/storage/preferences': {}, '@/components/language-selector': { LanguageSelector: 'language-selector' },
+    '@/components/select': { Select: 'select' }, '@/features/telemetry/analytics-preferences': { AnalyticsPreferences: 'analytics' },
+    '@/features/acquisition/preferences': { AcquisitionPreferences: 'acquisition-preferences' },
+    '@/lib/team-context': projectContext, '@/lib/data': {},
+  });
+  const links = nodes(SettingsPage({ supportEmail: null })).filter(node => node.type === 'a').map(node => node.props.href);
+  for (const path of ['/sources', ...['notion', 'obsidian', 'evernote'].map(source => `/settings/import-guides/${source}`)]) {
+    assert.ok(links.includes(`${path}?project=${project}`), `Lost Team selection on ${path}`);
+  }
+  assert.ok(links.includes('/privacy'));
+  assert.ok(links.includes('/terms'));
 });
