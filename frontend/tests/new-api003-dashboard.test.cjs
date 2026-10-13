@@ -46,6 +46,7 @@ function harness(overrides = {}, component = 'DashboardPage', locale = 'en') {
       clearTimeout(id) { timers.delete(id); },
     }, require(name) {
       if (name === 'react/jsx-runtime') return jsx;
+      if (name === '@/lib/team-context') return { projectHref: url => url };
       if (name === 'react') return {
         useState(initial) { const i = cursor++; if (!(i in state)) state[i] = initial;
           return [state[i], value => state[i] = typeof value === 'function' ? value(state[i]) : value]; },

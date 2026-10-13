@@ -702,6 +702,7 @@ export const uiEs = {
   "Capture failed. Try again.": "No se pudo guardar el contexto. Inténtalo de nuevo.",
   "Voice transcription failed. Try again.": "No se pudo transcribir el audio. Inténtalo de nuevo.",
   "Your acceptance could not be saved. Please retry.": "No se pudo guardar tu aceptación. Inténtalo de nuevo.",
+  "Recent Flares could not be loaded. Try again.": "No se pudieron cargar los Flares recientes. Inténtalo de nuevo.",
   "Your recent items could not be loaded.": "No se pudieron cargar tus elementos recientes.",
   "Write note": "Escribir nota",
   "Paste URL": "Pegar URL",

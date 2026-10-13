@@ -700,6 +700,7 @@ export const uiEn = {
   "Capture failed. Try again.": "Capture failed. Try again.",
   "Voice transcription failed. Try again.": "Voice transcription failed. Try again.",
   "Your acceptance could not be saved. Please retry.": "Your acceptance could not be saved. Please retry.",
+  "Recent Flares could not be loaded. Try again.": "Recent Flares could not be loaded. Try again.",
   "Your recent items could not be loaded.": "Your recent items could not be loaded.",
   "Write note": "Write note",
   "Paste URL": "Paste URL",

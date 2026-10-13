@@ -79,7 +79,7 @@ class OfflinePool:
         self.store = store
 
     @contextmanager
-    def connection(self):
+    def connection(self, timeout=None):
         yield OfflineConnection(self.store)
 
 
