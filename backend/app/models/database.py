@@ -381,13 +381,18 @@ class Database:
         identity: WorkspaceIdentity,
         *,
         write: bool = False,
+        snapshot: bool = False,
         timeout: float | None = None,
         statement_timeout_ms: int | None = None,
         lock_timeout_ms: int | None = None,
     ) -> Iterator[Connection]:
         """Select one workspace locally, verify membership, then yield a transaction."""
+        if snapshot and write:
+            raise ValueError("A workspace snapshot is read-only")
         with self._pool.connection(timeout=timeout) as connection:
             with connection.transaction():
+                if snapshot:
+                    connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
                 for name, value in (('statement_timeout', statement_timeout_ms), ('lock_timeout', lock_timeout_ms)):
                     if value is not None:
                         if type(value) is not int or value <= 0:
