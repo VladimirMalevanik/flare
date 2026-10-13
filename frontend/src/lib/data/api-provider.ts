@@ -266,6 +266,7 @@ async function responseError(
       }
       if (typeof record.detail === "object" && record.detail !== null) {
         const detail = record.detail as Record<string, unknown>;
+        if (typeof detail.code === "string" && typeof detail.message !== "string") return { message: "Source operation could not complete.", code: detail.code };
         if (typeof detail.message === "string") {
           return {
             message: detail.message,
@@ -339,6 +340,28 @@ function mapGitHubConnection(value: unknown): GitHubConnection {
 }
 
 export class ApiDataProvider implements FlareDataProvider {
+  async getSourceConnections(signal?: AbortSignal): Promise<import("./types").SourceConnections> {
+    return mapSourceConnections(await importRequest((signal) => this.request("/integrations/sources", { signal }), signal));
+  }
+  async connectSource(provider: import("./types").ConnectedProvider, signal?: AbortSignal): Promise<{url?: string; connected?: boolean}> {
+    const row = asRecord(await importRequest((signal) => this.request(`/integrations/sources/${provider}/connect`, { method: "POST", body: "{}", signal }), signal));
+    if (row.connected === true) return { connected: true };
+    const url = stringField(row, "url");
+    const destination = new URL(url);
+    if (destination.protocol !== "https:" || !["accounts.google.com", "slack.com", "api.notion.com"].includes(destination.hostname)) throw new FlareApiError("Invalid source authorization");
+    return { url };
+  }
+  async sourceResources(id: string, cursor?: string, signal?: AbortSignal): Promise<import("./types").SourceResourcePage> {
+    const row = asRecord(await importRequest((signal) => this.request(`/integrations/sources/connection/${encodeURIComponent(id)}/resources${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { signal }), signal));
+    return { resources: sourceResourceRows(row.resources), cursor: nullableString(row, "cursor"), scopeRevision: countField(row, "scopeRevision") };
+  }
+  async selectSourceResources(id: string, expectedRevision: number, resourceIds: string[], shareWithWorkspace: boolean, signal?: AbortSignal): Promise<void> {
+    await importRequest((signal) => this.request(`/integrations/sources/connection/${encodeURIComponent(id)}/selection`, { method: "POST", body: JSON.stringify({ expectedRevision, resourceIds, shareWithWorkspace }), signal }), signal);
+  }
+  async sourceConnectionAction(id: string, action: "sync" | "cancel" | "disconnect", signal?: AbortSignal): Promise<void> {
+    await importRequest((signal) => this.request(`/integrations/sources/connection/${encodeURIComponent(id)}/${action}`, { method: "POST", body: "{}", signal }), signal);
+  }
+
   private readonly baseUrl: string;
   private readonly fallback: FlareDataProvider;
 
@@ -466,7 +489,7 @@ export class ApiDataProvider implements FlareDataProvider {
       if (connection.status === "connected" && connection.repository) {
         return { ...source, status: "connected", scope: connection.repository.fullName,
           description: "Repository connection is active.",
-          channels: [], updated: "Repository activity ingestion is not available yet.",
+          channels: [], updated: "Choose which repository context to sync below.",
           accountLogin: connection.accountLogin ?? undefined, repository: connection.repository };
       }
       if (connection.status === "pending") {
@@ -666,4 +689,28 @@ export function mapImportPackage(value: unknown): ImportPackage {
     status: status as ImportPackage["status"], phase: phase as ImportPackage["phase"], entryCount: row.entry_count === null ? null : countField(row, "entry_count"),
     supportedCount: countField(row, "prepared_count"), skippedCount: countField(row, "skipped_count"), importedCount: countField(row, "published_count"),
     chunkCount: countField(row, "chunk_count"), failedCount: countField(row, "failed_count"), errorCode: nullableString(row, "error_code"), retryable: row.retryable };
+}
+
+const connectedProviders = ["slack", "gmail", "drive", "notion", "github"];
+function sourceResourceRows(value: unknown): import("./types").SourceResource[] {
+  if (!Array.isArray(value) || value.length > 10000) throw new FlareApiError("Invalid source resources");
+  return value.map(value => { const row = asRecord(value); return { id: stringField(row, "id"), name: stringField(row, "name"), kind: stringField(row, "kind") }; });
+}
+function sourceCounts(value: unknown): import("./types").SourceCounts {
+  const row = asRecord(value);
+  return { added: countField(row, "added"), updated: countField(row, "updated"), unchanged: countField(row, "unchanged"), skipped: countField(row, "skipped"), conflicts: countField(row, "conflicts"), more: row.more === true };
+}
+export function mapSourceConnections(value: unknown): import("./types").SourceConnections {
+  const body = asRecord(value);
+  if (!Array.isArray(body.providers) || !Array.isArray(body.connections) || body.connections.length > 5) throw new FlareApiError("Invalid source connections");
+  return { providers: body.providers.map(value => {
+    const row = asRecord(value), provider = stringField(row, "provider");
+    if (!connectedProviders.includes(provider) || typeof row.available !== "boolean" || typeof row.syncAvailable !== "boolean") throw new FlareApiError("Invalid source capability");
+    return { provider: provider as import("./types").ConnectedProvider, available: row.available, syncAvailable: row.syncAvailable };
+  }), connections: body.connections.map(value => {
+    const row = asRecord(value), provider = stringField(row, "provider"), status = stringField(row, "status");
+    if (!connectedProviders.includes(provider) || !["pending", "connected", "ready", "syncing", "error", "disabled"].includes(status) || typeof row.owner !== "boolean" || typeof row.canDisconnect !== "boolean" || typeof row.enabled !== "boolean") throw new FlareApiError("Invalid source connection");
+    const job = row.job === null ? null : asRecord(row.job);
+    return { id: stringField(row, "id"), provider: provider as import("./types").ConnectedProvider, status: status as import("./types").SourceConnection["status"], owner: row.owner, canDisconnect: row.canDisconnect, enabled: row.enabled, accountLabel: nullableString(row, "accountLabel"), scopeRevision: countField(row, "scopeRevision"), resources: sourceResourceRows(row.resources), lastSyncAt: nullableDateField(row, "lastSyncAt"), nextSyncAt: nullableDateField(row, "nextSyncAt"), errorCode: nullableString(row, "errorCode"), lastResult: row.lastResult === null ? null : sourceCounts(row.lastResult), job: job ? { ...sourceCounts(job), id: stringField(job, "id"), status: stringField(job, "status"), errorCode: nullableString(job, "errorCode") } : null };
+  }) };
 }

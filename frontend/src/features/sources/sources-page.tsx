@@ -1,6 +1,8 @@
 "use client";
 import { useI18n } from "@/i18n/provider";
 import Link from "next/link";
+import { ConnectedSource } from "./connected-source";
+import type { ConnectedProvider, SourceConnections, SourceConnection } from "@/lib/data";
 import { ZipImport } from "./zip-import";
 import { useEffect, useState } from "react";
 import { dataErrorMessage, dataProvider, type GitHubRepository, type Source } from "@/lib/data";
@@ -12,6 +14,22 @@ export function SourcesPage() {
   const { t, label, message } = useI18n();
 
   const { openCapture } = useWorkspace();
+  const [connections, setConnections] = useState<SourceConnections>({ providers: [], connections: [] });
+  const [connectionError, setConnectionError] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    let running = false;
+    async function check() {
+      if (running) return;
+      running = true;
+      try { const state = await dataProvider.getSourceConnections(controller.signal); if (!controller.signal.aborted) { setConnections(state); setConnectionError(""); } }
+      catch { if (!controller.signal.aborted) setConnectionError("Source status could not be loaded. Check status before trying again."); }
+      finally { running = false; }
+    }
+    void check(); const timer = setInterval(() => void check(), 10000);
+    return () => { controller.abort(); clearInterval(timer); };
+  }, []);
+  async function refreshConnections() { setConnections(await dataProvider.getSourceConnections()); setConnectionError(""); }
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -98,6 +116,7 @@ export function SourcesPage() {
           <p>{t("Ways to add project context to Flare.")}</p>
         </div>
       </header>
+      {connectionError && <p role="alert" className="error-text">{message(connectionError)}</p>}
       {error && <p role="alert" className="error-text">{message(error)}</p>}
       {loading ? <p role="status" className="state">{t("Loading sources…")}</p> : groups.map(({ title, sources }) => (
         <section className="source-group" key={title} aria-label={label(title)}>
@@ -108,29 +127,31 @@ export function SourcesPage() {
                 <header>
                   <SourceIcon source={source} />
                   <div><h3>{label(source.name)}</h3><p className="muted">{source.repository ? source.scope : label(source.scope)}</p></div>
-                  <span className={`badge status-${source.status}`}>
-                    <span className="dot" />{label(sourceStatus(source))}
+                  <span className={`badge status-${sourceConnectionBadge(source, connections.connections.find(item => item.provider === source.id)).status}`}>
+                    <span className="dot" />{label(sourceConnectionBadge(source, connections.connections.find(item => item.provider === source.id)).label)}
                   </span>
                 </header>
-                {source.id !== "notion" && source.id !== "obsidian" && <div className="source-scope">
+                {!["notion", "obsidian", "slack", "gmail", "drive"].includes(source.id) && <div className="source-scope">
                   <p className="eyebrow muted">{source.status === "ready" ? t("AVAILABLE CONTEXT") : t("PRIMARY")}</p>
                   {source.channels.length ? (
                     <div className="tags">{source.channels.map((channel) => <span key={channel}>{source.status === "connected" ? channel : label(channel)}</span>)}</div>
                   ) : source.status === "connected" ? null : <p className="muted">{t("Not available yet.")}</p>}
                 </div>}
-                <p className="source-description">{source.id === "notion" || source.id === "obsidian" ? t("ZIP snapshots with Markdown, TXT and CSV. Files are checked and added together. Analyze runs only when you choose it.") : label(source.description)}</p>
-                {source.id !== "notion" && source.id !== "obsidian" && <p className="muted meta">{source.id === "github" && source.status === "syncing" ? t("authorizedAs", { name: source.accountLogin ?? "GitHub" }) : label(source.updated)}</p>}
+                <p className="source-description">{source.id === "notion" || source.id === "obsidian" ? t("ZIP snapshots with Markdown, TXT and CSV. Files are checked and added together. Analysis follows your workspace schedule.") : label(source.description)}</p>
+                {!["notion", "obsidian", "slack", "gmail", "drive", "github"].includes(source.id) && <p className="muted meta">{source.id === "github" && source.status === "syncing" ? t("authorizedAs", { name: source.accountLogin ?? "GitHub" }) : label(source.updated)}</p>}
                 <footer>
+                  {["slack", "gmail", "drive", "notion", "github"].includes(source.id) && <ConnectedSource provider={source.id as ConnectedProvider} connection={connections.connections.find(item => item.provider === source.id)} available={connections.providers.some(item => item.provider === source.id && item.available)} syncAvailable={connections.providers.some(item => item.provider === source.id && item.syncAvailable)} refresh={refreshConnections} />}
+
                   {source.id === "notion" || source.id === "obsidian" ? (
                     <>
                       <ZipImport sourceKind={source.id} />
                       <Link className="zip-guide-link" href={`/settings/import-guides/${source.id}`}>
                         {t("View import guide")}</Link>
                     </>
-                  ) : source.status === "manual-import" ? (
+                  ) : ["slack", "gmail", "drive"].includes(source.id) ? null : source.status === "manual-import" ? (
                     <Link className="button" href={`/settings/import-guides/${source.id}`}>
                       {t("View import guide")}</Link>
-                  ) : source.id === "github" && source.status !== "coming-soon" ? (
+                  ) : source.id === "github" && source.repository && connections.connections.some(item => item.provider === "github" && !["pending", "disabled"].includes(item.status)) ? null : source.id === "github" && source.status !== "coming-soon" ? (
                     <GitHubControls
                       source={source}
                       repositories={repositories}
@@ -156,6 +177,15 @@ export function SourcesPage() {
       ))}
     </section>
   );
+}
+
+export function sourceConnectionBadge(source: Source, connection?: SourceConnection) {
+  if (!connection || connection.status === "pending") return { status: source.status, label: sourceStatus(source) };
+  if (connection.status === "disabled") return { status: "disconnected", label: "Not connected" };
+  if (connection.job?.status === "retry_wait") return { status: "syncing", label: "Waiting for source" };
+  if (connection.status === "syncing") return { status: "syncing", label: "Syncing" };
+  if (connection.status === "error") return { status: "error", label: "Connection error" };
+  return { status: "connected", label: "Connected" };
 }
 
 function sourceStatus(source: Source) {
