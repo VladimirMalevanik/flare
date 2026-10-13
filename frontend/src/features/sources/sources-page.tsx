@@ -1,6 +1,7 @@
 "use client";
 import { useI18n } from "@/i18n/provider";
 import Link from "next/link";
+import { projectHref } from "@/lib/team-context";
 import { ConnectedSource } from "./connected-source";
 import type { ConnectedProvider, SourceConnections, SourceConnection } from "@/lib/data";
 import { ZipImport } from "./zip-import";
@@ -145,11 +146,11 @@ export function SourcesPage() {
                   {source.id === "notion" || source.id === "obsidian" ? (
                     <>
                       <ZipImport sourceKind={source.id} />
-                      <Link className="zip-guide-link" href={`/settings/import-guides/${source.id}`}>
+                      <Link className="zip-guide-link" href={projectHref(`/settings/import-guides/${source.id}`)}>
                         {t("View import guide")}</Link>
                     </>
                   ) : ["slack", "gmail", "drive"].includes(source.id) ? null : source.status === "manual-import" ? (
-                    <Link className="button" href={`/settings/import-guides/${source.id}`}>
+                    <Link className="button" href={projectHref(`/settings/import-guides/${source.id}`)}>
                       {t("View import guide")}</Link>
                   ) : source.id === "github" && source.repository && connections.connections.some(item => item.provider === "github" && !["pending", "disabled"].includes(item.status)) ? null : source.id === "github" && source.status !== "coming-soon" ? (
                     <GitHubControls

@@ -19,6 +19,7 @@ function load(relative, mocks) {
     if (name === '@/features/funny/funny-sounds') return { playFunnySound() {} };
     if (name === "./zip-import") return { ZipImport: () => null };
     if (name === "./connected-source") return { ConnectedSource: () => null };
+    if (name === '@/lib/team-context') return { projectHref: url => url };
     throw Error(`Unexpected import ${name}`);
   } });
   return exports;
@@ -105,7 +106,7 @@ test('Capture toast auto-dismisses and both explicit actions cancel its timer', 
   const source = fs.readFileSync(path.join(__dirname, '../src/features/capture/capture.tsx'), 'utf8');
   assert.match(source, /CAPTURE_TOAST_DISMISS_MS = 4000/);
   assert.match(source, /return \(\) => \{\s*if \(toastTimer\.current !== null\) window\.clearTimeout\(toastTimer\.current\)/s);
-  assert.match(source, /<Link href=\{`\/vault\?item=\$\{saved\}`\} onClick=\{dismissToast\}>/);
+  assert.match(source, /<Link href=\{projectHref\(`\/vault\?item=\$\{saved\}`\)\} onClick=\{dismissToast\}>/);
   assert.match(source, /aria-label=\{t\("Dismiss capture confirmation"\)\}[\s\S]*?onClick=\{dismissToast\}/);
 });
 test('Vault cards render voice as transcript provenance without prominent audio chrome', () => {

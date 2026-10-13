@@ -1,6 +1,7 @@
 "use client";
 import { useI18n } from "@/i18n/provider";
 import Link from "next/link";
+import { projectHref } from "@/lib/team-context";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -66,7 +67,7 @@ export function ScheduledAnalysisStatus() {
     : date ? t("Next scheduled insight: {date}", { date })
     : t("Waiting for the next scheduled insight.");
   return <div className="analyze-action">
-    <Link className="button" href="/settings">{t("Analysis schedule")}</Link>
+    <Link className="button" href={projectHref("/settings")}>{t("Analysis schedule")}</Link>
     <p className={error ? "error-text meta" : "muted meta"} role={error ? "alert" : "status"}>{copy}</p>
   </div>;
 }
@@ -254,7 +255,7 @@ export function InsightsPage() {
                     {t("Add context")}</button>
                   <Link
                     className="button"
-                    href="/sources"
+                    href={projectHref("/sources")}
                     onClick={() => {
                       void dataProvider.trackEvent({
                         eventType: "screen_opened",
@@ -369,11 +370,11 @@ export function InsightsPage() {
             {active.evidence.map((e, i) => (
               <article className="quote-card" key={`${e.itemId}-${i}`}>
                 <div className="quote-meta">
-                  <Link onClick={() => { void dataProvider.trackEvent({ eventType: "voluntary_inspection", interactionId: crypto.randomUUID(), flareId: active.id, sourceId: e.itemId }); }} href={`/vault?item=${encodeURIComponent(e.itemId)}`}>{e.sourceTitle}</Link>
+                  <Link onClick={() => { void dataProvider.trackEvent({ eventType: "voluntary_inspection", interactionId: crypto.randomUUID(), flareId: active.id, sourceId: e.itemId }); }} href={projectHref(`/vault?item=${encodeURIComponent(e.itemId)}`)}>{e.sourceTitle}</Link>
                   <span className="muted">{label(e.sourceType)}</span>
                 </div>
                 <blockquote>“{e.excerpt}”</blockquote>
-                <Link onClick={() => { void dataProvider.trackEvent({ eventType: "voluntary_inspection", interactionId: crypto.randomUUID(), flareId: active.id, sourceId: e.itemId }); }} className="text-button" href={`/vault?item=${encodeURIComponent(e.itemId)}`}>
+                <Link onClick={() => { void dataProvider.trackEvent({ eventType: "voluntary_inspection", interactionId: crypto.randomUUID(), flareId: active.id, sourceId: e.itemId }); }} className="text-button" href={projectHref(`/vault?item=${encodeURIComponent(e.itemId)}`)}>
                   {t("Open source")}{" "}<Icon name="arrow" />
                 </Link>
               </article>

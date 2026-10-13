@@ -1,6 +1,7 @@
 "use client";
 import { useI18n } from "@/i18n/provider";
 import Link from "next/link";
+import { projectHref } from "@/lib/team-context";
 
 type ImportGuidePageProps = {
   source: "Notion" | "Obsidian" | "Evernote";
@@ -44,8 +45,8 @@ export function ImportGuidePage({ source, preparation }: ImportGuidePageProps) {
         <p className="muted meta">
           {t("Provider-specific export screenshots and click-by-click instructions are pending validation.")}</p>
         <div className="form-actions">
-          <Link className="button" href="/settings">{t("Back to Settings")}</Link>
-          <Link className="button primary" href={zipImport ? "/sources" : "/dashboard"}>{t(zipImport ? "Open Sources" : "Return to workspace")}</Link>
+          <Link className="button" href={projectHref("/settings")}>{t("Back to Settings")}</Link>
+          <Link className="button primary" href={projectHref(zipImport ? "/sources" : "/vault")}>{t(zipImport ? "Open Sources" : "Return to workspace")}</Link>
         </div>
       </section>
     </section>

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { projectHref } from "@/lib/team-context";
 import { Dialog } from "@/components/dialog";
 import { Icon } from "@/components/icons";
 import { useI18n } from "@/i18n/provider";
@@ -264,7 +265,7 @@ export function ZipImport({ sourceKind }: { sourceKind: ZipSourceKind }) {
         {terminal && <button type="button" className="zip-text-action" disabled={reportBusy} onClick={() => openReport("failed")}><Icon name="note" />{t("View import report")}</button>}
         {terminal && !complete && <button type="button" className="zip-text-action" onClick={() => resetResult(true)}>{t("Choose another ZIP")}</button>}
         {terminal && <button type="button" className="zip-text-action" onClick={() => resetResult()}>{t("Close import")}</button>}
-        {complete && <Link href="/vault" className="zip-text-action"><Icon name="vault" />{t("Open Vault")}<span aria-hidden="true">↗</span></Link>}
+        {complete && <Link href={projectHref("/vault")} className="zip-text-action"><Icon name="vault" />{t("Open Vault")}<span aria-hidden="true">↗</span></Link>}
       </div>
     </section>}
     {error && !pickerOpen && !reportOpen && <p role="alert" className="error-text">{message(error)}</p>}

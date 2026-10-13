@@ -32,15 +32,15 @@ runtime dependency, real invitation, provider call, payment or cloud deployment.
 
 ## Validation
 
-Backend source 01d226e570079c3c63ad34c8c95baa723f2c6f65; final frontend ef5c652 preserves Team selection from Sources/import-guide links in Settings and updates synchronized-source analysis copy. A behavior regression checks the actual project helper and all four product links.
+Backend source 01d226e570079c3c63ad34c8c95baa723f2c6f65; final frontend preserves Team selection across Settings, source guides, Insights evidence, Vault related notes, ZIP results and capture results. Behavior regressions use the actual project helper to check Settings links and a complete source-guide round trip. Synchronized-source analysis copy matches saved Vault content.
 
 | Check | Result |
 | --- | --- |
 | Full PostgreSQL 17 self-managed | 1305 passed, 1 managed-only skip |
 | Full PostgreSQL 17 managed owner | 1304 passed, 2 self-managed-only skips |
-| Frontend existing/recovered checks | 319 passed |
+| Frontend existing/recovered checks | 320 passed |
 | ESLint |Passed |
-| Linux standalone release artifact 38419727162 |Passed |
+| Linux standalone release artifact | Passed; latest run recorded in PR/task evidence |
 
 The first whole run exposed an obsolete test pool signature that lacked the
 current timeout argument. Only that synthetic pool adapter was updated; nine

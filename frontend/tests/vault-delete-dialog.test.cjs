@@ -43,6 +43,7 @@ function harness(deleteItem) {
         effects.push(fn); deps[i] = values;
       } },
     };
+    if (name === '@/lib/team-context') return { projectHref: url => url };
     if (name === 'next/link') return { default: 'a' };
     if (name === 'next/navigation') return { usePathname: () => '/vault', useSearchParams: () => query,
       useRouter: () => ({ replace: (...args) => replacements.push(args) }) };

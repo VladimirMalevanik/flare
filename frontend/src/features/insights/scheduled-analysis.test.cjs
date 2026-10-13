@@ -31,6 +31,7 @@ function setup(provider = {}, locale = 'en') {
     if (name === '@/i18n/provider') return i18nMock(locale);
     if (name === '@/lib/data') return { dataProvider: data };
     if (name === '@/components/workspace-context') return { useWorkspace: () => ({ refresh() { refreshed++; } }) };
+    if (name === '@/lib/team-context') return { projectHref: url => url };
     if (name === 'next/link') return { default: 'a' };
     if (name === 'next/navigation') return {};
     if (name === '@/components/icons') return {};
