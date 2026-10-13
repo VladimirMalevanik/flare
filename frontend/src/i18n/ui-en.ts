@@ -498,6 +498,7 @@ export const uiEn = {
   "Send one email to your verified account address when a scheduled run creates at least one Flare.": "Send one email to your verified account address when a scheduled run creates at least one Flare.",
   "Next refresh": "Next refresh",
   "Next insight": "Next insight",
+  "Notes and text imports are included. Connected sources join your scheduled analysis after their content is saved in Vault.": "Notes and text imports are included. Connected sources join your scheduled analysis after their content is saved in Vault.",
   "Notes and CSV/TXT/Markdown are included. GitHub repository content is not imported yet; its connection currently stores metadata only.": "Notes and CSV/TXT/Markdown are included. GitHub repository content is not imported yet; its connection currently stores metadata only.",
   "Save insight schedule": "Save insight schedule",
   "Data & Privacy": "Data & Privacy",

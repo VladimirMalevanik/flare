@@ -16,7 +16,7 @@ import { useI18n } from "@/i18n/provider";
 import { AnalyticsPreferences } from "@/features/telemetry/analytics-preferences";
 import { AcquisitionPreferences } from "@/features/acquisition/preferences";
 import { DeveloperMail } from "./developer-mail";
-import { projectApiUrl } from "@/lib/team-context";
+import { projectApiUrl, projectHref } from "@/lib/team-context";
 import {
   dataErrorMessage,
   dataProvider,
@@ -392,7 +392,7 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
               </div>
             )}
             <p className="muted meta">
-              {t("Notes and CSV/TXT/Markdown are included. GitHub repository content is not imported yet; its connection currently stores metadata only.")}</p>
+              {t("Notes and text imports are included. Connected sources join your scheduled analysis after their content is saved in Vault.")}</p>
             <div className="form-actions schedule-actions">
               {scheduleMessage && (
                 <p
@@ -422,7 +422,7 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
         <AnalyticsPreferences compact={false} />
         <AcquisitionPreferences account />
         <SettingRow title={t("Source connections")} description={t("Choose shared context and manage sync on Sources.")}>
-          <Link className="button" href="/sources">{t("Open Sources")}</Link>
+          <Link className="button" href={projectHref("/sources")}>{t("Open Sources")}</Link>
         </SettingRow>
         <SettingRow title={t("Private Slack conversations")} description={t("Slack sync excludes direct messages and private channels.")}>
           <span className="badge">{t("Always excluded")}</span>
@@ -461,7 +461,7 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
             title={source[0].toUpperCase() + source.slice(1)}
             description={t(source === "evernote" ? "Current imports accept one Markdown, text, or CSV file up to 200 KB." : "Import a ZIP snapshot with .md, .markdown, .txt, and .csv files from Sources.")}
           >
-            <Link className="button" href={`/settings/import-guides/${source}`}>
+            <Link className="button" href={projectHref(`/settings/import-guides/${source}`)}>
               {t("View guide")}</Link>
           </SettingRow>
         ))}

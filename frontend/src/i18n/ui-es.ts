@@ -500,6 +500,7 @@ export const uiEs = {
   "Send one email to your verified account address when a scheduled run creates at least one Flare.": "Envía un correo a tu dirección verificada cuando un análisis programado cree al menos un Flare.",
   "Next refresh": "Próxima actualización",
   "Next insight": "Próximo Flare",
+  "Notes and text imports are included. Connected sources join your scheduled analysis after their content is saved in Vault.": "Se incluyen notas y archivos de texto. Las fuentes conectadas entran en el análisis programado cuando su contenido se guarda en Vault.",
   "Notes and CSV/TXT/Markdown are included. GitHub repository content is not imported yet; its connection currently stores metadata only.": "Se incluyen notas y archivos CSV, TXT y Markdown. Aún no se importa contenido de repositorios de GitHub; la conexión solo guarda metadatos.",
   "Save insight schedule": "Guardar programación",
   "Data & Privacy": "Datos y privacidad",
