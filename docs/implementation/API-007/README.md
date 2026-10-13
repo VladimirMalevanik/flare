@@ -38,7 +38,7 @@ Backend source 01d226e570079c3c63ad34c8c95baa723f2c6f65; final frontend ef5c652 
 | --- | --- |
 | Full PostgreSQL 17 self-managed | 1305 passed, 1 managed-only skip |
 | Full PostgreSQL 17 managed owner | 1304 passed, 2 self-managed-only skips |
-| Frontend existing/recovered checks | 318 passed |
+| Frontend existing/recovered checks | 319 passed |
 | ESLint |Passed |
 | Linux standalone release artifact 38419727162 |Passed |
 
