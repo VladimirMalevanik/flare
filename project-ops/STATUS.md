@@ -2,9 +2,9 @@
 
 > Этот файл генерирует `task-sync`; вручную его не редактируют.
 
-Сформировано: `2026-10-13T15:16:52Z`
-Последнее обновление работы: `2026-10-13T15:16:52Z`
-Снимок состояния: `sha256:1defc19edaf12d3db36f70d2dbec407f580a083983e20638979cff43375d05cd`
+Сформировано: `2026-10-13T15:20:09Z`
+Последнее обновление работы: `2026-10-13T15:20:09Z`
+Снимок состояния: `sha256:94c7c254301887875437a9b714958d7b04f6c738802a820e57577ee59c658858`
 
 ## Ближайшая цель
 
@@ -40,6 +40,7 @@
 
 ## Блокеры
 
+- `OPS-006` (требуется информация) — Activate accepted integrated source on existing resources: reviewed backups and0023→0024 migration, matching API/web/restricted workers, provider apps/scopes/keys and real Sources consent/sync, Sandbox Team price and verified invitations/expiry, existing UTM policy/reporting/cleanup, developer mail permissions/delivery. Record actual source/readiness/smoke and rollback evidence. Common Gmail owner creation/verification and delegated access use supplied service register. No new paid resources, Live payments, invented production success, actual-secret disclosure or API-005 generation changes.. Условие: Wait for accepted API-007 main and account-owner/provider access plus required budget/policy approvals. Consolidated docs/implementation/API-007/release-handoff.md and service-register.md supply exact existing runbooks; CLI/flags alone do not prove activation.; владелец: Vova / existing-resource activation; Fedor / Google account ownership; зависит от: API-007; не завершены: API-007
 - `ARCH-002` (требуется информация) — Future Project Memory implementation after budget approval: layered section/document characteristics, lexical-first retrieval, explicit counterevidence/completion lane, original evidence grounding and lifecycle/evaluation. Embeddings deferred. Contract: docs/ONBOARDING_MEMORY_ATTRIBUTION_DECISIONS.md#arch-002. This task currently authorizes no automatic enrichment implementation or provider calls.. Условие: WAITING: responsible enrichment-budget owner must supply approved entitlement/onboarding credit, rolling/day and workspace/global Groq ceilings, concurrency, paid/free behavior, numeric limits and rollout policy. Record approval, coordinate shared/migration scopes and fresh main before moving to next or claim. Planned future envelope: memory modules, bounded Analyze/context adapters, versioned schema/worker capabilities, tests and docs/implementation/ARCH-002/; no scope activated now.; владелец: ARCH / unassigned; Groq budget decision owner pending; зависит от: ARCH-001
 
 ## Вопросы пользователю
