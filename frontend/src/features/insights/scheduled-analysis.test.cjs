@@ -13,10 +13,15 @@ function nodes(n) { return !n || typeof n !== 'object' ? [] : Array.isArray(n) ?
 function text(n) { return typeof n === 'string' || typeof n === 'number' ? String(n) : Array.isArray(n) ? n.map(text).join(' ') : n ? text(n.props?.children) : ''; }
 function setup(provider = {}, locale = 'en') {
   let cursor = 0, mounted = false, cleanup, tick, refreshed = 0;
-  const state = [], refs = [], calls = [];
+  const state = [], refs = [], calls = [], deadlines = new Map();
+  let deadlineId = 0;
+  const request = {};
+  const requestCode = ts.transpileModule(fs.readFileSync(path.join(__dirname, '../../lib/data/import-request.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  vm.runInNewContext(requestCode, { exports: request, AbortController, setTimeout(fn, ms) { deadlines.set(++deadlineId, {fn, ms}); return deadlineId; }, clearTimeout(id) { deadlines.delete(id); } });
   const data = {
     async getAnalysisSchedule(signal) { calls.push(['schedule', signal]); return schedule; },
     async getDailyAnalysisStatus(signal) { calls.push(['status', signal]); return daily; },
+    async getAnalysisRun(id, signal) { calls.push(['run', signal]); return { id, status: 'completed', stage: 'completed', selectedChunkCount: 1, flareIds: ['flare-one'], error: null }; },
     startAnalysis() { assert.fail('No manual start is permitted'); }, ...provider,
   };
   const exports = {};
@@ -29,17 +34,18 @@ function setup(provider = {}, locale = 'en') {
       useEffect(fn) { if (!mounted) cleanup = fn(); }, useCallback(fn) { return fn; },
     };
     if (name === '@/i18n/provider') return i18nMock(locale);
+    if (name === '@/lib/data/import-request') return request;
     if (name === '@/lib/data') return { dataProvider: data };
     if (name === '@/components/workspace-context') return { useWorkspace: () => ({ refresh() { refreshed++; } }) };
     if (name === '@/lib/team-context') return { projectHref: url => url };
     if (name === 'next/link') return { default: 'a' };
     if (name === 'next/navigation') return {};
-    if (name === '@/components/icons') return {};
+    if (name === '@/components/icons') return { Icon: 'icon' };
     if (name === './view-analytics') return {};
     throw Error('Unexpected import ' + name);
   } });
   const render = () => { cursor = 0; const tree = exports.ScheduledAnalysisStatus(); mounted = true; return tree; };
-  return { render, calls, refreshes: () => refreshed, flush: () => new Promise(resolve => setImmediate(resolve)), poll: async () => { assert.ok(tick); tick.fn(); await new Promise(resolve => setImmediate(resolve)); }, dispose() { cleanup?.(); }, delay: () => tick?.ms };
+  return { render, calls, refreshes: () => refreshed, flush: () => new Promise(resolve => setImmediate(resolve)), poll: async () => { assert.ok(tick); tick.fn(); await new Promise(resolve => setImmediate(resolve)); }, dispose() { cleanup?.(); }, delay: () => tick?.ms, expireResultRead() { assert.equal(deadlines.size,1); const deadline=[...deadlines.values()][0]; assert.equal(deadline.ms,15000); deadline.fn(); }, deadlines: () => deadlines.size };
 }
 
 test('Flares schedule surface has no manual action and links to existing Settings', async () => {
@@ -89,4 +95,54 @@ test('unmount aborts pending reads and ignores late completion without refresh o
   app.render(); app.dispose(); assert.ok(app.calls.every(c => c[1].aborted));
   resolve({ ...daily, state: 'completed', runId: 'late' }); await app.flush();
   assert.equal(app.refreshes(), 0); assert.equal(app.delay(), undefined);
+});
+
+
+const completed = { ...daily, state: 'completed', runId: 'finished-run' };
+const emptyRun = { id: 'finished-run', status: 'completed', stage: 'completed', selectedChunkCount: 2, flareIds: [], error: null };
+for (const locale of ['en', 'es']) test(`${locale}: confirmed completed-empty run has a visible, nonblocking result notice and never calls Analyze`, async () => {
+  const app = setup({ async getDailyAnalysisStatus() { return completed; }, async getAnalysisRun() { return emptyRun; }, listInsights() { assert.fail('Overall feed count cannot classify a run'); } }, locale);
+  app.render(); await app.flush(); const tree = app.render();
+  const notice = nodes(tree).find(n => n.props?.className === 'card analysis-result-notice');
+  assert.ok(notice); assert.equal(notice.props.role, 'status'); assert.equal(notice.props['aria-live'], 'polite');
+  assert.match(text(notice), locale === 'en' ? /No new Flares found.*Analysis completed.*saved in Vault/ : /No se encontraron nuevos Flares.*Análisis completado.*guardadas en Vault/);
+  assert.doesNotMatch(text(notice), /useless|no useful information|error|failed/i);
+  assert.equal(app.refreshes(), 1); assert.equal(app.delay(), 60000); assert.equal(app.deadlines(),0); app.dispose();
+});
+
+for (const count of [1,2]) test(`completed run with ${count} new Flares shows its actual result count without a zero-result notice`, async () => {
+  const app = setup({ async getDailyAnalysisStatus() { return completed; }, async getAnalysisRun() { return {...emptyRun,flareIds:['one','two'].slice(0,count)}; } });
+  app.render(); await app.flush(); const tree=app.render();assert.match(text(tree),new RegExp(`Latest analysis completed: ${count} new Flare${count===1?'':'s'}`));
+  assert.ok(!nodes(tree).some(n=>n.props?.className==='card analysis-result-notice'));app.dispose();
+});
+
+for(const state of ['scheduled','refreshing','processing','failed','consumed']) test(`${state} is never presented as a completed empty result`, async()=>{
+ const app=setup({async getDailyAnalysisStatus(){return {...daily,state,reason:state==='failed'?'no_eligible_context':null};},getAnalysisRun(){assert.fail('Only a completed run can be read as a result');}});
+ app.render();await app.flush();const tree=app.render();assert.ok(!nodes(tree).some(n=>n.props?.className==='card analysis-result-notice'));
+ if(state==='failed')assert.match(text(tree),/No ready context was available/);app.dispose();
+});
+
+for(const run of [null,{...emptyRun,id:'other-run'},{...emptyRun,status:'processing',stage:'flare_generation'}]) test('unavailable or mismatched completed receipt is not guessed as zero Flares',async()=>{
+ const app=setup({async getDailyAnalysisStatus(){return completed;},async getAnalysisRun(){if(!run)throw Error('offline');return run;}});
+ app.render();await app.flush();const tree=app.render();assert.match(text(tree),/result is unavailable/);assert.ok(!nodes(tree).some(n=>n.props?.className==='card analysis-result-notice'));app.dispose();
+});
+
+test('a previous empty notice clears when the next cycle is processing or status becomes unavailable',async()=>{
+ let state='completed',offline=false;
+ const app=setup({async getDailyAnalysisStatus(){if(offline)throw Error('offline');return {...completed,state};},async getAnalysisRun(){return emptyRun;}});
+ app.render();await app.flush();assert.match(text(app.render()),/No new Flares found/);
+ state='processing';await app.poll();assert.doesNotMatch(text(app.render()),/No new Flares found/);assert.match(text(app.render()),/Analysis is running/);
+ state='completed';await app.poll();assert.match(text(app.render()),/No new Flares found/);offline=true;await app.poll();assert.doesNotMatch(text(app.render()),/No new Flares found/);assert.match(text(app.render()),/status is unavailable/);app.dispose();
+});
+
+test('completed result lookup is bounded even when transport ignores abort, and late zero result is ignored',async()=>{
+ let finish;const app=setup({async getDailyAnalysisStatus(){return completed;},getAnalysisRun(_id,signal){app.calls.push(['run',signal]);return new Promise(resolve=>finish=resolve);}});
+ app.render();await app.flush();app.expireResultRead();await app.flush();assert.match(text(app.render()),/result is unavailable/);assert.ok(app.calls.find(c=>c[0]==='run')[1].aborted);
+ finish(emptyRun);await app.flush();assert.doesNotMatch(text(app.render()),/No new Flares found/);app.dispose();
+});
+
+test('unmount during result lookup aborts the request and prevents late notice, refresh or poll',async()=>{
+ let finish;const app=setup({async getDailyAnalysisStatus(){return completed;},getAnalysisRun(_id,signal){app.calls.push(['run',signal]);return new Promise(resolve=>finish=resolve);}});
+ app.render();await app.flush();app.dispose();assert.equal(app.deadlines(),0);assert.ok(app.calls.every(c=>c[1].aborted));
+ finish(emptyRun);await app.flush();assert.doesNotMatch(text(app.render()),/No new Flares found/);assert.equal(app.refreshes(),0);assert.equal(app.delay(),undefined);
 });

@@ -9,7 +9,9 @@ import {
   type Insight,
   type AnalysisSchedule,
   type DailyAnalysisStatus,
+  type AnalysisRun,
 } from "@/lib/data";
+import { importRequest } from "@/lib/data/import-request";
 import { Icon } from "@/components/icons";
 import { useWorkspace } from "@/components/workspace-context";
 import { nextFlareViewEvent, resetFlareView } from "./view-analytics";
@@ -23,7 +25,7 @@ const flareTypeFor = (insight: Insight): FlareType => insight.type;
 export function ScheduledAnalysisStatus() {
   const { t, locale } = useI18n();
   const { refresh } = useWorkspace();
-  const [status, setStatus] = useState<{ schedule: AnalysisSchedule; daily: DailyAnalysisStatus } | null>(null);
+  const [status, setStatus] = useState<{ schedule: AnalysisSchedule; daily: DailyAnalysisStatus; run: AnalysisRun | null; resultUnavailable: boolean } | null>(null);
   const [error, setError] = useState(false);
   const refreshedRun = useRef<string | null>(null);
   useEffect(() => {
@@ -38,7 +40,20 @@ export function ScheduledAnalysisStatus() {
           dataProvider.getDailyAnalysisStatus(controller.signal),
         ]);
         if (!live) return;
-        setStatus({ schedule, daily }); setError(false);
+        let run: AnalysisRun | null = null;
+        let resultUnavailable = false;
+        if (daily.state === "completed") {
+          try {
+            if (!daily.runId) throw new Error("Missing completed run");
+            const result = await importRequest(signal => dataProvider.getAnalysisRun(daily.runId!, signal), controller.signal);
+            if (result.id !== daily.runId || result.status !== "completed" || result.stage !== "completed") throw new Error("Completed result is unavailable");
+            run = result;
+          } catch {
+            resultUnavailable = true;
+          }
+        }
+        if (!live) return;
+        setStatus({ schedule, daily, run, resultUnavailable }); setError(false);
         if (["refreshing", "ready", "queued", "processing"].includes(daily.state)) delay = 15_000;
         if (daily.state === "completed" && daily.runId && refreshedRun.current !== daily.runId) {
           refreshedRun.current = daily.runId;
@@ -62,14 +77,24 @@ export function ScheduledAnalysisStatus() {
     : current === "refreshing" ? t("Flare is preparing context for the scheduled insight.")
     : current === "ready" ? t("Context is ready. Analysis will start at the scheduled time.")
     : current === "queued" || current === "processing" ? t("Analysis is running. Flares will update when it finishes.")
+    : current === "completed" && status.resultUnavailable ? t("Analysis completed, but its result is unavailable. We’ll check again automatically.")
+    : current === "failed" && status.daily.reason === "no_eligible_context" ? t("No ready context was available for the latest analysis. Your notes are still saved in Vault.")
     : status.daily.state === "failed" && status.daily.mode === "scheduled" ? t("The latest scheduled analysis did not complete. Check the schedule in Settings.")
     : !status.schedule.enabled ? t("Scheduled analysis is off. Enable it in Settings.")
     : date ? t("Next scheduled insight: {date}", { date })
     : t("Waiting for the next scheduled insight.");
-  return <div className="analyze-action">
+  const completed = !error && current === "completed" && status?.run;
+  const noNewFlares = completed && completed.flareIds.length === 0;
+  return <><div className="analyze-action">
     <Link className="button" href={projectHref("/settings")}>{t("Analysis schedule")}</Link>
     <p className={error ? "error-text meta" : "muted meta"} role={error ? "alert" : "status"}>{copy}</p>
-  </div>;
+    {completed && !noNewFlares && <p className="muted meta" role="status">{completed.flareIds.length === 1 ? t("Latest analysis completed: 1 new Flare.") : t("Latest analysis completed: {count} new Flares.", { count: completed.flareIds.length })}</p>}
+  </div>
+    {noNewFlares && <section className="card analysis-result-notice" role="status" aria-live="polite">
+      <Icon name="check"/>
+      <div><h2>{t("No new Flares found")}</h2><p>{t("Analysis completed. This run did not find a new reminder, warning or recommendation. Your notes are saved in Vault.")}</p></div>
+    </section>}
+  </>;
 }
 export function InsightsPage() {
   const { t, locale, label, message } = useI18n();
@@ -240,7 +265,7 @@ export function InsightsPage() {
             <h2>{itemCount ? t(itemCount === 1 ? "rememberedItem" : "rememberedItems", { count: itemCount }) : t("No Flares yet")}</h2>
             <p>
               {itemCount
-                ? t("No completed Flares are available for this workspace.")
+                ? t("Your notes are saved. Flares appear here when scheduled analysis finds a new signal to highlight.")
                 : t("Add a note to keep project context here.")}
             </p>
             {!itemCount && (
