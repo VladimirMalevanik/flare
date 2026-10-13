@@ -50,7 +50,7 @@ def _item_service(
     user: Annotated[AuthenticatedUser, Depends(verified_user)],
     database: Annotated[Database, Depends(_database)],
 ) -> ItemService:
-    return ItemService(database, user.identity)
+    return ItemService(database, user.identity, author_name=user.name)
 
 
 def _search_query(

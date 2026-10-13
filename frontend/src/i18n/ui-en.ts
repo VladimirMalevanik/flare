@@ -765,4 +765,5 @@ export const uiEn = {
   "Scheduled analysis is off. Enable it in Settings.": "Scheduled analysis is off. Enable it in Settings.",
   "Next scheduled insight: {date}": "Next scheduled insight: {date}",
   "Waiting for the next scheduled insight.": "Waiting for the next scheduled insight.",
+  "Added by": "Added by",
 } as const;

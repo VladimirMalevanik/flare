@@ -17,11 +17,12 @@ class VoiceTranscriptService:
         database: Database,
         identity: WorkspaceIdentity,
         *,
+        author_name: str | None = None,
         item_service: ItemService | None = None,
         analytics: AnalyticsService | None = None,
         max_upload_bytes: int = 10 * 1024 * 1024,
     ):
-        self._item_service = item_service or ItemService(database, identity)
+        self._item_service = item_service or ItemService(database, identity, author_name=author_name)
         self._analytics = analytics or AnalyticsService(database, identity)
         self._max_upload_bytes = max_upload_bytes
 

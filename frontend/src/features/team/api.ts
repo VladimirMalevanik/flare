@@ -4,13 +4,10 @@ import { importRequest, ImportRequestError } from "@/lib/data/import-request";
 export type TeamRole = "owner" | "editor" | "viewer";
 export type Project = { id: string; name: string; role: TeamRole; kind: "personal" | "team" | "shared"; writable: boolean; canManageLicense: boolean };
 export type Capability = { enabled: boolean; canCreate: boolean; requiresVerification: boolean; projectCount: number;
-  limits: { projects: number; members: number; tasks: number; documents: number; contentBytes: number; invitationsDaily: number } };
+  limits: { projects: number; members: number; documents: number; contentBytes: number; invitationsDaily: number } };
 export type ProjectsResponse = { projects: Project[]; capability: Capability };
 export type Member = { id: string; name: string; email: string | null; role: TeamRole };
 export type Invitation = { id: string; email: string; role: "editor" | "viewer"; status: "pending" | "accepted" | "canceled" | "expired"; expiresAt: string };
-export type Task = { id: string; title: string; description: string; status: "todo" | "doing" | "done";
-  createdBy: string | null; creatorName: string; assigneeId: string | null; assigneeName: string | null; version: number; createdAt: string; updatedAt: string };
-export type History = { actorName: string; action: string; fields: string[]; version: number; createdAt: string };
 
 export class TeamError extends Error {
   constructor(message: string, readonly status: number, readonly code: string | undefined) { super(message); }

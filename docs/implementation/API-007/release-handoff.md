@@ -14,8 +14,10 @@ by API-007. Required configuration names and scripts already exist in the repo.
    cancellation and disconnect before enabling SOURCES_ENABLED.
 3. Team: select a distinct Paddle Sandbox Team price, configure server and matching
    administrator team_policy, genuine SMTP/HTTPS origin and verification. Follow
-   API-006/README.md. Test checkout/webhook→empty project→verified invite→roles/tasks,
-   removal and expiry/read/export. Enable TEAM_ENABLED and policy only after these
+   API-006/README.md for configuration and API-008/README.md for the corrected
+   shared-notes product flow. Test checkout/webhook→empty shared project→verified
+   invite→notes from two members→one shared scheduled Flare with both sources,
+   private-Vault isolation, removal and expiry/read/export. Enable TEAM_ENABLED and policy only after these
    checks. Pro-to-Team provider upgrade/proration remains a separate approved flow.
 4. UTM: approve the existing proposed policy/retention/disclosure values, configure
    function-only reporting access and bounded cleanup in the existing scheduler,

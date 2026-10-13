@@ -38,9 +38,12 @@ class ItemService:
         self,
         database: Database,
         identity: WorkspaceIdentity,
+        *,
+        author_name: str | None = None,
     ):
         self._database = database
         self._identity = identity
+        self._author_name = author_name
 
     def create_note(self, *, title: str | None, content: str) -> ItemRecord:
         return self.create_item(
@@ -74,6 +77,10 @@ class ItemService:
             file_size=file_size,
             file_type=file_type,
         )
+
+        metadata["createdBy"] = self._identity.user_id
+        if self._author_name is not None:
+            metadata["createdByName"] = self._author_name
 
         with self._database.workspace_transaction(self._identity, write=True) as connection:
             repository = ItemRepository(connection)

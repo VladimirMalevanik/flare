@@ -37,7 +37,7 @@ def _import_service(
     user: Annotated[AuthenticatedUser, Depends(verified_user)],
     database: Annotated[Database, Depends(_database)],
 ) -> ImportService:
-    return ImportService(database, user.identity)
+    return ImportService(database, user.identity, author_name=user.name)
 
 
 def _analytics_service(

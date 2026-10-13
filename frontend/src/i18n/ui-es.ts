@@ -767,4 +767,5 @@ export const uiEs = {
   "Scheduled analysis is off. Enable it in Settings.": "El análisis programado está desactivado. Actívalo en Ajustes.",
   "Next scheduled insight: {date}": "Próximo análisis programado: {date}",
   "Waiting for the next scheduled insight.": "Esperando el próximo análisis programado.",
+  "Added by": "Añadida por",
 } satisfies Record<keyof typeof uiEn, string>;

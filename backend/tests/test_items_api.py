@@ -206,6 +206,8 @@ def test_note_is_persisted_atomically_and_survives_app_restart(api_environment):
         )
 
     assert item == {
+        "createdBy": user_id,
+        "author": f"API Test {workspace_id}",
         "id": item["id"],
         "type": "note",
         "title": "Interview result",
@@ -347,6 +349,7 @@ def test_validated_voice_transcript_is_versioned_visible_and_contains_no_audio_b
     )
     assert persisted[0] == "audio"
     assert persisted[1] == {
+        "createdBy": user_id,
         "sourceType": "audio",
         "fileName": "voice-memo.webm",
         "fileSize": 1_234,

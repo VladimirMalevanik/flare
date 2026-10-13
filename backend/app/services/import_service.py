@@ -84,9 +84,10 @@ _MARKDOWN_HEADING = re.compile(r"^(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$")
 class ImportService:
     """Create exactly one file item and a durable batch record per import."""
 
-    def __init__(self, database: Database, identity: WorkspaceIdentity):
+    def __init__(self, database: Database, identity: WorkspaceIdentity, *, author_name: str | None = None):
         self._database = database
         self._identity = identity
+        self._author_name = author_name
 
     def create_import(
         self,
@@ -159,6 +160,9 @@ class ImportService:
             repository = ItemRepository(connection)
             item_title = _title_from_file_name(prepared.file_name)
             item_metadata = _document_metadata(prepared, batch_id)
+            item_metadata["createdBy"] = self._identity.user_id
+            if self._author_name is not None:
+                item_metadata["createdByName"] = self._author_name
             repository.insert_document(
                 item_id=item_id,
                 workspace_id=self._identity.workspace_id,

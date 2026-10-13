@@ -101,6 +101,8 @@ function mapItem(value: unknown): Item {
       };
     }),
     relatedItemIds: relatedIds,
+    ...(typeof dto.author === "string" ? { author: dto.author } : {}),
+    ...(typeof dto.createdBy === "string" ? { createdBy: dto.createdBy } : {}),
     ...(typeof dto.sourceUrl === "string" ? { sourceUrl: dto.sourceUrl } : {}),
     ...(typeof dto.importPackageId === "string" ? { importPackageId: dto.importPackageId } : {}),
     ...(typeof dto.relativePath === "string" ? { relativePath: dto.relativePath } : {}),

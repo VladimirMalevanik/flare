@@ -35,7 +35,7 @@ const english = {
     name: "Team",
     description: "A shared home for your team’s context.",
     benefits: [
-      "Shared context and tasks with creator and assignee",
+      "Shared notes and Flares from your team’s context",
       "Email invitations and owner, editor, viewer roles",
       "Project limits shown alongside current usage",
     ],
@@ -114,7 +114,7 @@ const spanish: SubscriptionCopy = {
     name: "Team",
     description: "Un lugar compartido para el contexto de tu equipo.",
     benefits: [
-      "Contexto y tareas compartidas con autor y responsable",
+      "Notas y Flares del contexto compartido del equipo",
       "Invitaciones por correo y roles de propietario, editor y lector",
       "Límites del proyecto junto al uso actual",
     ],

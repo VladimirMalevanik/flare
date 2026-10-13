@@ -65,44 +65,50 @@ test('Team API errors retain only stable public messages and aborted requests ne
  const controller=new AbortController();controller.abort();await assert.rejects(teamRequest('/projects',undefined,undefined,controller.signal));assert.equal(calls,1);
 });
 
-function screen({role='owner',conflict=false}={}){
- const slots=[],effects=[],requests=[];let cursor=0;
- const task={id:'task-one',title:'Interview customers',description:'Write down the main objections.',status:'todo',createdBy:'other-user',creatorName:'Ilyas',assigneeId:'current-user',assigneeName:'Fedor',version:7,createdAt:'2026-10-12T12:00:00Z',updatedAt:'2026-10-12T12:00:00Z'};
- const project={id:'project-one',name:'Flare',role,kind:'team',writable:true,canManageLicense:true};
- const response={projects:[project],capability:{enabled:true,canCreate:false,projectCount:1,requiresVerification:false,limits:{members:10,tasks:1000,projects:1}}};
+function screen({role='owner',writable=true,notesFailure=false,empty=false}={}){
+ const slots=[],effects=[],cleanups=[],requests=[],captures=[];let cursor=0;
+ const note={id:'note-one',title:'Customer interview',author:'Ilyas',createdBy:'other-user',createdAt:'2026-10-12T12:00:00Z'};
+ const project={id:'project-one',name:'Flare',role,kind:'team',writable,canManageLicense:true};
+ const response={projects:[project],capability:{enabled:true,canCreate:false,projectCount:1,requiresVerification:false,limits:{members:10,projects:1}}};
  const api={async teamRequest(url,body,method){requests.push({url,body,method});
-  if(body&&url.endsWith('/tasks')&&conflict)throw Error('Someone changed this task. Keep your draft.');
+  assert.ok(!url.includes('/tasks'), 'Team must not request task data');
   if(url==='/projects')return response;if(url.endsWith('/members'))return[{id:'current-user',name:'Fedor',role},{id:'other-user',name:'Ilyas',role:'editor'}];
-  if(url.endsWith('/tasks'))return body?{id:task.id,version:8}:{tasks:[task],nextCursor:null};
-  if(url.endsWith('/usage'))return{contentBytes:10,documents:1,tasks:1,limits:{contentBytes:104857600,documents:5000,tasks:1000}};
-  if(url.endsWith('/invitations'))return[];if(url.endsWith('/history'))return[];
-  if(url.endsWith('/tasks/task-one'))return{...task,version:8,title:'Changed by colleague'};
-  return{ok:true};}};
+  if(url.endsWith('/usage'))return{contentBytes:10,documents:1,limits:{contentBytes:104857600,documents:5000}};
+  if(url.endsWith('/invitations'))return[];return{ok:true};}};
  const react={useState(initial){const index=cursor++;if(!(index in slots))slots[index]=initial;return[slots[index],next=>{slots[index]=typeof next==='function'?next(slots[index]):next;}];},useRef(value){const index=cursor++;if(!(index in slots))slots[index]={current:value};return slots[index];},useEffect(fn){effects.push(fn);}};
- const load=loader({window:{addEventListener(){},removeEventListener(){},dispatchEvent(){}},crypto:{randomUUID:()=> 'new-task-id'}},
-  {react,'@/lib/auth/session':{apiBaseUrl:'/api'},'@/components/auth-session':{useSession:()=>({user:{id:'current-user'},workspace:{id:project.id}})},
+ const load=loader({window:{location:{search:'?project=project-one'},addEventListener(){},removeEventListener(){},dispatchEvent(){}}},
+  {react,'next/link':{default:'a'},'@/components/workspace-context':{useWorkspace:()=>({revision:0,openCapture:()=>captures.push('shared-note')})},
+   '@/lib/data':{dataProvider:{async listItems(options){requests.push({url:'/items',options});if(notesFailure)throw Error('Notes unavailable');return empty?[]:[note];}}},
+   '@/components/auth-session':{useSession:()=>({user:{id:'current-user'},workspace:{id:project.id}})},
    '@/components/select':{Select:'select'},'@/components/dialog':{Dialog:'dialog'},'@/components/icons':{Icon:'icon'},
-   '@/i18n/provider':{useI18n:()=>({locale:'en'})},'@/lib/team-context':{switchProject(){}},'./api':api});
+   '@/i18n/provider':{useI18n:()=>({locale:'en'})},'./api':api});
  const {TeamPage}=load('features/team/team-page.tsx');
- return{task,requests,render(){cursor=0;return TeamPage();},async start(){this.render();for(const effect of effects.splice(0))effect();await flush();},all:()=>slots};
+ return{note,requests,captures,render(){cursor=0;return TeamPage();},async start(){this.render();for(const effect of effects.splice(0))cleanups.push(effect());await flush();},dispose(){for(const cleanup of cleanups)cleanup?.();}};
 }
 
-test('shared tasks display the server creator, assignee and timestamp; viewer cannot add or edit',async()=>{
- const h=screen({role:'viewer'});await h.start();let tree=h.render();assert.match(text(tree),/Added by\s+Ilyas/);
- assert.match(text(tree),/Assigned to\s*:\s*Fedor/);assert.equal(nodes(tree).find(n=>n.type==='time').props.dateTime,h.task.createdAt);
- assert.equal(nodes(tree).find(n=>n.type==='button'&&text(n).trim()==='Add task').props.disabled,true);
- nodes(tree).find(n=>n.props?.className==='card team-task').props.onClick();tree=h.render();
- assert.ok(nodes(tree).filter(n=>n.type==='input'||n.type==='textarea').every(n=>n.props.disabled));
- assert.ok(!nodes(tree).some(n=>n.type==='button'&&text(n)==='Save task'));
+test('Team defaults to authored shared notes and project-bound Vault/Flares/Sources with no task controls or requests',async()=>{
+ const h=screen();await h.start();const tree=h.render();
+ assert.match(text(tree),/Added by\s+Ilyas/);assert.match(text(tree),/Shared Flares/);
+ const links=nodes(tree).filter(n=>n.type==='a').map(n=>new URL(n.props.href,'http://localhost'));
+ for(const path of ['/vault','/insights','/sources','/settings'])assert.ok(links.some(url=>url.pathname===path&&url.searchParams.get('project')==='project-one'),path);
+ assert.ok(links.some(url=>url.searchParams.get('item')==='note-one'&&url.searchParams.get('project')==='project-one'));
+ assert.equal(nodes(tree).find(n=>n.type==='time').props.dateTime,h.note.createdAt);
+ assert.deepEqual(plain(h.requests.find(r=>r.url==='/items').options),{limit:5});
+ assert.doesNotMatch(text(tree),/Add task|Export tasks|Assigned to|Tasks/);
+ nodes(tree).find(n=>n.type==='button'&&text(n).trim()==='Add a note').props.onClick();assert.deepEqual(h.captures,['shared-note']);h.dispose();
 });
 
-test('task submission uses its expected server version and never sends a forged creator; conflict preserves the draft',async()=>{
- const h=screen({conflict:true});await h.start();nodes(h.render()).find(n=>n.props?.className==='card team-task').props.onClick();
- let tree=h.render();nodes(tree).find(n=>n.type==='input'&&n.props.value===h.task.title).props.onChange({target:{value:'My unfinished draft'}});
- tree=h.render();nodes(tree).find(n=>n.type==='form').props.onSubmit({preventDefault(){}});await flush();tree=h.render();
- const request=h.requests.find(r=>r.body&&r.url.endsWith('/tasks'));assert.equal(request.body.expectedVersion,7);
- assert.equal(request.body.title,'My unfinished draft');assert.equal(request.body.createdBy,undefined);
- assert.ok(text(tree).includes('Keep your draft'));assert.ok(nodes(tree).some(n=>n.type==='input'&&n.props.value==='My unfinished draft'));
+test('viewer or expired Team can read shared context but cannot add notes; personal notes are not claimed as shared',async()=>{
+ for(const options of [{role:'viewer'},{writable:false}]){
+  const h=screen(options);await h.start();const tree=h.render();
+  assert.equal(nodes(tree).find(n=>n.type==='button'&&text(n).trim()==='Add a note').props.disabled,true);
+  assert.ok(nodes(tree).some(n=>n.type==='a'&&text(n).includes('Open Vault')));assert.match(text(tree),/personal Vault stays separate/);h.dispose();
+ }
+});
+
+test('empty context explains scheduled shared analysis, while a failed note fetch remains an error instead of an empty Vault',async()=>{
+ const empty=screen({empty:true});await empty.start();assert.match(text(empty.render()),/first shared note/);assert.match(text(empty.render()),/next scheduled analysis/);empty.dispose();
+ const failed=screen({notesFailure:true});await failed.start();const tree=failed.render();assert.match(text(tree),/Notes unavailable/);assert.doesNotMatch(text(tree),/first shared note/);assert.ok(nodes(tree).some(n=>n.props.role==='alert'));failed.dispose();
 });
 
 test('invitation requires an explicit sharing acknowledgement and editor/viewer role, with no membership identity supplied',async()=>{
@@ -135,4 +141,13 @@ test('Team and Pro share one checkout lock and SDK; Team uses only the server-ow
  assert.deepEqual(intents,['team']);assert.equal(opened[0].items[0].priceId,teamPrice);assert.equal(initialized,1);
  callback({name:'checkout.loaded'});callback({name:'checkout.closed'});await checkout.openProCheckout(user,'en');
  assert.equal(initialized,1);assert.equal(opened[1].items[0].priceId,proPrice);callback({name:'checkout.closed'});
+});
+
+test('real API adapter preserves server note attribution, optional legacy author and the selected project',async()=>{
+ const calls=[];
+ const dto={id:'note-one',type:'note',title:'Interview',content:'A shared customer interview.',status:'ready',createdAt:'2026-10-12T12:00:00Z',updatedAt:'2026-10-12T12:00:00Z',currentVersionId:'version-one',versionNumber:1,author:'Ilyas',createdBy:'member-id'};
+ const {ApiDataProvider}=loader({window:{location:{search:'?project=project-one'}},fetch:async(url,options)=>{calls.push({url,options});return{ok:true,status:200,json:async()=>[dto,{...dto,id:'legacy-note',author:null,createdBy:null}]};}})('lib/data/api-provider.ts');
+ const rows=await new ApiDataProvider({baseUrl:'/api',fallback:{}}).listItems({limit:5});
+ assert.equal(calls[0].url,'/api/items?limit=5&workspace=project-one');assert.equal(calls[0].options.credentials,'include');
+ assert.equal(rows[0].author,'Ilyas');assert.equal(rows[0].createdBy,'member-id');assert.equal(rows[1].author,undefined);assert.equal(rows[1].createdBy,undefined);
 });

@@ -9,6 +9,7 @@ export interface Item {
   category?: "discussion" | "pull-request" | "note" | "voice";
   sourceLabel?: string;
   author?: string;
+  createdBy?: string;
   fileType?: string;
   id: string;
   type: ItemType;

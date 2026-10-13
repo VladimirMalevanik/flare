@@ -77,6 +77,10 @@ def team():
         cleanup=ApiEnvironment(runtime,admin);cleanup.workspace_ids.update([u.workspace_id for u in users]+projects);cleanup.user_ids.update(u.user_id for u in users)
         with psycopg.connect(admin) as c:
             c.execute('SET LOCAL session_replication_role=replica')
+            # Shared scheduled runs reference their requesting user. Clear owned
+            # fixture cycles/receipts before ApiEnvironment removes those users.
+            for table in ('scheduled_analysis_notifications','analysis_cycle_sources','analysis_cycles','analysis_schedules','analysis_runs','analysis_daily_quotas'):
+                c.execute(f'DELETE FROM public.{table} WHERE workspace_id=ANY(%s)',(projects,))
             for table in ('team_task_history','team_member_events','team_invitations','team_tasks','team_projects'):
                 c.execute(f'DELETE FROM public.{table} WHERE workspace_id=ANY(%s)',(projects,))
             c.execute('DELETE FROM billing_webhook_events WHERE event_id=ANY(%s)',(events,))
