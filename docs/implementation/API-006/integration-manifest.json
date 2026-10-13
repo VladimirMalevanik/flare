@@ -1,0 +1,19 @@
+{
+  "team_commit": "22bf7c4ae1ea33fcb01c4a27cdb124c8de6ea67b",
+  "sources_commit": "16703c6aea827043f7512e740f67fe2a780f51e7",
+  "local_integration": "/private/tmp/flare-team-data003-integration",
+  "files": {
+    "backend/app/api/team.py": "800eb2d62c740a65201a85ff11a7693a9b62a3e07b2d8fad18ec500816862e8b",
+    "backend/app/services/team.py": "27df570ac2502972aa3b1df8c09a688e20c22b2b46fa943f3820bdc6c190e597",
+    "backend/app/api/auth.py": "a046dc9a0230544e0240c06a6094f1783aad69ad40dadc1baba8f26ebfdd06db",
+    "backend/app/models/database.py": "b238ecc70711000a8e0d1cd08163fd76bfb7165f6df528e2d3a3420033a907d9",
+    "backend/db/team.sql": "8ce023fefcb34b5a58905bab40bbd382bbacd58ff5e345ab6b732cd0f337a313",
+    "backend/migrations/versions/0024_team.py": "095a6f28819a1594ac7c55a942382bfe4b36ae263350f31bef38156c4c3b85de",
+    "backend/tests/test_team.py": "81625ce70812bdbb05fc634c8b406b89ac00c5fe08f561466fbd0afc4978fa69",
+    "backend/tests/test_team_schema.py": "9e44e728657c24f369b133c4f95756d10270e6cabf431fe9e4a7ddc1ac5331f2",
+    "frontend/src/lib/team-context.ts": "b4c7d1c9ce3618640d5c1bac7cfb751cee8ee69e1e77ecdf31a141aab9610f71",
+    "frontend/src/lib/data/api-provider.ts": "1fa97fa86942e25b72efb576236944d5403e460d47539bb3b75a471a9f727748",
+    "frontend/tests/sources-connections.test.cjs": "d1c4c62798fdb281afb613437fee2ce78eb090f39e34e5beb9ab7136e6dbdd08",
+    "frontend/tests/import-guides.test.cjs": "abddd2beffaa2248b0c1eb6c02b3af520ea0f3e75ce533011842fed73bba4dbc"
+  }
+}

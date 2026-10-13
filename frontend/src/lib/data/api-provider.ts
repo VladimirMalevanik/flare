@@ -1,5 +1,6 @@
 import type { ImportPackage, ImportPackageReport, ZipSourceKind } from "./types";
 import { importRequest, IMPORT_UPLOAD_MS } from "./import-request";
+import { projectApiUrl } from "../team-context";
 import type { AnalyticsEventInput, FlareDataProvider } from "./provider";
 import type {
   AnalysisRun,
@@ -373,7 +374,7 @@ export class ApiDataProvider implements FlareDataProvider {
   private async request(path: string, init?: RequestInit): Promise<unknown> {
     let response: Response;
     try {
-      response = await fetch(`${this.baseUrl}${path}`, {
+      response = await fetch(projectApiUrl(`${this.baseUrl}${path}`), {
         ...init,
         credentials: "include",
         cache: "no-store",

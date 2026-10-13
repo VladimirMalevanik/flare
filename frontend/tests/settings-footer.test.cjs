@@ -15,6 +15,9 @@ function load(file, mocks) {
     if (name === 'react/jsx-runtime') return jsx;
     if (name === '@/i18n/provider') return i18nMock();
     if (name in mocks) return mocks[name];
+      if (name === '@/lib/team-context') return { projectApiUrl: url => url, projectHref: path => path };
+      if (name === '@/features/team/project-menu') return { ProjectMenu: () => null };
+
     if (name === './developer-mail') return { DeveloperMail: () => null };
     throw Error(`Unexpected import ${name}`);
   } });

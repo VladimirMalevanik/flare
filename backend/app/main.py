@@ -3,7 +3,9 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 import logging
+import psycopg
 from time import perf_counter
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -15,6 +17,7 @@ from app.api.acquisition import router as acquisition_router
 from app.api.analytics import router as analytics_router
 from app.api.auth import router as auth_router
 from app.api.billing import router as billing_router, WEBHOOK_PATH
+from app.api.team import router as team_router, TeamBodyLimit
 from app.api.flares import router as flares_router
 from app.api.analysis import router as analysis_router
 from app.api.analysis_schedule import router as analysis_schedule_router
@@ -68,6 +71,10 @@ def create_app(
         configured.validate()
         if email_sender is not None:
             application.state.email_sender = email_sender
+        elif configured.team_enabled and configured.smtp_url:
+            application.state.email_sender = SmtpEmailSender(configured.smtp_url, configured.email_from or "")
+        elif configured.team_enabled and configured.environment != 'production' and configured.app_public_url:
+            application.state.email_sender = LoggingEmailSender()
         elif not configured.email_verification_required:
             application.state.email_sender = None
         elif configured.smtp_url:
@@ -107,6 +114,7 @@ def create_app(
     application.state.settings = configured
     application.state.database = database
     application.state.email_sender = email_sender
+    application.add_middleware(TeamBodyLimit)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=configured.cors_origins,
@@ -121,11 +129,20 @@ def create_app(
             if request.headers.get("origin") not in configured.cors_origins:
                 return JSONResponse({"detail": "Request origin is not allowed"}, status_code=403)
         response = await call_next(request)
+        callback_workspace = getattr(request.state,'team_callback_workspace',None)
+        location = response.headers.get('location')
+        if callback_workspace and location and response.status_code in {302,303,307,308}:
+            target = urlsplit(location)
+            public = urlsplit(configured.app_public_url or '')
+            if (target.scheme,target.netloc)==(public.scheme,public.netloc):
+                query = [(key,value) for key,value in parse_qsl(target.query,keep_blank_values=True) if key!='project']
+                query.append(('project',callback_workspace))
+                response.headers['location']=urlunsplit((target.scheme,target.netloc,target.path,urlencode(query),target.fragment))
         if request.url.path.startswith((
             "/auth", "/items", "/imports", "/flares", "/analyze", "/analysis-runs",
             "/integrations", "/ops", "/analytics", "/voice",
             "/analysis-schedule", "/analysis/daily-status",
-            "/export", "/acquisition", "/billing",
+            "/export", "/acquisition", "/billing", "/team",
         )):
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -171,8 +188,21 @@ def create_app(
             for e in error.errors()
         ]}, status_code=422)
 
+    @application.exception_handler(psycopg.Error)
+    async def database_error(request: Request, error: psycopg.Error):
+        # Team storage/entitlement guards also protect existing capture and
+        # worker SQL. Return only fixed public errors, never SQL or row contents.
+        message = error.diag.message_primary
+        quota_messages = {'Project document limit reached', 'Project storage limit reached'}
+        if error.sqlstate == 'P0003' and message in quota_messages:
+            return JSONResponse({'detail': {'code': 'team_storage_limit', 'message': 'This project has reached its document or storage limit.'}}, status_code=409)
+        if error.sqlstate == 'P0001' and message == 'Team subscription required':
+            return JSONResponse({'detail': {'code': 'team_subscription_required', 'message': 'An active Team subscription is required.'}}, status_code=403)
+        return JSONResponse({'detail': {'code': 'database_unavailable', 'message': 'This action could not complete. Please retry.'}}, status_code=503)
+
     application.include_router(auth_router)
     application.include_router(billing_router)
+    application.include_router(team_router)
     application.include_router(import_packages_router)
     application.include_router(imports_router)
     application.include_router(flares_router)

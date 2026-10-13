@@ -68,7 +68,8 @@ test('double connect submits once; closing picker prevents late resource state',
 
 test('connection decoder exposes only known public fields and rejects unsafe capabilities', () => {
   const request = load('../src/lib/data/import-request.ts', {});
-  const componentModule = load('../src/lib/data/api-provider.ts', { './import-request': request });
+  const projectContext = load('../src/lib/team-context.ts', {});
+  const componentModule = load('../src/lib/data/api-provider.ts', { './import-request': request, '../team-context': projectContext });
   const conn = { id:'c', provider:'gmail', owner:true, canDisconnect:true, accountLabel:'Test', scopeRevision:1, status:'ready', enabled:true, resources:[], lastSyncAt:null, nextSyncAt:null, errorCode:null, lastResult:null, job:null, credentialBlob:'PRIVATE' };
   const dto = componentModule.mapSourceConnections({ providers:[{provider:'gmail',available:true,syncAvailable:false}],connections:[conn] });
   assert.ok(!JSON.stringify(dto).includes('PRIVATE'));

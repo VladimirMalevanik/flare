@@ -50,6 +50,7 @@ function harness(relative, locale) {
     if (name === '@/features/funny/funny-sounds') return { playFunnySound() {} };
     if (name === '@/lib/auth/session') return { apiBaseUrl: '/api' };
     if (name === "./connected-source") return { ConnectedSource: () => null };
+    if (name === '@/lib/team-context') return { projectApiUrl: url => url };
     throw Error(`Unexpected import ${name}`);
   } });
   return { render(component, props = {}) { cursor = 0; return exports[component](props); },

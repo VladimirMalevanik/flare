@@ -1,8 +1,9 @@
 import { apiBaseUrl } from "@/lib/auth/session";
+import { projectApiUrl } from "./team-context";
 import type { Recording } from "@/features/capture/voice-recorder";
 
 export async function transcribeVoice(recording: Recording): Promise<{ id: string }> {
-  const response = await fetch(`${apiBaseUrl}/voice/transcribe`, {
+  const response = await fetch(projectApiUrl(`${apiBaseUrl}/voice/transcribe`), {
     method: "POST",
     credentials: "include",
     cache: "no-store",
