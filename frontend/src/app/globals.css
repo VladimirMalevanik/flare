@@ -637,10 +637,11 @@ kbd {
   max-width: 1040px;
 }
 .insights-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 40px;
+  gap: 20px 40px;
   margin-bottom: 24px;
 }
 .insights-header .page-heading {
@@ -1784,6 +1785,7 @@ blockquote {
   }
   .insights-header {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 20px;
   }
   .analyze-action {
@@ -2924,3 +2926,12 @@ html[data-funny-mode="true"] .insight-feed:has(.funny-ritual-panel) {
 .team-context-links { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-top: 24px; }
 @media (max-width: 800px) { .team-context { grid-template-columns: 1fr; } }
 @media (max-width: 480px) { .team-shared-notes, .team-shared-flares { padding: 20px; } }
+
+.analysis-result-notice { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 14px; padding: 20px 24px; text-align: left; }
+.analysis-result-notice > svg { color: var(--accent-text); width: 24px; height: 24px; flex: 0 0 auto; margin-top: 2px; }
+.analysis-result-notice h2 { font-size: 17px; font-weight: 600; line-height: 1.4; }
+.analysis-result-notice p { color: var(--secondary); font-size: 14px; line-height: 1.6; max-width: 72ch; margin-top: 6px; text-wrap: pretty; }
+.capture-toast-copy { display: grid; gap: 4px; }
+.capture-toast-copy strong { font-weight: 500; }
+.capture-toast-copy small { color: var(--secondary); font-size: 11px; max-width: 240px; line-height: 1.45; }
+@media (max-width: 767px) { .analysis-result-notice { padding: 18px; gap: 12px; } .capture-toast { max-width: calc(100vw - 32px); right: 16px; bottom: 16px; } }

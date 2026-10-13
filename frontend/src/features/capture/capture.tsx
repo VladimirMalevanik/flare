@@ -697,7 +697,7 @@ export function Capture() {
       />
       {saved && (
         <div className="toast capture-toast" role="status">
-          <span>{t("Captured in Vault")}</span>
+          <span className="capture-toast-copy"><strong>{t("Captured in Vault")}</strong><small>{t("Insights follow your project’s analysis schedule.")}</small></span>
           <Link href={projectHref(`/vault?item=${saved}`)} onClick={dismissToast}>
             {t("View item →")}</Link>
           <button

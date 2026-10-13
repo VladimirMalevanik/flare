@@ -768,4 +768,12 @@ export const uiEs = {
   "Next scheduled insight: {date}": "Próximo análisis programado: {date}",
   "Waiting for the next scheduled insight.": "Esperando el próximo análisis programado.",
   "Added by": "Añadida por",
+  "No new Flares found": "No se encontraron nuevos Flares",
+  "Analysis completed. This run did not find a new reminder, warning or recommendation. Your notes are saved in Vault.": "Análisis completado. No se encontró ningún recordatorio, aviso o recomendación nuevos. Tus notas están guardadas en Vault.",
+  "Latest analysis completed: {count} new Flares.": "Último análisis completado: {count} Flares nuevos.",
+  "Analysis completed, but its result is unavailable. We’ll check again automatically.": "El análisis terminó, pero su resultado no está disponible. Lo comprobaremos de nuevo automáticamente.",
+  "No ready context was available for the latest analysis. Your notes are still saved in Vault.": "No había contexto listo para el último análisis. Tus notas siguen guardadas en Vault.",
+  "Your notes are saved. Flares appear here when scheduled analysis finds a new signal to highlight.": "Tus notas están guardadas. Los Flares aparecen aquí cuando el análisis programado encuentra una nueva señal que destacar.",
+  "Insights follow your project’s analysis schedule.": "Los insights siguen el horario de análisis de tu proyecto.",
+  "Latest analysis completed: 1 new Flare.": "Último análisis completado: 1 Flare nuevo.",
 } satisfies Record<keyof typeof uiEn, string>;

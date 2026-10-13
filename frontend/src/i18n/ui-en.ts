@@ -766,4 +766,12 @@ export const uiEn = {
   "Next scheduled insight: {date}": "Next scheduled insight: {date}",
   "Waiting for the next scheduled insight.": "Waiting for the next scheduled insight.",
   "Added by": "Added by",
+  "No new Flares found": "No new Flares found",
+  "Analysis completed. This run did not find a new reminder, warning or recommendation. Your notes are saved in Vault.": "Analysis completed. This run did not find a new reminder, warning or recommendation. Your notes are saved in Vault.",
+  "Latest analysis completed: {count} new Flares.": "Latest analysis completed: {count} new Flares.",
+  "Analysis completed, but its result is unavailable. We’ll check again automatically.": "Analysis completed, but its result is unavailable. We’ll check again automatically.",
+  "No ready context was available for the latest analysis. Your notes are still saved in Vault.": "No ready context was available for the latest analysis. Your notes are still saved in Vault.",
+  "Your notes are saved. Flares appear here when scheduled analysis finds a new signal to highlight.": "Your notes are saved. Flares appear here when scheduled analysis finds a new signal to highlight.",
+  "Insights follow your project’s analysis schedule.": "Insights follow your project’s analysis schedule.",
+  "Latest analysis completed: 1 new Flare.": "Latest analysis completed: 1 new Flare.",
 } as const;
