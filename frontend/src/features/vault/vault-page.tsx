@@ -312,7 +312,7 @@ export function VaultPage() {
                 </button>
               </h2>
               <p className="muted meta">
-                {item.author ?? t("Team workspace")} ·{" "}
+                {item.author && <>{t("Added by")} {item.author} · </>}
                 {new Date(item.createdAt).toLocaleDateString(locale, {
                   month: "short",
                   day: "numeric",

@@ -139,6 +139,7 @@ def test_cookie_authenticated_writer_persists_voice_transcript(authenticated_cli
     item = response.json()
     assert item["type"] == "audio" and item["status"] == "ready"
     assert item["content"] == WORDS
+    assert item["createdBy"] == user_id and item["author"] == "Voice HTTP regression"
     assert item["fileName"] == "voice-memo.webm" and item["fileSize"] == len(AUDIO)
     assert item["fileType"] == "audio/webm"
     assert response.headers["cache-control"] == "no-store"
@@ -159,6 +160,7 @@ def test_cookie_authenticated_writer_persists_voice_transcript(authenticated_cli
     )
     assert stored[:4] == ("audio", "ready", "ingest-audio-v1", WORDS)
     assert stored[4] == stored[5] == {
+        "createdBy": user_id, "createdByName": "Voice HTTP regression",
         "sourceType": "audio", "fileName": "voice-memo.webm",
         "fileSize": len(AUDIO), "fileType": "audio/webm",
     }

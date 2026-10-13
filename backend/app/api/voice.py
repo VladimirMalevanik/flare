@@ -130,6 +130,7 @@ async def transcribe_voice(
         service = VoiceTranscriptService(
             database,
             user.identity,
+            author_name=user.name,
             max_upload_bytes=settings.max_upload_bytes,
         )
         item = await run_in_threadpool(

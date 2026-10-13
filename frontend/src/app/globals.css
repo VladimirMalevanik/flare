@@ -1143,7 +1143,7 @@ blockquote {
 .team-project-menu .flare-select { display: block; width: 100%; }
 .team-project-menu .flare-select-trigger { width: 100%; text-align: left; }
 .team-page { max-width: 1080px; }
-.team-toolbar, .team-task-toolbar, .team-actions, .team-member, .team-task-tools, .team-members-footer { display: flex; align-items: center; gap: 12px; }
+.team-toolbar, .team-actions, .team-member, .team-members-footer { display: flex; align-items: center; gap: 12px; }
 .team-capacity { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; padding: 16px 0; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--secondary); }
 .team-capacity strong { color: var(--ink); font-weight: 500; margin-left: 6px; }
 .team-capacity progress { width: 120px; height: 6px; accent-color: var(--accent); }
@@ -1151,19 +1151,6 @@ blockquote {
 .team-toolbar { justify-content: space-between; margin: 28px 0 18px; flex-wrap: wrap; }
 .team-tabs { display: flex; gap: 6px; }
 .team-tabs .active { color: var(--accent-text); border-color: var(--accent-text); }
-.team-task-toolbar { margin-bottom: 18px; flex-wrap: wrap; }
-.team-task-toolbar > .ghost { margin-left: auto; }
-.team-task-list { display: grid; gap: 12px; }
-.team-task { text-align: left; padding: 20px 22px; display: grid; grid-template-columns: 116px 1fr; gap: 8px 20px; width: 100%; color: var(--ink); }
-.team-task:hover { border-color: var(--accent-text); }
-.team-task:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 3px; }
-.team-task strong { font-size: 16px; overflow-wrap: anywhere; }
-.team-task-status { grid-row: 1 / span 3; font-size: 12px; align-self: start; border-radius: 6px; padding: 5px 8px; background: var(--inset); border: 1px solid var(--line); }
-.team-task-status.doing { color: var(--accent-text); }
-.team-task-status.done { color: color-mix(in srgb,var(--green) 65%,var(--ink)); }
-.team-task-description { color: var(--secondary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
-.team-task-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12px; color: var(--secondary); margin-top: 4px; }
-.team-task-meta b { font-weight: 500; color: var(--ink); }
 .team-feedback { padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--inset); margin: 16px 0; }
 .team-error { color: #c12a37; overflow-wrap: anywhere; }
 [data-theme="dark"] .team-error { color: #ff8e96; }
@@ -1179,11 +1166,8 @@ blockquote {
 .team-field input, .team-field textarea { width: 100%; color: var(--ink); background: var(--inset); border: 1px solid var(--line); border-radius: 8px; padding: 11px 12px; font: inherit; min-width: 0; }
 .team-field textarea { resize: vertical; min-height: 100px; }
 .team-field input:focus-visible, .team-field textarea:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
-.team-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.team-form-row .team-field { margin-top: 0; min-width: 0; }
 .team-sharing { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.5; margin: 18px 0; }
 .team-sharing input { margin-top: 4px; flex: 0 0 auto; accent-color: var(--accent-text); }
-.team-task-tools { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 12px; justify-content: space-between; }
 .team-members { padding: 22px; }
 .team-members h2 { font-size: 17px; margin-bottom: 16px; }
 .team-members h3 { font-size: 15px; margin: 28px 0 8px; }
@@ -1194,10 +1178,6 @@ blockquote {
 .team-empty-copy { padding: 16px 0; }
 .team-members-footer { margin-top: 20px; }
 .team-transfer-list { display: grid; gap: 10px; margin: 20px 0; }
-.team-history { padding-left: 20px; margin: 18px 0 0; font-size: 13px; }
-.team-history li { padding: 8px 0; }
-.team-history small { display: block; color: var(--secondary); margin-top: 4px; }
-.team-load-more { margin: 22px auto; }
 .team-join { min-height: 100dvh; padding: 32px 24px; display: flex; flex-direction: column; align-items: center; background: var(--canvas); }
 .team-join > .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 40px; }
 .team-join-card { width: min(100%,560px); padding: 32px; }
@@ -1205,11 +1185,7 @@ blockquote {
 .team-join-card > p { color: var(--secondary); line-height: 1.6; }
 .team-join-card .team-join-account { color: var(--ink); margin: 24px 0; overflow-wrap: anywhere; }
 @media(max-width:640px) {
-  .team-task { grid-template-columns: 1fr; padding: 18px; gap: 10px; }
-  .team-task-status { grid-row: auto; justify-self: start; }
-  .team-task-meta { flex-direction: column; gap: 5px; }
   .team-dialog { padding: 22px; }
-  .team-form-row { grid-template-columns: 1fr; gap: 0; }
   .team-empty { padding: 24px; }
   .team-join { padding: 24px 16px; }
   .team-join-card { padding: 24px; }
@@ -2928,3 +2904,23 @@ html[data-funny-mode="true"] .insight-feed:has(.funny-ritual-panel) {
   .flare-select-menu:popover-open { animation: none; }
   .flare-select-menu[data-fallback-open="true"] { animation: none; }
 }
+
+/* Team is a shared context space; Vault remains its note editor. */
+.team-context { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.team-shared-notes, .team-shared-flares { padding: 26px; min-width: 0; }
+.team-context h2 { font-size: 19px; letter-spacing: -.02em; }
+.team-context p { line-height: 1.6; margin-top: 12px; }
+.team-context-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.team-context-heading .text-button { display: inline-flex; align-items: center; gap: 6px; }
+.team-note-list { list-style: none; padding: 0; margin: 20px 0; }
+.team-note-list li { border-top: 1px solid var(--line); }
+.team-note-list a { display: grid; gap: 7px; padding: 18px 0; overflow-wrap: anywhere; }
+.team-note-list a:hover strong { color: var(--accent-text); }
+.team-note-list a:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 4px; border-radius: 4px; }
+.team-note-list strong { font-size: 15px; font-weight: 600; }
+.team-note-list span { font-size: 12px; line-height: 1.5; }
+.team-note-empty { padding: 28px 0; }
+.team-note-empty h3 { font-size: 17px; }
+.team-context-links { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; margin-top: 24px; }
+@media (max-width: 800px) { .team-context { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .team-shared-notes, .team-shared-flares { padding: 20px; } }

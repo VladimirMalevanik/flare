@@ -103,6 +103,8 @@ class ExtractedFactResponse(BaseModel):
 
 
 class ItemResponse(BaseModel):
+    author: str | None = None
+    created_by: str | None = Field(default=None, serialization_alias="createdBy")
     model_config = ConfigDict(populate_by_name=True)
 
     id: UUID
@@ -142,6 +144,8 @@ class ItemResponse(BaseModel):
         related_ids = metadata.get("relatedItemIds", [])
         return cls(
             id=record.id,
+            author=metadata.get("createdByName") if isinstance(metadata.get("createdByName"), str) else None,
+            created_by=metadata.get("createdBy") if isinstance(metadata.get("createdBy"), str) else None,
             type=record.item_type,
             title=record.title,
             content=record.content,

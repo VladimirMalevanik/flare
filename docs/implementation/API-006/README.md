@@ -1,10 +1,12 @@
 # API-006 — Team projects
 
 Implementation started 12 October 2026; review record updated 13 October (Moscow).
-User requested autonomous implementation, server-authored task creators, database
-limits and Team-only creation. This is a review candidate, not owner acceptance or
-production activation. No real invitations, new dependencies, paid resources or
-production credentials were used.
+The first interface interpreted Team as a task manager. The owner clarified on
+13 October that Team collects participants' notes and produces shared Flares.
+[API-008](../API-008/README.md) supersedes that task-oriented interface and its
+product acceptance flow. The technical/validation history below is retained for
+the existing membership, billing, schema and compatibility contracts. No real
+invitations, paid resources or production credentials were used by this work.
 
 ## Delivered behavior
 
