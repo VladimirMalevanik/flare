@@ -378,6 +378,11 @@ export function VaultPage() {
                 {selected.sourceLabel ?? label(selected.type)} · {label(selected.status)}
               </span>
               <h2>{confirmingDelete ? t("deleteItemConfirmation", { title: selected.title }) : selected.title}</h2>
+              {selected.author && (
+                <p className="muted meta" style={{ marginTop: 8 }}>
+                  {t("Added by")} {selected.author}
+                </p>
+              )}
             </div>
             <button
               className="icon-button"
