@@ -16,7 +16,6 @@ const navigation = [
   { href: "/insights", label: "flares", icon: "insights" },
   { href: "/vault", label: "vault", icon: "vault" },
   { href: "/sources", label: "sources", icon: "sources" },
-  { href: "/settings", label: "settings", icon: "settings" },
   { href: "/team", label: "Team", icon: "team" },
 ] as const;
 export function AppShell({ children }: { children: ReactNode }) {
@@ -31,7 +30,7 @@ function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
   const settingsPresses = useRef(0);
-  const { dark, setTheme, openCapture, revision, notice, profile, funnyMode, setFunnyMode } =
+  const { openCapture, revision, notice, profile, funnyMode, setFunnyMode } =
     useWorkspace();
   const initials =
     profile.name
@@ -96,17 +95,6 @@ function Shell({ children }: { children: ReactNode }) {
         </nav>
       </div>
       <div className="sidebar-footer">
-        <label className="theme-row">
-          <Icon name="moon" />
-          <span>{t("darkMode")}</span>
-          <input
-            className="switch"
-            type="checkbox"
-            checked={dark}
-            onChange={() => setTheme(dark ? "light" : "dark")}
-            aria-label={t("darkMode")}
-          />
-        </label>
         <div className="profile-row">
           <Link href={projectHref("/settings")} className="profile" onClick={() => setDrawer(false)}>
             <span className="avatar">{initials}</span>
