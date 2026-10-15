@@ -8,14 +8,12 @@ import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from app.api.schemas import CreateItemRequest, HealthResponse, ItemResponse, UpdateItemRequest
-from app.config import Settings
 from app.api.auth import verified_user
 from app.services.auth_service import AuthenticatedUser
 from app.models.database import (
     Database,
     MembershipRequiredError,
     WritePermissionRequiredError,
-    database_is_ready,
 )
 from app.services.item_service import (
     ItemConflictError,
@@ -26,10 +24,6 @@ from app.services.item_service import (
 from app.services.analytics_service import AnalyticsService, track_event_best_effort
 
 router = APIRouter()
-
-
-def _settings(request: Request) -> Settings:
-    return request.app.state.settings
 
 
 def _database(request: Request) -> Database:
@@ -89,11 +83,9 @@ def health() -> HealthResponse:
 @router.get("/ready", response_model=HealthResponse, tags=["health"])
 def ready(request: Request) -> HealthResponse:
     """Check the migration and the restricted runtime database role."""
-    application_settings = _settings(request)
-    if not application_settings.database_url:
-        raise HTTPException(status_code=503, detail="Database is not configured")
+    database = _database(request)
     try:
-        if not database_is_ready(application_settings.database_url):
+        if not database.is_ready():
             raise HTTPException(status_code=503, detail="Database is not initialized")
     except psycopg.Error:
         # Never expose connection strings, credentials or SQL details over HTTP.
