@@ -100,7 +100,7 @@ def test_runtime_database_connect_and_idle_queries_are_bounded(monkeypatch):
     jobs = object.__new__(import_worker.RuntimeImportWorkerJobs)
     jobs.url = 'postgresql://worker.test.invalid/runtime'
     jobs.connection()
-    assert calls[0][1]['connect_timeout'] == 3
+    assert calls[0][1]['connect_timeout'] == 15
     assert calls[0][1]['options'] == '-c statement_timeout=30000 -c lock_timeout=3000'
 
 

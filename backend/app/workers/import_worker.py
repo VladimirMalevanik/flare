@@ -23,6 +23,7 @@ from psycopg.rows import dict_row
 from app.import_staging import LocalStagedObjects
 from app.import_staging.policy import ImportPolicy
 from app.models.import_packages import ImportWorkerJobs, ImportPackageError
+from app.worker_database import connect_worker_database
 
 
 def _decoder_environment():
@@ -223,8 +224,11 @@ class RuntimeImportWorkerJobs(ImportWorkerJobs):
     """Keep even idle claim/cleanup and role probes bounded during shutdown."""
 
     def connection(self):
-        return psycopg.connect(self.url, row_factory=dict_row, connect_timeout=3,
-            options='-c statement_timeout=30000 -c lock_timeout=3000')
+        return connect_worker_database(
+            self.url,
+            row_factory=dict_row,
+            options='-c statement_timeout=30000 -c lock_timeout=3000',
+        )
 
 
 def create_processor(settings: ImportRuntimeSettings, stop: threading.Event) -> ImportProcessor:

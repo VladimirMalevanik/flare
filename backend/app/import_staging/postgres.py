@@ -10,6 +10,7 @@ import threading
 
 import psycopg
 from app.models.import_packages import ImportPackageError
+from app.worker_database import connect_worker_database
 
 BLOCK_BYTES = 256 * 1024
 MAX_BYTES = 8 * 1024 * 1024
@@ -56,9 +57,11 @@ class PostgresStagedObjects:
     def _call(self, function, parameters=(), role=None):
         """Map database failures to fixed codes; never expose a DSN or SQL detail."""
         try:
-            with psycopg.connect(self.dsn, connect_timeout=3,
-                                options='-c statement_timeout=5000 -c lock_timeout=2000',
-                                application_name='flare-import-staging') as connection:
+            with connect_worker_database(
+                self.dsn,
+                options='-c statement_timeout=5000 -c lock_timeout=2000',
+                application_name='flare-import-staging',
+            ) as connection:
                 safe = connection.execute('''SELECT rolname, NOT rolsuper AND NOT rolbypassrls
                     AND NOT rolcreatedb AND NOT rolcreaterole AND NOT EXISTS
                     (SELECT 1 FROM pg_auth_members WHERE member=pg_roles.oid)
