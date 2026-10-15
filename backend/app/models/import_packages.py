@@ -5,6 +5,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from app.models.database import Database, WorkspaceIdentity
+from app.worker_database import connect_worker_database
 
 
 class ImportPackageError(Exception):
@@ -81,7 +82,7 @@ class ImportWorkerJobs:
                 raise ValueError('Import worker requires the restricted flare_worker role')
 
     def connection(self):
-        return psycopg.connect(self.url, row_factory=dict_row, connect_timeout=3)
+        return connect_worker_database(self.url, row_factory=dict_row)
 
     def claim(self, global_limit):
         with self.connection() as c:

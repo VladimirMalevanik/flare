@@ -4,6 +4,7 @@ import psycopg
 from psycopg.rows import dict_row, tuple_row
 from psycopg.types.json import Jsonb
 from app.models.database import Database, WorkspaceIdentity, _source_storage_is_safe
+from app.worker_database import connect_worker_database
 
 
 class SourceStateError(Exception):
@@ -53,8 +54,12 @@ class SourceJobs:
 
     def call(self, statement: str, arguments: tuple):
         # Only the restricted worker role can execute claim/step. No app URL fallback.
-        with psycopg.connect(self.database_url, autocommit=True, row_factory=dict_row,
-                             connect_timeout=3, options='-c statement_timeout=15000 -c lock_timeout=2000') as connection:
+        with connect_worker_database(
+            self.database_url,
+            autocommit=True,
+            row_factory=dict_row,
+            options='-c statement_timeout=15000 -c lock_timeout=2000',
+        ) as connection:
             role = connection.execute("SELECT current_user='flare_worker' AND NOT rolsuper AND NOT rolbypassrls AND NOT rolcreatedb AND NOT rolcreaterole AND NOT EXISTS(SELECT 1 FROM pg_auth_members WHERE member=pg_roles.oid) AS safe FROM pg_roles WHERE rolname=current_user").fetchone()
             if not role or not role['safe']:
                 raise SourceStateError('unsafe_worker_role')

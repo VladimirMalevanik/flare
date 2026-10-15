@@ -3,11 +3,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from app.models.database import Database
+from app.worker_database import connect_worker_database
 
 
 class JobUnavailable(Exception):
@@ -38,9 +38,12 @@ class WorkerJobs:
     def _call(self, sql: str, params: tuple):
         # No connection pool/transaction can escape this method. Lock waits are
         # bounded too; a DB failure leaves the lease recoverable after expiry.
-        with psycopg.connect(self._database_url, connect_timeout=3, row_factory=dict_row,
-                             application_name='flare-analysis-worker',
-                             options='-c statement_timeout=10000 -c lock_timeout=5000') as conn:
+        with connect_worker_database(
+            self._database_url,
+            row_factory=dict_row,
+            application_name='flare-analysis-worker',
+            options='-c statement_timeout=10000 -c lock_timeout=5000',
+        ) as conn:
             safe = conn.execute("""SELECT current_user='flare_worker'
                                       AND NOT rolsuper AND NOT rolbypassrls
                                       AND NOT rolcreatedb AND NOT rolcreaterole
