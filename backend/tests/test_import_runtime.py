@@ -329,13 +329,16 @@ def test_health_server_startup_failure_never_interpolates_environment(monkeypatc
     assert 'synthetic-private-value' not in caplog.text
 
 
-@pytest.mark.parametrize('exit_child,exit_status,enabled', [
-    ('app.workers.health_server', 7, True), ('app.workers.analysis_worker', 0, True),
-    ('app.workers.import_worker:jobs', 6, True), ('app.workers.import_worker:cleanup', 8, True),
-    ('app.workers.analysis_worker', 0, False),
-    ('signal-supervisor', 0, True),
+@pytest.mark.parametrize('exit_child,exit_status,import_enabled,sources_enabled', [
+    ('app.workers.health_server', 7, True, True), ('app.workers.analysis_worker', 0, True, True),
+    ('app.workers.import_worker:jobs', 6, True, True),
+    ('app.workers.import_worker:cleanup', 8, True, True),
+    ('app.workers.source_worker', 0, False, True),
+    ('app.workers.analysis_worker', 0, False, False),
+    ('signal-supervisor', 0, True, True),
 ])
-def test_supervisor_stops_all_children_if_any_consumer_exits(tmp_path, exit_child, exit_status, enabled):
+def test_supervisor_stops_all_children_if_any_consumer_exits(
+        tmp_path, exit_child, exit_status, import_enabled, sources_enabled):
     log = tmp_path / 'events.jsonl'
     fake_python = tmp_path / 'fake-python'
     fake_python.write_text(f'''#!{sys.executable}
@@ -373,9 +376,14 @@ cp "$TEST_FAKE_PYTHON" "$target/antenv/bin/python"
 chmod 755 "$target"
 ''')
     tar.chmod(0o700)
-    environment = {**os.environ, 'PATH': f'{commands}:{os.defpath}', 'FLARE_IMPORT_ENABLED': str(enabled).lower(),
+    expected = {'app.workers.health_server', 'app.workers.analysis_worker'}
+    if import_enabled: expected |= {'app.workers.import_worker:jobs', 'app.workers.import_worker:cleanup'}
+    if sources_enabled: expected.add('app.workers.source_worker')
+    environment = {**os.environ, 'PATH': f'{commands}:{os.defpath}',
+                   'FLARE_IMPORT_ENABLED': str(import_enabled).lower(),
+                   'SOURCES_ENABLED': str(sources_enabled).lower(),
                    'TEST_FAKE_PYTHON': str(fake_python), 'TEST_EVENTS': str(log), 'TEST_EXIT_CHILD': exit_child,
-                   'TEST_EXIT_STATUS': str(exit_status), 'TEST_EXPECTED_CHILDREN': '4' if enabled else '2'}
+                   'TEST_EXIT_STATUS': str(exit_status), 'TEST_EXPECTED_CHILDREN': str(len(expected))}
     script = Path(__file__).resolve().parents[1] / 'deploy/bootstrap_flare_worker.sh'
     process = subprocess.Popen(['bash', str(script)], env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                start_new_session=True)
@@ -383,7 +391,7 @@ chmod 755 "$target"
         if exit_child == 'signal-supervisor':
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline:
-                if log.exists() and len(log.read_text().splitlines()) == 4:
+                if log.exists() and len(log.read_text().splitlines()) == len(expected):
                     break
                 time.sleep(0.01)
             process.send_signal(signal.SIGTERM)
@@ -393,14 +401,35 @@ chmod 755 "$target"
         events = [json.loads(line) for line in log.read_text().splitlines()]
         assert all(event['runtime_mode'] == 0o700 for event in events)
         started = {event['label'] for event in events if event['event'] == 'started'}
-        expected = {'app.workers.health_server', 'app.workers.analysis_worker'}
-        if enabled: expected |= {'app.workers.import_worker:jobs', 'app.workers.import_worker:cleanup'}
         assert started == expected
         assert {event['label'] for event in events if event['event'] == 'stopped'} == expected - {exit_child}
     finally:
         if process.poll() is None:
             os.killpg(process.pid, signal.SIGKILL)
             process.communicate()
+
+
+def test_supervisor_rejects_noncanonical_sources_flag_before_launching_children(tmp_path):
+    started = tmp_path / 'started'
+    fake_python = tmp_path / 'fake-python'
+    fake_python.write_text('#!/bin/sh\ntouch "$TEST_STARTED"\n')
+    fake_python.chmod(0o700)
+    commands = tmp_path / 'commands'
+    commands.mkdir()
+    tar = commands / 'tar'
+    tar.write_text('''#!/bin/sh
+for value in "$@"; do target=$value; done
+mkdir -p "$target/antenv/bin"
+cp "$TEST_FAKE_PYTHON" "$target/antenv/bin/python"
+''')
+    tar.chmod(0o700)
+    environment = {**os.environ, 'PATH': f'{commands}:{os.defpath}',
+                   'FLARE_IMPORT_ENABLED': 'false', 'SOURCES_ENABLED': 'TRUE',
+                   'TEST_FAKE_PYTHON': str(fake_python), 'TEST_STARTED': str(started)}
+    script = Path(__file__).resolve().parents[1] / 'deploy/bootstrap_flare_worker.sh'
+    result = subprocess.run(['bash', str(script)], env=environment, capture_output=True, timeout=5)
+    assert result.returncode == 1, (result.stdout, result.stderr)
+    assert not started.exists()
 
 
 

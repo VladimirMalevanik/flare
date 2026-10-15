@@ -42,12 +42,20 @@ case "${FLARE_IMPORT_ENABLED:-false}" in
   true|false) ;;
   *) exit 1 ;;
 esac
+case "${SOURCES_ENABLED:-false}" in
+  true|false) ;;
+  *) exit 1 ;;
+esac
 
 python_bin="$runtime_dir/antenv/bin/python"
 "$python_bin" -m app.workers.health_server &
 pids+=("$!")
 "$python_bin" -m app.workers.analysis_worker &
 pids+=("$!")
+if [[ "${SOURCES_ENABLED:-false}" == true ]]; then
+  "$python_bin" -m app.workers.source_worker &
+  pids+=("$!")
+fi
 if [[ "${FLARE_IMPORT_ENABLED:-false}" == true ]]; then
   "$python_bin" -m app.workers.import_worker --mode jobs &
   pids+=("$!")
