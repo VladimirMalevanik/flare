@@ -302,7 +302,7 @@ def test_writer_serial_close_late_write_and_block_memory_bound():
 
 def test_database_failure_message_is_fixed(monkeypatch):
     def unavailable(*args, **kwargs):
-        assert kwargs['connect_timeout'] == 3
+        assert kwargs['connect_timeout'] == 15
         assert 'statement_timeout=5000' in kwargs['options'] and 'lock_timeout=2000' in kwargs['options']
         raise psycopg.OperationalError('private DSN secret error')
     monkeypatch.setattr(psycopg, 'connect', unavailable)
