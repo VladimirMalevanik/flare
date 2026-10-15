@@ -45,6 +45,7 @@ export const en = {
   verificationRequired: "Check your inbox and verify your email before signing in.",
   neutralResend: "If verification is available for that address, a new email will arrive shortly.",
   authFallback: "Unable to sign in. Please retry.",
+  authUnconfirmed: "The request may have completed. Check your email or try signing in before submitting again.",
   resendFallback: "Unable to request a new email. Please retry.",
   alreadyHaveAccount: "Already have an account?",
   newToFlare: "New to Flare?",

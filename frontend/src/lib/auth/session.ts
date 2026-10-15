@@ -1,4 +1,5 @@
 import { currentAcquisitionOptIn, resetAcquisitionConsent } from "./acquisition";
+import { importRequest } from "@/lib/data/import-request";
 export interface Session {
   user: {
     id: string;
@@ -39,36 +40,46 @@ export async function authRequest(
   const payload = path === "register" && typeof body === "object" && body !== null && !Array.isArray(body)
     ? { ...body, acquisitionOptIn: currentAcquisitionOptIn() } : body;
   if (["login", "logout"].includes(path)) resetAcquisitionConsent();
-  const response = await fetch(`${apiBaseUrl}/auth/${path}`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload ?? {}),
-    cache: "no-store",
-  });
-  if (!response.ok) {
-    const error: unknown = await response.json().catch(() => null);
-    const detail =
-      typeof error === "object" && error !== null
-        ? (error as { detail?: unknown }).detail
-        : undefined;
-    const structured =
-      typeof detail === "object" && detail !== null
-        ? (detail as { code?: unknown; message?: unknown })
-        : undefined;
-    const message =
-      typeof structured?.message === "string"
-        ? structured.message
-        : typeof detail === "string"
-          ? detail
-          : "Check your details and try again.";
-    throw new AuthRequestError(
-      message,
-      typeof structured?.code === "string" ? structured.code : undefined,
-      response.status,
-    );
+  try {
+    return await importRequest(async signal => {
+      const response = await fetch(`${apiBaseUrl}/auth/${path}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload ?? {}),
+        cache: "no-store",
+        signal,
+      });
+      if (!response.ok) {
+        const error: unknown = await response.json().catch(() => null);
+        const detail =
+          typeof error === "object" && error !== null
+            ? (error as { detail?: unknown }).detail
+            : undefined;
+        const structured =
+          typeof detail === "object" && detail !== null
+            ? (detail as { code?: unknown; message?: unknown })
+            : undefined;
+        const message =
+          typeof structured?.message === "string"
+            ? structured.message
+            : typeof detail === "string"
+              ? detail
+              : "Check your details and try again.";
+        throw new AuthRequestError(
+          message,
+          typeof structured?.code === "string" ? structured.code : undefined,
+          response.status,
+        );
+      }
+      if (path === "register") resetAcquisitionConsent();
+      if (response.status === 204) return { ok: true };
+      return response.json() as Promise<AuthResponse>;
+    }, undefined, 30_000);
+  } catch (cause) {
+    if (cause instanceof AuthRequestError) throw cause;
+    // The server may already have created the account/session. Do not replay
+    // a lost registration or SMTP-dependent response automatically.
+    throw new AuthRequestError("Could not confirm the authentication request.", "request_outcome_unknown", 0);
   }
-  if (path === "register") resetAcquisitionConsent();
-  if (response.status === 204) return { ok: true };
-  return response.json() as Promise<AuthResponse>;
 }

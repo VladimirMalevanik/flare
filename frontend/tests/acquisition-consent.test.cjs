@@ -4,6 +4,9 @@ const fs = require('node:fs');
 const ts = require('typescript');
 const vm = require('node:vm');
 const policy = {enabled:true,revision:'x-launch-2026-10-v1',noticeId:'measurement-x-v1',eligibility:'explicit-opt-in',cookieSeconds:604800};
+const deadline = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/data/import-request.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,
+  {exports:deadline,AbortController,setTimeout,clearTimeout});
 function load(extra={}) {
   const storage = new Map();
   const sandbox = {URL,AbortSignal,navigator:{},window:{location:{href:'https://flare.invalid/?utm_source=x&utm_medium=organic_social&utm_campaign=launch_2026_10&utm_content=fedor&ref=fedor&email=private'}},document:{referrer:'https://t.co/private'},
@@ -100,7 +103,7 @@ test('registration asserts current consent; rejection, privacy signals and faile
     if(scenario==='rejected')storage.set(m.rejectionKey,policy.revision);
     if(scenario==='privacy')sandbox.navigator.globalPrivacyControl=true;
     const exports={};
-    vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/auth/session.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:()=>m,process:{env:{}},...sandbox});
+    vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/auth/session.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:n=>n==='@/lib/data/import-request'?deadline:m,process:{env:{}},...sandbox});
     await exports.authRequest('register',{email:'synthetic@example.invalid',acquisitionOptIn:true});
     assert.equal(JSON.parse(calls[0][1].body).acquisitionOptIn,scenario==='allowed');
     assert.equal(storage.has(m.consentKey),false);
@@ -110,7 +113,7 @@ test('failed registration keeps its active choice for a corrected retry; login s
   const {m,storage,sandbox}=load({fetch:async()=>({ok:false,status:422,json:async()=>({detail:'synthetic validation'})})});
   storage.set(m.consentKey,policy.revision);
   const exports={};
-  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/auth/session.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:()=>m,process:{env:{}},...sandbox});
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/auth/session.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports,require:n=>n==='@/lib/data/import-request'?deadline:m,process:{env:{}},...sandbox});
   await assert.rejects(exports.authRequest('register',{}));
   assert.equal(storage.get(m.consentKey),policy.revision);
   await assert.rejects(exports.authRequest('login',{}));

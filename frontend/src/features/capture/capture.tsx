@@ -98,6 +98,16 @@ export function Capture() {
   const [shakeOffset, setShakeOffset] = useState(0);
 
   useEffect(() => {
+    if (!busy && !draft.trim() && !file && !voice.recording && !voiceIsland) return;
+    const guard = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [busy, draft, file, voice.recording, voiceIsland]);
+
+  useEffect(() => {
     setFunnyAudioPaused(voiceIsland);
     return () => setFunnyAudioPaused(false);
   }, [voiceIsland, voice.state, setFunnyAudioPaused]);

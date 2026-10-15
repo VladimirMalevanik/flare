@@ -147,6 +147,24 @@ test('Vault edits are guarded only after text changes, not merely when the edito
   app.dispose();
 });
 
+test('Vault does not send the same version update twice before the pending render', async () => {
+  let resolve, calls = 0;
+  const app = component('../src/features/vault/vault-page.tsx', 'VaultPage', {
+    listItems: async () => [item(1)],
+    updateItem() { calls++; return new Promise(done => { resolve = done; }); },
+  });
+  app.render(); await app.effects(); await app.debounce();
+  app.button('Note 1').props.onClick(); app.button('Edit note').props.onClick();
+  nodes(app.render()).find(n => n.type === 'textarea').props.onChange({ target: { value: 'Updated release note' } });
+  const form = nodes(app.render()).find(n => n.type === 'form');
+  form.props.onSubmit({ preventDefault() {} }); form.props.onSubmit({ preventDefault() {} });
+  assert.equal(calls, 1, 'duplicate PATCH would report a conflict after the first save already succeeded');
+  resolve({ ...item(1), content: 'Updated release note', currentVersionId: 'version-2', versionNumber: 2 });
+  await settle();
+  assert.ok(!nodes(app.render()).some(n => n.type === 'form'));
+  app.dispose();
+});
+
 test('changing a Vault filter during paging releases the old loading state and ignores its late result', async () => {
   let finishOld;
   const app = component('../src/features/vault/vault-page.tsx', 'VaultPage', {

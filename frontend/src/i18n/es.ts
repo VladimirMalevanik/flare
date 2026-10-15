@@ -46,6 +46,7 @@ export const es = {
   verificationRequired: "Revisa tu correo y verifica tu dirección antes de iniciar sesión.",
   neutralResend: "Si esa dirección puede verificarse, pronto recibirás otro correo.",
   authFallback: "No se pudo iniciar sesión. Inténtalo de nuevo.",
+  authUnconfirmed: "La solicitud puede haberse completado. Revisa tu correo o intenta iniciar sesión antes de enviarla de nuevo.",
   resendFallback: "No se pudo solicitar otro correo. Inténtalo de nuevo.",
   alreadyHaveAccount: "¿Ya tienes una cuenta?",
   newToFlare: "¿Aún no usas Flare?",
