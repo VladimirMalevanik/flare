@@ -302,10 +302,10 @@ def test_writer_serial_close_late_write_and_block_memory_bound():
 
 def test_database_failure_message_is_fixed(monkeypatch):
     def unavailable(*args, **kwargs):
-        assert kwargs['connect_timeout'] == 15
+        assert args == ('never exposed',)
         assert 'statement_timeout=5000' in kwargs['options'] and 'lock_timeout=2000' in kwargs['options']
         raise psycopg.OperationalError('private DSN secret error')
-    monkeypatch.setattr(psycopg, 'connect', unavailable)
+    monkeypatch.setattr('app.import_staging.postgres.connect_worker_database', unavailable)
     with pytest.raises(OSError, match='^storage_unavailable$'):
         PostgresStagedObjects('never exposed').ready()
 
@@ -397,6 +397,10 @@ def test_pg17_restricted_admin_ownership_grants_preserved_and_rollback(monkeypat
         pytest.skip('Disposable PostgreSQL bootstrap required')
     from psycopg import sql
     from psycopg.conninfo import make_conninfo
+    from app.worker_database import _close_worker_database_pools
+    # The runtime pool intentionally retains idle sessions. Release them before
+    # using the disposable database as a PostgreSQL CREATE DATABASE template.
+    _close_worker_database_pools()
     bootstrap = make_conninfo(os.environ['TEST_DATABASE_URL'], dbname='template1')
     database, role = 'staging_' + uuid4().hex, 'staging_admin_' + uuid4().hex
     admin_password = uuid4().hex  # Disposable role, also works with CI's SCRAM TCP.

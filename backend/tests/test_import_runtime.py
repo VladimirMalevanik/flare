@@ -96,12 +96,24 @@ def test_postgres_startup_probes_adapter_and_restricted_jobs_without_local_fallb
 
 def test_runtime_database_connect_and_idle_queries_are_bounded(monkeypatch):
     calls = []
-    monkeypatch.setattr(import_worker.psycopg, 'connect', lambda *args, **kwargs: calls.append((args, kwargs)))
+    connection_context = object()
+    monkeypatch.setattr(
+        import_worker,
+        'connect_worker_database',
+        lambda *args, **kwargs: (calls.append((args, kwargs)) or connection_context),
+    )
     jobs = object.__new__(import_worker.RuntimeImportWorkerJobs)
     jobs.url = 'postgresql://worker.test.invalid/runtime'
-    jobs.connection()
-    assert calls[0][1]['connect_timeout'] == 15
-    assert calls[0][1]['options'] == '-c statement_timeout=30000 -c lock_timeout=3000'
+    assert jobs.connection() is connection_context
+    assert calls == [
+        (
+            ('postgresql://worker.test.invalid/runtime',),
+            {
+                'row_factory': import_worker.dict_row,
+                'options': '-c statement_timeout=30000 -c lock_timeout=3000',
+            },
+        )
+    ]
 
 
 def test_decoder_uses_installed_dependencies_with_a_separate_interpreter(tmp_path, monkeypatch):
