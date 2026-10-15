@@ -19,6 +19,7 @@ function load(file, mocks, globals = {}) {
       if (name === '@/features/team/project-menu') return { ProjectMenu: () => null };
 
     if (name === './developer-mail') return { DeveloperMail: () => null };
+    if (name === './campaign-links') return { CampaignLinks: () => null };
     throw Error(`Unexpected import ${name}`);
   } });
   return exports;

@@ -22,6 +22,7 @@ function load(relative, mocks = {}, globals = {}) {
       if (name === '@/features/team/project-menu') return { ProjectMenu: () => null };
 
     if (name === './developer-mail') return { DeveloperMail: () => null };
+    if (name === './campaign-links') return { CampaignLinks: () => null };
     if (name === 'react/jsx-runtime') return jsx;
     if (name === 'next/link') return { default: 'a' };
     if (name === '@/components/language-selector') return { LanguageSelector: 'language-selector' };
@@ -220,7 +221,7 @@ test('Settings, Sources, Vault, Flares, and Capture render Spanish without trans
 
 test('legal document body stays English and declares its own language', () => {
   const { LegalPage } = load('../src/components/legal-page.tsx', { './legal-chrome': { LegalChrome: 'legal-chrome' }, './brand-mark': { BrandMark: 'brand-mark' } });
-  const opening = { privacy: 'This Privacy Policy explains', terms: 'These terms govern access', analytics: 'This notice explains', measurement: 'Optional link measurement helps' };
+  const opening = { privacy: 'This Privacy Policy explains', terms: 'These terms govern access', analytics: 'This notice explains', measurement: 'Flare provides aggregate campaign-link redirect counts' };
   for (const file of ['privacy', 'terms', 'analytics', 'measurement']) {
     const { default: Page } = load(`../src/app/${file}/page.tsx`, { '@/components/legal-page': { LegalPage, LegalSection: 'section' } });
     const page = Page();

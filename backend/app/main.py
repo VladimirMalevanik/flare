@@ -23,6 +23,7 @@ from app.api.analysis import router as analysis_router
 from app.api.analysis_schedule import router as analysis_schedule_router
 from app.api.github import router as github_router
 from app.api.source_connections import router as source_connections_router
+from app.api.campaign_links import router as campaign_links_router
 from app.api.imports import router as imports_router
 from app.api.import_packages import router as import_packages_router
 from app.import_staging import LocalStagedObjects
@@ -142,7 +143,7 @@ def create_app(
             "/auth", "/items", "/imports", "/flares", "/analyze", "/analysis-runs",
             "/integrations", "/ops", "/analytics", "/voice",
             "/analysis-schedule", "/analysis/daily-status",
-            "/export", "/acquisition", "/billing", "/team",
+            "/export", "/acquisition", "/billing", "/team", "/campaign-links",
         )):
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -210,6 +211,7 @@ def create_app(
     application.include_router(analysis_schedule_router)
     application.include_router(github_router)
     application.include_router(source_connections_router)
+    application.include_router(campaign_links_router)
     application.include_router(export_router)
     application.include_router(voice_router)
     application.include_router(ops.router)

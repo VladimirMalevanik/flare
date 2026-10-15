@@ -671,7 +671,10 @@ test("document CSP permits lazy Sandbox checkout even after client navigation an
       source: "/:path*", has: [{ type: "host", value: "www.flare4u.tech" }],
       destination: "https://flare4u.tech/:path*", permanent: true,
     }]);
-    assert.deepEqual(plain(await config.rewrites()), [{ source: "/api/:path*", destination: "http://127.0.0.1:8000/:path*" }]);
+    assert.deepEqual(plain(await config.rewrites()), [
+      { source: "/r/:slug", destination: "http://127.0.0.1:8000/campaign-links/r/:slug" },
+      { source: "/api/:path*", destination: "http://127.0.0.1:8000/:path*" },
+    ]);
   }
 });
 
