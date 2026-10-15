@@ -51,7 +51,11 @@ def _worker_database_pool(database_url: str, kwargs: dict[str, Any]) -> Connecti
                 check=ConnectionPool.check_connection,
                 name=f"flare-worker-{next(_pool_names)}",
                 timeout=WORKER_DATABASE_POOL_WAIT_TIMEOUT_SECONDS,
-                max_waiting=1,
+                # A cold pool may briefly have both the first requester and a
+                # concurrent caller waiting while its single physical
+                # connection is established. Keep that queue bounded without
+                # rejecting the second operation before either can run.
+                max_waiting=2,
                 reconnect_timeout=WORKER_DATABASE_POOL_WAIT_TIMEOUT_SECONDS,
                 num_workers=1,
             )

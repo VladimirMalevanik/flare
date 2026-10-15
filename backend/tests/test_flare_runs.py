@@ -97,7 +97,7 @@ def test_retry_only_stage2(stage,admin_url):
         assert c.execute('SELECT attempts FROM flare_generation_runs WHERE analysis_job_id=%s',(stage[1],)).fetchone()==(2,)
 
 
-def test_no_connection_during_detector(stage,admin_url):
+def test_no_transaction_during_detector(stage,admin_url):
     async def run():
         started,release=asyncio.Event(),asyncio.Event()
         class Blocked(Detector):
@@ -107,7 +107,11 @@ def test_no_connection_during_detector(stage,admin_url):
         await asyncio.wait_for(started.wait(),3)
         try:
             with psycopg.connect(admin_url) as c:
-                assert c.execute("SELECT count(*) FROM pg_stat_activity WHERE application_name='flare-analysis-worker'").fetchone()==(0,)
+                assert c.execute(
+                    "SELECT count(*) FROM pg_stat_activity "
+                    "WHERE application_name='flare-analysis-worker' "
+                    "AND xact_start IS NOT NULL"
+                ).fetchone()==(0,)
         finally: release.set()
         assert await task=='completed'
     asyncio.run(run())

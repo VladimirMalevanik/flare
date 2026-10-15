@@ -58,7 +58,7 @@ def test_worker_database_pool_is_cold_start_safe_and_strictly_bounded(pool_facto
         check=sentinel.connection_check,
         name=ANY,
         timeout=20,
-        max_waiting=1,
+        max_waiting=2,
         reconnect_timeout=20,
         num_workers=1,
     )

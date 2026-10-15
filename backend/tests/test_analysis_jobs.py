@@ -306,7 +306,11 @@ def test_full_pipeline_and_no_transaction_while_analyzer_blocked(jobs, admin_url
         await asyncio.wait_for(started.wait(), 3)
         try:
             with psycopg.connect(admin_url) as conn:
-                assert conn.execute("SELECT count(*) FROM pg_stat_activity WHERE application_name='flare-analysis-worker'").fetchone() == (0,)
+                assert conn.execute(
+                    "SELECT count(*) FROM pg_stat_activity "
+                    "WHERE application_name='flare-analysis-worker' "
+                    "AND xact_start IS NOT NULL"
+                ).fetchone() == (0,)
                 assert conn.execute('SELECT status,attempts FROM analysis_jobs WHERE id=%s', (job,)).fetchone() == ('processing',1)
             # Another process cannot claim a job with a valid lease.
             assert await asyncio.to_thread(jobs[1].claim, uuid4(), 120) is None

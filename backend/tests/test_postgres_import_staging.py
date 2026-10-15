@@ -397,6 +397,10 @@ def test_pg17_restricted_admin_ownership_grants_preserved_and_rollback(monkeypat
         pytest.skip('Disposable PostgreSQL bootstrap required')
     from psycopg import sql
     from psycopg.conninfo import make_conninfo
+    from app.worker_database import _close_worker_database_pools
+    # The runtime pool intentionally retains idle sessions. Release them before
+    # using the disposable database as a PostgreSQL CREATE DATABASE template.
+    _close_worker_database_pools()
     bootstrap = make_conninfo(os.environ['TEST_DATABASE_URL'], dbname='template1')
     database, role = 'staging_' + uuid4().hex, 'staging_admin_' + uuid4().hex
     admin_password = uuid4().hex  # Disposable role, also works with CI's SCRAM TCP.
