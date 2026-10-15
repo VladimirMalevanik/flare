@@ -9,12 +9,14 @@ from uuid import UUID
 
 import psycopg
 from psycopg import Connection
-from psycopg.rows import dict_row
+from psycopg.rows import dict_row, tuple_row
 from psycopg_pool import ConnectionPool
 from pwdlib import PasswordHash
 
 
 CURRENT_SCHEMA_REVISION = "0025"
+DATABASE_STARTUP_TIMEOUT_SECONDS = 300
+DATABASE_READINESS_TIMEOUT_SECONDS = 3
 IMPORT_STAGING_TABLES = ("import_staging_blocks", "import_staging_health")
 # These are private tables, rather than member-readable tenant projections. The
 # API and worker get only their exact capabilities; even a column SELECT grant
@@ -475,24 +477,55 @@ class Database:
 
     def open(self) -> None:
         try:
-            self._pool.open(wait=True, timeout=10)
+            # Azure can need several minutes to establish the first TLS database
+            # connection while an App Service instance is warming. Keep startup
+            # bounded, but don't turn that transient warmup into a restart loop.
+            self._pool.open(wait=True, timeout=DATABASE_STARTUP_TIMEOUT_SECONDS)
             with self._pool.connection() as connection:
-                safe_role = connection.execute(
-                    """SELECT rolname = 'flare_app' AND NOT rolsuper AND NOT rolbypassrls
-                              AND NOT rolcreatedb AND NOT rolcreaterole
-                              AND NOT EXISTS (
-                                  SELECT 1 FROM pg_auth_members WHERE member = pg_roles.oid
-                              ) AS safe
-                       FROM pg_roles WHERE rolname = current_user"""
-                ).fetchone()
-                if safe_role is None or safe_role["safe"] is not True:
+                # The pool serves dictionaries to application code, while the
+                # exhaustive startup fence intentionally compares tuple results.
+                previous_row_factory = connection.row_factory
+                connection.row_factory = tuple_row
+                try:
+                    ready = _connection_is_ready(connection)
+                finally:
+                    connection.row_factory = previous_row_factory
+                if not ready:
                     raise RuntimeError(
-                        "Application database connections must use a non-superuser, "
-                        "non-BYPASSRLS flare_app role"
+                        "Application database failed the schema and security readiness fence"
                     )
         except Exception:
             self._pool.close()
             raise
+
+    def is_ready(self, *, timeout: float = DATABASE_READINESS_TIMEOUT_SECONDS) -> bool:
+        """Check serving readiness through the existing pool in one round trip."""
+        with self._pool.connection(timeout=timeout) as connection:
+            row = connection.execute(
+                """SELECT
+                    EXISTS (
+                        SELECT 1 FROM pg_roles
+                         WHERE rolname = current_user
+                           AND rolname = 'flare_app'
+                           AND NOT rolsuper
+                           AND NOT rolbypassrls
+                           AND NOT rolcreatedb
+                           AND NOT rolcreaterole
+                           AND NOT EXISTS (
+                               SELECT 1 FROM pg_auth_members
+                                WHERE member = pg_roles.oid
+                           )
+                    )
+                    AND (
+                        SELECT count(*) = 1 AND bool_and(version_num = %s)
+                          FROM public.alembic_version
+                    )
+                    AND current_setting('transaction_read_only') = 'off'
+                    AND NOT pg_is_in_recovery()
+                    AND to_regtype('vector') IS NOT NULL AS ready""",
+                (CURRENT_SCHEMA_REVISION,),
+            ).fetchone()
+            return row is not None and row["ready"] is True
 
     def close(self) -> None:
         self._pool.close()
