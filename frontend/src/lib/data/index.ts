@@ -19,6 +19,9 @@ export function dataErrorMessage(error: unknown, fallback: string): string {
   if (failure?.status === 401) return "errorSession";
   if (failure?.status === 403) return "errorPermission";
   if (failure?.status === 429) return "errorRateLimit";
+  if (failure?.code === "request_outcome_unknown") return "errorUnconfirmed";
+  if (failure?.code === "request_timeout") return "errorTimeout";
+  if (failure?.status === 409 && failure.code === "Item changed since it was loaded; reload it and retry") return "errorVersionConflict";
   return fallback;
 }
 

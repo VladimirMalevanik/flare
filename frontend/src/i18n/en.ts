@@ -86,6 +86,8 @@ export const en = {
   errorSession: "Your session has expired. Please sign in again.",
   errorPermission: "You do not have permission to perform this action.",
   errorRateLimit: "Too many requests. Please wait a moment and try again.",
+  errorTimeout: "The request timed out. Please try again.",
+  errorUnconfirmed: "The server did not confirm the result. The request may have completed; check the current state before trying again.",
   errorVersionConflict: "This item changed while you were editing. Reopen it to see the latest version.",
   errorCredentials: "Check your email and password and try again.",
   errorAccountExists: "An account with this email already exists. Please sign in.",

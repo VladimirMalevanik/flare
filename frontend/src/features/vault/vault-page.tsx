@@ -76,7 +76,10 @@ export function VaultPage() {
     const request = ++listRequest.current;
     let live = true;
     const timer = window.setTimeout(() => {
-      if (live && request === listRequest.current) setLoading(true);
+      if (live && request === listRequest.current) {
+        setLoading(true);
+        setLoadingMore(false);
+      }
       void dataProvider.listItems({
         query: query.trim() || undefined,
         type: itemType,

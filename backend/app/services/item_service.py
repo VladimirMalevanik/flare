@@ -11,7 +11,9 @@ from uuid import UUID, uuid4
 from app.models.database import Database, WorkspaceIdentity
 from app.models.import_batches import ImportBatchRepository
 from app.models.tables import ItemRecord, ItemRepository
-from app.services.import_service import ChunkSpec, ImportService, ImportValidationError
+from app.services.import_service import (
+    IMPORT_CHUNK_TARGET_BYTES, ChunkSpec, ImportService, ImportValidationError, _split_exact,
+)
 
 
 class ItemNotFoundError(Exception):
@@ -67,7 +69,7 @@ class ItemService:
         file_size: int | None = None,
         file_type: str | None = None,
     ) -> ItemRecord:
-        item_id, version_id, chunk_id = uuid4(), uuid4(), uuid4()
+        item_id, version_id = uuid4(), uuid4()
         resolved_title = title or self._title_from_content(content)
         content_hash = sha256(content.encode("utf-8")).hexdigest()
         metadata = self._metadata(
@@ -102,18 +104,16 @@ class ItemService:
                 snapshot_source_url=source_url,
                 snapshot_metadata=metadata,
             )
-            repository.insert_chunk(
-                chunk_id=chunk_id,
-                workspace_id=self._identity.workspace_id,
-                version_id=version_id,
-                content=content,
-                locator=self._chunk_locator(
-                    item_type=item_type,
-                    source_url=source_url,
-                    file_name=file_name,
-                    file_type=file_type,
-                ),
+            locator = self._chunk_locator(
+                item_type=item_type, source_url=source_url,
+                file_name=file_name, file_type=file_type,
             )
+            for ordinal, chunk in enumerate(self._capture_chunks(item_type, content, locator)):
+                repository.insert_chunk(
+                    chunk_id=uuid4(), workspace_id=self._identity.workspace_id,
+                    version_id=version_id, ordinal=ordinal,
+                    content=chunk.content, locator=chunk.locator,
+                )
             connection.execute("SELECT set_config('app.growth_human_action','capture',true)")
             repository.publish_version(document_id=item_id, version_id=version_id)
             connection.execute("SELECT set_config('app.growth_human_action','',true)")
@@ -175,6 +175,14 @@ class ItemService:
             "Untitled note",
         )
         return first_line[:80].rstrip()
+
+    @staticmethod
+    def _capture_chunks(item_type: str, content: str, locator: dict[str, object]) -> tuple[ChunkSpec, ...]:
+        # Imported text already has bounded fragments. Manual notes must have
+        # the same opportunity to enter scheduled selection without truncation
+        # or increasing provider budgets. Other source contracts are unchanged.
+        parts = _split_exact(content, IMPORT_CHUNK_TARGET_BYTES) if item_type == "note" else (content,)
+        return tuple(ChunkSpec(content=part, locator=dict(locator)) for part in parts)
 
     def list_items(
         self,
@@ -300,7 +308,7 @@ class ItemService:
         str,
         str | None,
         dict[str, Any],
-        tuple[ChunkSpec | _ReplacementChunk, ...] | None,
+        tuple[ChunkSpec, ...] | None,
     ]:
         item_type = current.item_type
         allowed_by_type = {
@@ -420,15 +428,11 @@ class ItemService:
             or metadata.get("fileType") != (current.metadata or {}).get("fileType")
         )
         if replacement_chunks is None and (content != current.content or locator_changed):
-            replacement_chunks = (
-                _ReplacementChunk(
-                    content=content,
-                    locator=self._chunk_locator(
-                        item_type=item_type,
-                        source_url=source_url,
-                        file_name=metadata.get("fileName"),
-                        file_type=metadata.get("fileType"),
-                    ),
+            replacement_chunks = self._capture_chunks(
+                item_type, content,
+                self._chunk_locator(
+                    item_type=item_type, source_url=source_url,
+                    file_name=metadata.get("fileName"), file_type=metadata.get("fileType"),
                 ),
             )
         return title, content, source_url, metadata, replacement_chunks
@@ -464,9 +468,3 @@ class ItemService:
             if not ItemRepository(connection).soft_delete(item_id):
                 raise ItemNotFoundError
             ImportBatchRepository(connection).supersede_for_document(item_id)
-
-
-@dataclass(frozen=True)
-class _ReplacementChunk:
-    content: str
-    locator: dict[str, object]

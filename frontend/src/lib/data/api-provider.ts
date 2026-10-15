@@ -374,39 +374,52 @@ export class ApiDataProvider implements FlareDataProvider {
   }
 
   private async request(path: string, init?: RequestInit): Promise<unknown> {
-    let response: Response;
-    try {
-      response = await fetch(projectApiUrl(`${this.baseUrl}${path}`), {
-        ...init,
-        credentials: "include",
-        cache: "no-store",
-        headers: {
-          Accept: "application/json",
-          ...(init?.body ? { "Content-Type": "application/json" } : {}),
-          ...init?.headers,
-        },
-      });
-    } catch {
-      throw new FlareApiError(
-        "Cannot reach the Flare API. Check that the backend is running.",
-      );
-    }
-    if (response.status === 401 && typeof window !== "undefined") {
-      window.location.replace("/login");
-    }
-    if (!response.ok) {
-      const error = await responseError(response);
-      if (
-        response.status === 403 &&
-        error.code === "email_verification_required" &&
-        typeof window !== "undefined"
-      ) {
-        window.location.replace("/verify-email?pending=1");
+    const writes = !["GET", "HEAD"].includes((init?.method ?? "GET").toUpperCase());
+    const unconfirmed = () => new FlareApiError(
+      "The server did not confirm the result. Check the current state before trying again.",
+      undefined, "request_outcome_unknown",
+    );
+    const execute = async (signal: AbortSignal): Promise<unknown> => {
+      let response: Response;
+      try {
+        response = await fetch(projectApiUrl(`${this.baseUrl}${path}`), {
+          ...init, signal,
+          credentials: "include",
+          cache: "no-store",
+          headers: {
+            Accept: "application/json",
+            ...(init?.body ? { "Content-Type": "application/json" } : {}),
+            ...init?.headers,
+          },
+        });
+      } catch {
+        if (writes) throw unconfirmed();
+        throw new FlareApiError("Cannot reach the Flare API. Check that the backend is running.");
       }
-      throw new FlareApiError(error.message, response.status, error.code);
+      if (response.status === 401 && typeof window !== "undefined") window.location.replace("/login");
+      if (!response.ok) {
+        const error = await responseError(response);
+        if (response.status === 403 && error.code === "email_verification_required" && typeof window !== "undefined") {
+          window.location.replace("/verify-email?pending=1");
+        }
+        throw new FlareApiError(error.message, response.status, error.code);
+      }
+      if (response.status === 204) return undefined;
+      try { return await response.json(); }
+      catch { if (writes) throw unconfirmed(); throw new FlareApiError("The server returned an invalid response."); }
+    };
+    // ZIP, source and historical-run callers already own their deadline and
+    // cancellation signal. Preserve their longer upload budget; bound ordinary
+    // item/feed/schedule requests through response parsing as well as headers.
+    if (init?.signal) return execute(init.signal);
+    try { return await importRequest(execute); }
+    catch (cause) {
+      if ((cause as { code?: string })?.code === "import_request_timeout") {
+        if (writes) throw unconfirmed();
+        throw new FlareApiError("The request timed out. Please try again.", undefined, "request_timeout");
+      }
+      throw cause;
     }
-    if (response.status === 204) return undefined;
-    return response.json();
   }
 
   async getImportCapabilities(signal?: AbortSignal): Promise<{ available: boolean; maxUploadBytes: number | null }> {

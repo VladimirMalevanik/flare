@@ -38,7 +38,10 @@ function component(relative, exportName, provider = {}, workspace = {}) {
     useState(initial) { const i = cursor++; if (!(i in state)) state[i] = typeof initial === 'function' ? initial() : initial;
       return [state[i], value => state[i] = typeof value === 'function' ? value(state[i]) : value]; },
     useRef(initial) { const i = cursor++; if (!(i in state)) state[i] = { current: initial }; return state[i]; },
-    useCallback: fn => fn,
+    createContext: () => ({ Provider: 'context-provider' }),
+    useCallback(fn, values = []) { const i = cursor++; if (!deps[i] || values.some((v, j) => v !== deps[i][j])) {
+      state[i] = fn; deps[i] = values;
+    } return state[i]; },
     useEffect(fn, values = []) { const i = cursor++; if (!deps[i] || values.some((v, j) => v !== deps[i][j])) {
       effects.push(() => { cleanups[i]?.(); cleanups[i] = fn(); }); deps[i] = values;
     } },
@@ -60,16 +63,17 @@ function component(relative, exportName, provider = {}, workspace = {}) {
     '@/components/icons': { Icon: 'icon', itemIcon: { note: 'note' } }, '@/components/dialog': { Dialog: 'dialog' },
     '@/components/workspace-context': { useWorkspace: () => defaults },
     '@/components/auth-session': { useSession: () => ({ workspace: { role: 'owner' } }) },
+    './auth-session': { useSession: () => null },
     '@/lib/team-context': { projectHref: url => url },
     '@/lib/data': { dataProvider: { trackEvent: async () => {}, ...provider }, dataErrorMessage: (_, fallback) => fallback },
     '@/lib/storage/preferences': { readLocal: (_, fallback) => fallback, writeLocal() {} },
     '@/lib/voice': { transcribeVoice: async () => ({ id: 'voice' }) },
-    '@/features/funny/funny-sounds': { playFunnySound() {} },
-    '@/features/funny/funny-state': {},
+    '@/features/funny/funny-sounds': { playFunnySound() {}, stopFunnySounds() {} },
+    '@/features/funny/funny-state': { INITIAL_FUNNY_RITUAL: { phase: 'idle', requestId: 0 } },
     './capture-position': { CAPTURE_PANEL_SIZES: { medium: { width: 500, height: 204 } }, clampOrbPosition: p => p },
     './use-voice-capture': { useVoiceCapture: () => ({ state: 'idle', recording: null, cancel() {} }) },
   }, { window, document });
-  const render = () => { cursor = 0; return exports[exportName](); };
+  const render = () => { cursor = 0; return exports[exportName]({ children: null }); };
   return { render, workspace: defaults,
     button(label) { const result = nodes(render()).find(n => n.type === 'button' && (text(n) === label || n.props?.['aria-label'] === label)); assert.ok(result, label); return result; },
     async effects() { for (const fn of effects.splice(0)) fn(); await settle(); },
@@ -81,6 +85,18 @@ function component(relative, exportName, provider = {}, workspace = {}) {
 const item = index => ({ id: `note-${index}`, title: `Note ${index}`, content: 'Saved context', type: 'note', status: 'ready',
   updatedAt: '2026-10-16T00:00:00Z', createdAt: '2026-10-16T00:00:00Z', versionNumber: 1,
   currentVersionId: `version-${index}`, extractedFacts: [], relatedItemIds: [] });
+
+test('typing a draft does not restart the scheduled analysis polling effect', () => {
+  const app = component('../src/components/workspace-context.tsx', 'WorkspaceProvider');
+  const original = app.render().props.value.refresh;
+  for (let i = 0; i < 20; i++) {
+    app.render().props.value.setDraft(`Draft ${i}`);
+    assert.equal(app.render().props.value.refresh, original, 'the schedule effect depends on this callback');
+  }
+  original();
+  assert.equal(app.render().props.value.revision, 1);
+  app.dispose();
+});
 
 test('Capture admits one save before React has rendered the pending state', async () => {
   let resolve, calls = 0;

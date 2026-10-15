@@ -87,6 +87,8 @@ export const es = {
   errorSession: "Tu sesión ha caducado. Inicia sesión de nuevo.",
   errorPermission: "No tienes permiso para realizar esta acción.",
   errorRateLimit: "Hay demasiadas solicitudes. Espera un momento e inténtalo de nuevo.",
+  errorTimeout: "La solicitud tardó demasiado. Inténtalo de nuevo.",
+  errorUnconfirmed: "El servidor no confirmó el resultado. La solicitud puede haberse completado; comprueba el estado actual antes de intentarlo de nuevo.",
   errorVersionConflict: "Este elemento cambió mientras lo editabas. Ábrelo de nuevo para ver la última versión.",
   errorCredentials: "Comprueba tu correo y contraseña e inténtalo de nuevo.",
   errorAccountExists: "Ya existe una cuenta con este correo. Inicia sesión.",
