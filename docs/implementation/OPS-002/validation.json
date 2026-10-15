@@ -1,0 +1,374 @@
+{
+  "release_sha": "453ebec4b6592d1e089a3f5d04da0f35a78a4f09",
+  "activation_complete": false,
+  "accepted_pull_requests": {
+    "36": "f62bc3f43b739bfd1f91b9630553f3f989fef52d",
+    "40": "e6b831cc51ce80e517490c25327fb0a88559efcd",
+    "41": "453ebec4b6592d1e089a3f5d04da0f35a78a4f09"
+  },
+  "ci": {
+    "integrated_main_run": 37329909083,
+    "integrated_main_result": "success",
+    "release_package_run": 37330253646,
+    "release_package_result": "success"
+  },
+  "release": {
+    "tag": "azure-453ebec4b659",
+    "url": "https://github.com/VladimirMalevanik/flare/releases/tag/azure-453ebec4b659",
+    "archives": {
+      "flare-backend.zip": {
+        "sha256": "cf1e6f1071d36c3e0bf947c775771599aa23b7ebbb541e3bdd2a8bbe232416f3",
+        "size_bytes": 25686911,
+        "published_digest_and_sidecar_verified": true,
+        "zip_crc_verified": true,
+        "release_sha_verified": true,
+        "required_files_verified": true
+      },
+      "flare-web.zip": {
+        "sha256": "a28c72125cef479fcff33240b7c683c14257d5fb900aa78001568f34f0940a8a",
+        "size_bytes": 24473043,
+        "published_digest_and_sidecar_verified": true,
+        "zip_crc_verified": true,
+        "release_sha_verified": true,
+        "required_files_verified": true
+      }
+    }
+  },
+  "read_only_azure_preflight": {
+    "database_revision": "0018",
+    "database_provider": "self-managed",
+    "postgresql_major_version": 17,
+    "backup_retention_days": 7,
+    "restore_test_performed": false,
+    "api_worker_web_running": true,
+    "private_current_archives_captured_and_verified": true,
+    "email_verification_preserved": true,
+    "runtime_roles_not_expanded": true,
+    "temporary_identity_probes_removed": true,
+    "nonsecret_exact_migration_source_staged": true,
+    "controlled_preflight_20261006_passed": true,
+    "migration_credential_read_only_in_process_memory": true,
+    "local_migration_credential_copy_removed": true
+  },
+  "sandbox_destination": {
+    "id": "ntfset_01m47zz283676cayy23388e71v",
+    "active": true,
+    "traffic_source": "platform",
+    "event_count": 8,
+    "url": "https://flare-api-vm-260914.azurewebsites.net/billing/paddle/webhook",
+    "secret_saved_and_privately_verified": true,
+    "local_plaintext_removed": true,
+    "api_secret_permissions_unchanged": [
+      "get",
+      "list"
+    ],
+    "api_key_vault_reference_applied": true,
+    "api_key_vault_reference_resolved": true,
+    "ui_test_mode_active_platform_8_events_verified": true
+  },
+  "pending": [
+    "Immediate-cancellation \u2192 Free smoke explicitly deferred by owner to retain Sandbox Pro; no actual Sandbox canceled-event verification claimed"
+  ],
+  "production_migration_performed": true,
+  "azure_deployment_performed": true,
+  "paddle_live_used": false,
+  "recovery_packages": {
+    "workflow_fix_pr": 45,
+    "linux_build_run": 37431064967,
+    "linux_build_result": "success",
+    "source_sha": "b9ccdc62fd166d13ea412753f736c635eff0a984",
+    "independent_archive_validation": true,
+    "historical_core_tests_passed": 215,
+    "production_fallback_deployed": false,
+    "archives": {
+      "api": {
+        "sha256": "168b422c35330ae82b54afc9f41383372dcba37734ebaab3256c309359d7fc2f",
+        "sizeBytes": 25688067,
+        "zipCrcVerified": true,
+        "manifestVerified": true,
+        "releaseHeadVerified": true
+      },
+      "worker": {
+        "sha256": "eeee73356d23395d0841315aa88377acae5c9d7fd3e6f14ef2538f2a926eae44",
+        "sizeBytes": 25688070,
+        "zipCrcVerified": true,
+        "manifestVerified": true,
+        "releaseHeadVerified": true
+      },
+      "web": {
+        "sha256": "d0850724add3db2e5eecb769cf81e53a455474ab3627f87d5bce5ee61f18f3ad",
+        "sizeBytes": 24373781,
+        "zipCrcVerified": true,
+        "manifestVerified": true,
+        "releaseHeadVerified": true
+      }
+    },
+    "source_manifest_sha256": "6cd6c29d92bf1be5f7163cfc359649deea9ca1ab9e5011b5b49b1b9184776c63",
+    "application_python_files": 79,
+    "task_state_done_commit": "8cf4939ddf1b66aafde86cec5a0cbbb4ae973eef"
+  },
+  "controlled_cloud_migration": {
+    "date_utc": "2026-10-06",
+    "report_last_modified_utc": "2026-10-06T07:59:48Z",
+    "source_sha": "453ebec4b6592d1e089a3f5d04da0f35a78a4f09",
+    "operator_script_sha256": "0ce593c6ecc38fc497730de4f08f081c74d5a7e8c2523e9bd66002a708550524",
+    "before_revision": "0018",
+    "after_revision": "0021",
+    "upgrade_exit_code": 0,
+    "repeat_upgrade_exit_code": 0,
+    "preserved_aggregate_counts_unchanged": true,
+    "temporary_extraction_removed": true,
+    "maintenance_local_503_guard_passed": true,
+    "worker_stopped_before_ddl": true,
+    "runtime_admin_credentials_not_added": true,
+    "migration_credential_memory_only": true
+  },
+  "deployments": {
+    "api": {
+      "role": "api",
+      "returnCode": 0,
+      "packageSha256": "cf1e6f1071d36c3e0bf947c775771599aa23b7ebbb541e3bdd2a8bbe232416f3",
+      "rawOutputOmitted": true,
+      "deploymentId": "18ec5188-6373-4544-a30e-5345f30feb7a",
+      "deploymentStatus": 4,
+      "complete": true
+    },
+    "worker": {
+      "role": "worker",
+      "returnCode": 0,
+      "packageSha256": "cf1e6f1071d36c3e0bf947c775771599aa23b7ebbb541e3bdd2a8bbe232416f3",
+      "rawOutputOmitted": true,
+      "deploymentId": "866cb735-91f5-4b93-8206-48b17770f3cf",
+      "deploymentStatus": 4,
+      "complete": true
+    },
+    "web": {
+      "role": "web",
+      "returnCode": 0,
+      "packageSha256": "a28c72125cef479fcff33240b7c683c14257d5fb900aa78001568f34f0940a8a",
+      "rawOutputOmitted": true,
+      "deploymentId": "fcfed178-427a-4a43-be13-61420286c356",
+      "deploymentStatus": 4,
+      "complete": true
+    }
+  },
+  "api_startup_allowance_seconds": 600,
+  "worker_readonly_probe": {
+    "result": "passed",
+    "time_utc": "2026-10-06T08:29:57.582073+00:00",
+    "script_sha256": "127029af538f28c93c2f824070524dfd2354c812729e92bdceff7dc46f84ed2e",
+    "check_count": 27,
+    "actual_worker_sql_select_passed": true,
+    "restricted_capabilities_verified": true,
+    "worker_and_health_processes_live": true,
+    "effective_secret_isolation_verified": true,
+    "queue_counts_unavailable_by_design": true,
+    "no_jobs_claimed_by_probe": true,
+    "no_provider_requests_by_probe": true,
+    "completed_job_test_performed": false,
+    "initial_time_utc": "2026-10-06T08:18:40.601324+00:00",
+    "post_restart_sql_probe_passed": true
+  },
+  "startup_diagnostics": {
+    "availableMetricNames": [
+      "CpuPercentage",
+      "MemoryPercentage"
+    ],
+    "capacity": 1,
+    "interval": "PT1M",
+    "metricDefinitionsVerified": true,
+    "metrics": {
+      "CpuPercentage": {
+        "averageOfMinuteAverages": 83.6,
+        "averageSampleCount": 15,
+        "firstAvailableTimestampUtc": "2026-10-06T08:03:00Z",
+        "lastAvailableTimestampUtc": "2026-10-06T08:17:00Z",
+        "maximum": 100.0,
+        "maximumSampleCount": 15,
+        "maximumTimestampUtc": "2026-10-06T08:07:00Z",
+        "peakMinuteAverage": 100.0,
+        "peakMinuteAverageTimestampUtc": "2026-10-06T08:07:00Z",
+        "sampleCount": 15,
+        "unit": "Percent"
+      },
+      "MemoryPercentage": {
+        "averageOfMinuteAverages": 81.2,
+        "averageSampleCount": 15,
+        "firstAvailableTimestampUtc": "2026-10-06T08:03:00Z",
+        "lastAvailableTimestampUtc": "2026-10-06T08:17:00Z",
+        "maximum": 86.0,
+        "maximumSampleCount": 15,
+        "maximumTimestampUtc": "2026-10-06T08:13:00Z",
+        "peakMinuteAverage": 86.0,
+        "peakMinuteAverageTimestampUtc": "2026-10-06T08:13:00Z",
+        "sampleCount": 15,
+        "unit": "Percent"
+      }
+    },
+    "plan": "flare-dev-web-plan-b1",
+    "requestedAggregations": [
+      "Average",
+      "Maximum"
+    ],
+    "resourceGroup": "flare-dev",
+    "sku": "B1",
+    "source": "Azure Monitor Microsoft.Web/serverfarms platform metrics",
+    "status": "complete",
+    "windowEndUtc": "2026-10-06T08:18:25Z",
+    "windowStartUtc": "2026-10-06T08:03:25Z"
+  },
+  "api_readiness": {
+    "/ready": {
+      "status": 200,
+      "body": "{\"status\":\"ready\"}"
+    },
+    "/billing/paddle/webhook": {
+      "status": 401,
+      "body": "{\"detail\":{\"code\":\"billing_invalid_signature\",\"message\":\"Invalid webhook signature\"}}"
+    },
+    "webhookKeyVaultReferenceStatus": "Resolved",
+    "completed": true
+  },
+  "web_readiness": {
+    "web": {
+      "status": 200,
+      "body": {
+        "status": "ready"
+      }
+    },
+    "webLogin": {
+      "status": 200
+    },
+    "billingWithoutLogin": {
+      "status": 401,
+      "body": {
+        "detail": "Authentication required"
+      }
+    }
+  },
+  "worker_restart_http_readiness": {
+    "status": 200,
+    "role": "worker"
+  },
+  "runtime_boundaries": {
+    "api": {
+      "serverWebhookSecretPresent": true,
+      "paddleServerApiKeyPresent": false,
+      "sandbox": true,
+      "priceMatches": true,
+      "emailVerificationRequired": true,
+      "developmentDisabled": true,
+      "adminMigrationCredentialAbsent": true,
+      "localZipStagingNotEnabled": true
+    },
+    "worker": {
+      "serverWebhookSecretPresent": false,
+      "paddleServerApiKeyPresent": false
+    },
+    "web": {
+      "serverWebhookSecretPresent": false,
+      "paddleServerApiKeyPresent": false
+    }
+  },
+  "cloud_operator_cleanup": {
+    "completed": true,
+    "temporary_source_directories_removed": true,
+    "temporary_logfiles_removed": true,
+    "private_local_sanitized_evidence_preserved": true
+  },
+  "real_owner_checkout_verified": true,
+  "real_signed_delivery_verified": true,
+  "real_replay_cancellation_verified": false,
+  "sandbox_checkout_preflight": {
+    "date_utc": "2026-10-06",
+    "verified_owner_session_observed": true,
+    "settings_current_free_observed": true,
+    "initial_sdk_error": "transaction_default_checkout_url_not_set",
+    "sandbox_default_payment_link": "https://flare4u.tech/settings",
+    "sandbox_default_payment_link_approved": true,
+    "real_paddle_overlay_opened": true,
+    "test_mode_visible": true,
+    "pro_product_visible": true,
+    "quantity": 1,
+    "trial_days_visible": 30,
+    "only_official_fictitious_card_entered": true,
+    "final_submission_performed": true,
+    "action_time_confirmation_pending": false,
+    "automatic_ptxn_update_links_verified": false,
+    "owner_completed_checkout_personally": true
+  },
+  "workspace_pro_sandbox_runtime_verified": true,
+  "real_replay_verified": true,
+  "real_cancellation_verified": false,
+  "genuine_sandbox_lifecycle": {
+    "date_utc": "2026-10-06",
+    "owner_checkout_success_visible": true,
+    "paddle_test_mode_visible": true,
+    "paddle_subscription_trialing_visible": true,
+    "created_and_trialing_delivered_first_attempt": true,
+    "pro_current_after_refresh": true,
+    "probe_script_sha256": "d8d95fe18bbf39cb5f8a78a1ba7bd66990eac9a37b95bd8da0ccff2b430a14ee",
+    "baseline_time_utc": "2026-10-06T10:13:28.732566+00:00",
+    "after_replay_time_utc": "2026-10-06T10:18:13.174865+00:00",
+    "readonly_check_count_each_snapshot": 20,
+    "readonly_checks_all_passed": true,
+    "restricted_admin_and_runtime_roles_unchanged": true,
+    "no_credential_plaintext_file_created": true,
+    "binding": {
+      "applied_event_count": 1,
+      "conflict_event_count": 0,
+      "consumed_binding_matches_owner_workspace": true,
+      "consumed_intent_count": 1,
+      "created_event_count": 1,
+      "created_event_within_intent_window": true,
+      "ledger_event_count": 2,
+      "linked_intent_count": 1,
+      "stale_event_count": 0,
+      "subscription_count": 1,
+      "trialing_event_count": 1,
+      "unlinked_event_count": 1
+    },
+    "trial_starts_at": "2026-10-06T10:03:52.344000+00:00",
+    "trial_ends_at": "2026-11-05T10:03:52.344000+00:00",
+    "access_until": "2026-11-05T10:03:52.344000+00:00",
+    "actual_trial_30_days": true,
+    "historical_unlinked_event_resolved_in_current_subscription": true,
+    "real_replay_delivered_first_attempt": true,
+    "replay_http_status": 200,
+    "replay_outcome": "conflict",
+    "replay_raw_envelope_fingerprint_limitation_observed": true,
+    "replay_comparison": {
+      "completed": true,
+      "method": "operator-local comparison of two verified read-only snapshots",
+      "before_time_utc": "2026-10-06T10:13:28.732566+00:00",
+      "after_time_utc": "2026-10-06T10:18:13.174865+00:00",
+      "checks": {
+        "subscription_unchanged": true,
+        "consumed_binding_unchanged": true,
+        "ledger_unchanged": true,
+        "workspace_entitlement_unchanged": true,
+        "runtime_subscriptions_unchanged": true,
+        "subscription_count_unchanged": true,
+        "consumed_intent_count_unchanged": true,
+        "workspace_pro_preserved": true
+      },
+      "check_count_each_snapshot": 20,
+      "no_raw_rows_exported": true,
+      "no_database_write_by_probe": true
+    },
+    "remote_guard_not_weakened": true,
+    "raw_rows_identifiers_and_private_digests_not_published": true,
+    "pro_confirmed_after_replay_browser_refresh": true,
+    "temporary_cloud_probe_files_removed": true,
+    "cancellation_prepared_now": true,
+    "cancellation_submitted": false,
+    "current_state": "Pro / Trialing",
+    "second_member_browser_session_verified": false,
+    "premium_quota_expanded": false,
+    "remote_compare_prior_load_or_validation_failed": true,
+    "remote_compare_prior_underlying_cause_confirmed": false,
+    "cancellation_owner_decision": "retain Sandbox Pro",
+    "cancellation_deferred_by_owner": true,
+    "cancellation_form_closed": true
+  }
+}
