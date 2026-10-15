@@ -23,6 +23,7 @@ function load(relative, mocks = {}) {
       if (name === '@/features/team/project-menu') return { ProjectMenu: () => null };
 
       if (name === "./developer-mail") return { DeveloperMail: () => null };
+      if (name === "./campaign-links") return { CampaignLinks: () => null };
       if (name === "@/i18n/provider") return require("./i18n-utils.cjs").i18nMock();
       if (name === "@/components/language-selector") return { LanguageSelector: "language-selector" };
       if (name === "@/components/select") return { Select: "custom-select" };

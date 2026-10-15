@@ -14,7 +14,7 @@ from psycopg_pool import ConnectionPool
 from pwdlib import PasswordHash
 
 
-CURRENT_SCHEMA_REVISION = "0024"
+CURRENT_SCHEMA_REVISION = "0025"
 IMPORT_STAGING_TABLES = ("import_staging_blocks", "import_staging_health")
 # These are private tables, rather than member-readable tenant projections. The
 # API and worker get only their exact capabilities; even a column SELECT grant
@@ -61,6 +61,7 @@ TENANT_TABLES = (
     "billing_checkout_intents",
     "billing_subscriptions",
     "source_connections", "source_auth_states", "source_jobs", "source_items",
+    "campaign_links",
 )
 
 
@@ -201,6 +202,7 @@ def _connection_is_ready(connection: Connection) -> bool:
                UNION ALL SELECT 1 FROM (SELECT workspace_id FROM public.source_auth_states) source_states_visible
                UNION ALL SELECT 1 FROM (SELECT workspace_id FROM public.source_jobs) source_jobs_visible
                UNION ALL SELECT 1 FROM (SELECT workspace_id FROM public.source_items) source_items_visible
+               UNION ALL SELECT 1 FROM public.campaign_links
            )"""
     ).fetchone()
     if customer_rows_are_hidden != (True,):
@@ -246,11 +248,137 @@ def _connection_is_ready(connection: Connection) -> bool:
     if not _import_staging_is_safe(connection):
         return False
 
+    if not _campaign_links_are_safe(connection):
+        return False
+
     extension = connection.execute(
         "SELECT 1 FROM pg_extension "
         "WHERE extname IN ('vector', 'pgvector') AND to_regtype('vector') IS NOT NULL"
     ).fetchone()
     return extension is not None
+
+
+def _campaign_links_are_safe(connection: Connection) -> bool:
+    """Require owner-scoped metadata and narrow anonymous counter capabilities."""
+    table = connection.execute("""SELECT relrowsecurity AND relforcerowsecurity
+        AND has_table_privilege('flare_app',oid,'SELECT')
+        AND NOT has_table_privilege('flare_app',oid,'DELETE,TRUNCATE,REFERENCES,TRIGGER')
+        AND NOT has_any_column_privilege('flare_app',oid,'REFERENCES')
+        AND NOT has_table_privilege('flare_worker',oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+        AND NOT has_any_column_privilege('flare_worker',oid,'SELECT,INSERT,UPDATE,REFERENCES')
+        AND NOT has_table_privilege('public',oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+        AND NOT has_any_column_privilege('public',oid,'SELECT,INSERT,UPDATE,REFERENCES')
+        AND has_column_privilege('flare_app',oid,'label','UPDATE')
+        AND has_column_privilege('flare_app',oid,'archived_at','UPDATE')
+        AND has_column_privilege('flare_app',oid,'id','INSERT')
+        AND has_column_privilege('flare_app',oid,'workspace_id','INSERT')
+        AND NOT has_column_privilege('flare_app',oid,'created_by_user_id','INSERT')
+        AND has_column_privilege('flare_app',oid,'label','INSERT')
+        AND has_column_privilege('flare_app',oid,'slug','INSERT')
+        AND has_column_privilege('flare_app',oid,'destination_path','INSERT')
+        AND has_column_privilege('flare_app',oid,'utm_source','INSERT')
+        AND has_column_privilege('flare_app',oid,'utm_medium','INSERT')
+        AND has_column_privilege('flare_app',oid,'utm_campaign','INSERT')
+        AND has_column_privilege('flare_app',oid,'utm_content','INSERT')
+        AND NOT has_column_privilege('flare_app',oid,'click_count','INSERT')
+        AND NOT has_column_privilege('flare_app',oid,'created_at','INSERT')
+        AND NOT has_column_privilege('flare_app',oid,'archived_at','INSERT')
+        AND NOT has_column_privilege('flare_app',oid,'id','UPDATE')
+        AND NOT has_column_privilege('flare_app',oid,'workspace_id','UPDATE')
+        AND NOT has_column_privilege('flare_app',oid,'created_by_user_id','UPDATE')
+        AND NOT has_column_privilege('flare_app',oid,'slug','UPDATE')
+        AND NOT has_column_privilege('flare_app',oid,'destination_path','UPDATE')
+        AND NOT has_column_privilege('flare_app',oid,'utm_source','UPDATE')
+        AND NOT has_column_privilege('flare_app',oid,'utm_medium','UPDATE')
+        AND NOT has_column_privilege('flare_app',oid,'utm_campaign','UPDATE')
+        AND NOT has_column_privilege('flare_app',oid,'utm_content','UPDATE')
+        AND NOT has_column_privilege('flare_app',oid,'click_count','UPDATE')
+        AND NOT has_column_privilege('flare_app',oid,'created_at','UPDATE')
+        FROM pg_class WHERE oid='public.campaign_links'::regclass""").fetchone()
+    if table != (True,):
+        return False
+    creator_contract = connection.execute("""SELECT
+        EXISTS(
+            SELECT 1
+              FROM pg_attribute attribute
+              JOIN pg_attrdef default_value
+                ON default_value.adrelid=attribute.attrelid
+               AND default_value.adnum=attribute.attnum
+             WHERE attribute.attrelid='public.campaign_links'::regclass
+               AND attribute.attname='created_by_user_id'
+               AND pg_get_expr(default_value.adbin,default_value.adrelid)=
+                   'NULLIF(current_setting(''app.user_id''::text, true), ''''::text)'
+        )
+        AND EXISTS(
+            SELECT 1
+              FROM pg_constraint relationship
+             WHERE relationship.conrelid='public.campaign_links'::regclass
+               AND relationship.contype='f'
+               AND relationship.confrelid='public.auth_users'::regclass
+               AND relationship.confdeltype='n'
+               AND relationship.convalidated
+               AND relationship.conkey=ARRAY[(
+                   SELECT attnum FROM pg_attribute
+                    WHERE attrelid='public.campaign_links'::regclass
+                      AND attname='created_by_user_id'
+               )]::smallint[]
+               AND relationship.confkey=ARRAY[(
+                   SELECT attnum FROM pg_attribute
+                    WHERE attrelid='public.auth_users'::regclass
+                      AND attname='id'
+               )]::smallint[]
+        )""").fetchone()
+    if creator_contract != (True,):
+        return False
+    policies = connection.execute("""SELECT
+        (SELECT count(*)=2 FROM pg_policy
+          WHERE polrelid='public.campaign_links'::regclass)
+        AND EXISTS(SELECT 1 FROM pg_policy p
+          WHERE p.polrelid='public.campaign_links'::regclass
+            AND p.polname='campaign_links_owner' AND p.polcmd='*'
+            AND p.polroles=ARRAY[(SELECT oid FROM pg_roles WHERE rolname='flare_app')]
+            AND position('app.workspace_id' IN pg_get_expr(p.polqual,p.polrelid))>0
+            AND position('app.user_id' IN pg_get_expr(p.polqual,p.polrelid))>0
+            AND position('owner' IN pg_get_expr(p.polqual,p.polrelid))>0
+            AND position('app.workspace_id' IN pg_get_expr(p.polwithcheck,p.polrelid))>0
+            AND position('app.user_id' IN pg_get_expr(p.polwithcheck,p.polrelid))>0
+            AND position('owner' IN pg_get_expr(p.polwithcheck,p.polrelid))>0)
+        AND EXISTS(SELECT 1 FROM pg_policy p
+          WHERE p.polrelid='public.campaign_links'::regclass
+            AND p.polname='campaign_links_executor' AND p.polcmd='*'
+            AND cardinality(p.polroles)=1
+            AND EXISTS(SELECT 1 FROM pg_roles r WHERE r.oid=p.polroles[1]
+                AND r.rolname IN ('flare_owner','flare_job_executor'))
+            AND pg_get_expr(p.polqual,p.polrelid)='true'
+            AND pg_get_expr(p.polwithcheck,p.polrelid)='true')""").fetchone()
+    if policies != (True,):
+        return False
+    signatures = [
+        "public.guard_campaign_link_limit()",
+        "public.campaign_link_resolve(text)",
+        "public.campaign_link_count(text)",
+    ]
+    functions = connection.execute("""SELECT count(*)=%s AND bool_and(
+        p.prosecdef
+        AND p.proconfig @> ARRAY['search_path=pg_catalog, public, pg_temp']
+        AND r.rolname IN ('flare_owner','flare_job_executor')
+        AND NOT r.rolsuper AND NOT r.rolbypassrls
+        AND NOT r.rolcreatedb AND NOT r.rolcreaterole
+        AND (r.rolname='flare_owner' OR (NOT r.rolcanlogin AND NOT r.rolinherit))
+        AND NOT EXISTS(SELECT 1 FROM pg_auth_members WHERE member=r.oid)
+        AND NOT has_function_privilege('public',p.oid,'EXECUTE')
+        AND NOT has_function_privilege('flare_worker',p.oid,'EXECUTE'))
+        FROM pg_proc p JOIN pg_roles r ON r.oid=p.proowner
+        WHERE p.oid=ANY(%s::regprocedure[])""", (len(signatures), signatures)).fetchone()
+    if functions != (True,):
+        return False
+    grants = connection.execute("""SELECT
+        NOT has_function_privilege('flare_app','public.guard_campaign_link_limit()','EXECUTE')
+        AND has_function_privilege('flare_app','public.campaign_link_resolve(text)','EXECUTE')
+        AND has_function_privilege('flare_app','public.campaign_link_count(text)','EXECUTE')
+        AND EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='public.campaign_links'::regclass
+            AND tgname='campaign_link_limit_guard' AND NOT tgisinternal)""").fetchone()
+    return grants == (True,)
 
 
 def _import_staging_is_safe(connection: Connection) -> bool:

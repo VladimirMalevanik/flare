@@ -73,10 +73,17 @@ const nextConfig: NextConfig = {
     }];
   },
   async rewrites() {
-    return [{
-      source: "/api/:path*",
-      destination: `${process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8000"}/:path*`,
-    }];
+    const api = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8000";
+    return [
+      {
+        source: "/r/:slug",
+        destination: `${api}/campaign-links/r/:slug`,
+      },
+      {
+        source: "/api/:path*",
+        destination: `${api}/:path*`,
+      },
+    ];
   },
 };
 

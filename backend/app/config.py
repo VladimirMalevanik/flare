@@ -98,9 +98,15 @@ class Settings:
             raise RuntimeError("EMAIL_VERIFICATION_TTL_SECONDS must be positive")
         if self.email_verification_resend_seconds <= 0:
             raise RuntimeError("EMAIL_VERIFICATION_RESEND_SECONDS must be positive")
-        if self.email_verification_required or self.team_enabled:
-            if not self.app_public_url:
-                raise RuntimeError("Email verification requires APP_PUBLIC_URL")
+        requires_public_url = (
+            self.environment == "production"
+            or self.email_verification_required
+            or self.team_enabled
+        )
+        if requires_public_url and not self.app_public_url:
+            raise RuntimeError("Production and email features require APP_PUBLIC_URL")
+        public_url = None
+        if self.app_public_url:
             public_url = urlsplit(self.app_public_url)
             if (
                 public_url.scheme not in {"http", "https"}
@@ -112,6 +118,8 @@ class Settings:
                 or public_url.password
             ):
                 raise RuntimeError("APP_PUBLIC_URL must be an HTTP(S) origin")
+        if self.email_verification_required or self.team_enabled:
+            assert public_url is not None
             if self.secure_cookies:
                 if (
                     public_url.scheme != "https"
@@ -125,6 +133,8 @@ class Settings:
                 raise RuntimeError(
                     "Development email verification requires a localhost APP_PUBLIC_URL"
                 )
+        elif self.secure_cookies and public_url is not None and public_url.scheme != "https":
+            raise RuntimeError("Production APP_PUBLIC_URL must use HTTPS")
 
     def require_dev_identity(self) -> tuple[UUID, str, str]:
         """Return the server-owned development identity or fail closed."""

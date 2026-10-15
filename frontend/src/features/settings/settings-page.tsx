@@ -16,6 +16,7 @@ import { useI18n } from "@/i18n/provider";
 import { AnalyticsPreferences } from "@/features/telemetry/analytics-preferences";
 import { AcquisitionPreferences } from "@/features/acquisition/preferences";
 import { DeveloperMail } from "./developer-mail";
+import { CampaignLinks } from "./campaign-links";
 import { projectApiUrl, projectHref } from "@/lib/team-context";
 import {
   dataErrorMessage,
@@ -224,6 +225,7 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
       </SettingsSection>
       {subscription}
       <DeveloperMail />
+      <CampaignLinks />
       <SettingsSection
         title={t("Appearance & Theme")}
         subtitle={t("Customize how Flare looks on your display.")}

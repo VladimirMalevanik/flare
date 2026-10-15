@@ -22,7 +22,9 @@ class TeamBodyLimit:
     """Buffer only bounded Team JSON before FastAPI parses it, including chunked bodies."""
     def __init__(self, app): self.app = app
     async def __call__(self, scope, receive, send):
-        if scope['type']!='http' or not scope.get('path','').startswith('/team/') or scope.get('method') not in {'POST','PUT','PATCH'}:
+        path = scope.get('path','')
+        bounded = path.startswith('/team/') or path == '/campaign-links' or path.startswith('/campaign-links/')
+        if scope['type']!='http' or not bounded or scope.get('method') not in {'POST','PUT','PATCH'}:
             return await self.app(scope,receive,send)
         maximum = 65536
         body = bytearray()

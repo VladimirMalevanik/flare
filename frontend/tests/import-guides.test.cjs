@@ -33,6 +33,7 @@ function harness(relative, locale, project = null) {
   vm.runInNewContext(code, { exports, require(name) {
     if (name === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: 'fragment' };
     if (name === './developer-mail') return { DeveloperMail: () => null };
+    if (name === './campaign-links') return { CampaignLinks: () => null };
     if (name === 'next/link') return { default: 'a' };
     if (name === '@/i18n/provider') return i18nMock(locale);
     if (name === 'react') return {
