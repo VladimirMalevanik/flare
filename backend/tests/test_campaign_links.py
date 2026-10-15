@@ -2,7 +2,9 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+import importlib.util
 import os
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
@@ -40,6 +42,42 @@ PAYLOAD = {
     "utmCampaign": " Launch-2026.10 ",
     "utmContent": " Founder_One ",
 }
+
+
+def _campaign_migration():
+    path = Path(__file__).resolve().parents[1] / "migrations/versions/0025_campaign_links.py"
+    spec = importlib.util.spec_from_file_location("campaign_links_migration", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_self_managed_migration_temporarily_grants_executor_schema_create(monkeypatch):
+    migration = _campaign_migration()
+    statements = []
+    monkeypatch.setenv("FLARE_DATABASE_PROVIDER", "self-managed")
+    monkeypatch.setattr(migration.op, "execute", lambda statement: statements.append(str(statement)))
+
+    migration.upgrade()
+
+    assert statements[0] == "GRANT CREATE ON SCHEMA public TO flare_job_executor"
+    assert "ALTER FUNCTION public.guard_campaign_link_limit() OWNER TO flare_job_executor" in statements[1]
+    assert statements[-1] == "REVOKE CREATE ON SCHEMA public FROM flare_job_executor"
+
+
+def test_managed_migration_keeps_schema_grants_unchanged(monkeypatch):
+    migration = _campaign_migration()
+    statements = []
+    monkeypatch.setenv("FLARE_DATABASE_PROVIDER", "yandex")
+    monkeypatch.setattr(migration.op, "execute", lambda statement: statements.append(str(statement)))
+
+    migration.upgrade()
+
+    assert len(statements) == 1
+    assert "OWNER TO flare_owner" in statements[0]
+    assert "GRANT CREATE ON SCHEMA" not in statements[0]
+    assert "REVOKE CREATE ON SCHEMA" not in statements[0]
 
 
 @pytest.mark.parametrize("value", ["", " ", "bad value", "bad/path", "%61", "é", "a" * 81, None, 1])
