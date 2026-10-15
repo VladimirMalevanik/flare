@@ -12,7 +12,13 @@ depends_on = None
 
 
 def upgrade() -> None:
-    owner = "flare_owner" if os.getenv("FLARE_DATABASE_PROVIDER") == "yandex" else "flare_job_executor"
+    managed = os.getenv("FLARE_DATABASE_PROVIDER") == "yandex"
+    owner = "flare_owner" if managed else "flare_job_executor"
+    # PostgreSQL requires a function's new owner to have CREATE on its schema.
+    # The restricted executor must not keep that capability after ownership is
+    # transferred, so grant it only inside this migration transaction.
+    if not managed:
+        op.execute(f"GRANT CREATE ON SCHEMA public TO {owner}")
     op.execute(
         f"""
         CREATE TABLE public.campaign_links (
@@ -141,6 +147,8 @@ def upgrade() -> None:
         ALTER FUNCTION public.campaign_link_count(text) SET lock_timeout='100ms';
         """
     )
+    if not managed:
+        op.execute(f"REVOKE CREATE ON SCHEMA public FROM {owner}")
 
 
 def downgrade() -> None:
