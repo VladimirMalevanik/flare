@@ -7,6 +7,7 @@ import { Select } from "@/components/select";
 import { useI18n } from "@/i18n/provider";
 import {
   archiveCampaignLink,
+  campaignLinksCapability,
   CampaignLinkError,
   CampaignLinkDraftError,
   createCampaignLink,
@@ -112,7 +113,26 @@ export function visibleCampaignLinks(values: CampaignLink[]): CampaignLink[] {
 
 export function CampaignLinks() {
   const session = useSession();
-  return session?.workspace.role === "owner" ? <CampaignLinksPanel /> : null;
+  const userId = session?.user.id;
+  const workspaceId = session?.workspace.id;
+  const role = session?.workspace.role;
+  if (!userId || !workspaceId || role !== "owner") return null;
+  const capabilityKey = `${userId}\n${workspaceId}`;
+  return <CampaignLinksAccess key={capabilityKey} capabilityKey={capabilityKey} />;
+}
+
+export function CampaignLinksAccess({ capabilityKey }: { capabilityKey: string }) {
+  const [allowed, setAllowed] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void campaignLinksCapability(controller.signal)
+      .then(value => { if (!controller.signal.aborted) setAllowed(value); })
+      .catch(() => { if (!controller.signal.aborted) setAllowed(false); });
+    return () => controller.abort();
+  }, [capabilityKey]);
+
+  return allowed ? <CampaignLinksPanel /> : null;
 }
 
 export function CampaignLinksPanel() {

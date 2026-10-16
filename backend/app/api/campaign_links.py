@@ -28,6 +28,7 @@ from app.services.campaign_links import (
     destination_url,
     public_origin,
 )
+from app.services.developer_mail import can_send as has_internal_account_grant
 
 
 router = APIRouter(prefix="/campaign-links", tags=["campaign-links"])
@@ -69,13 +70,27 @@ class CampaignLinkResponse(BaseModel):
     archived_at: datetime | None = Field(alias="archivedAt")
 
 
+def _can_manage(request: Request, user: AuthenticatedUser) -> bool:
+    settings = request.app.state.settings
+    # Local development identities have no mailbox. Keep the fixture/demo path
+    # usable outside production while the deployed service fails closed unless
+    # the exact verified account ID and email are privately granted.
+    internal = (
+        settings.dev_mode and settings.environment in {"development", "test"}
+        and settings.dev_user_id == user.user_id
+        and settings.dev_workspace_id == user.workspace_id
+    ) or has_internal_account_grant(user, settings.developer_mail_accounts)
+    return user.role == "owner" and internal
+
+
 def _owner(
+    request: Request,
     user: Annotated[AuthenticatedUser, Depends(verified_user)],
 ) -> AuthenticatedUser:
-    if user.role != "owner":
+    if not _can_manage(request, user):
         raise HTTPException(
             403,
-            {"code": "campaign_links_owner_required", "message": "Only the project owner can manage campaign links."},
+            {"code": "campaign_links_forbidden", "message": "Campaign links are unavailable for this account."},
         )
     return user
 
@@ -95,7 +110,7 @@ def _error(error: Exception) -> None:
     if isinstance(error, InvalidCampaignLink):
         raise HTTPException(422, {"code": str(error), "message": "Check the campaign link fields."}) from None
     if isinstance(error, (MembershipRequiredError, WritePermissionRequiredError, psycopg.errors.InsufficientPrivilege)):
-        raise HTTPException(403, {"code": "campaign_links_owner_required", "message": "Only the project owner can manage campaign links."}) from None
+        raise HTTPException(403, {"code": "campaign_links_forbidden", "message": "Campaign links are unavailable for this account."}) from None
     if isinstance(error, psycopg.Error):
         raise HTTPException(503, {"code": "campaign_links_unavailable", "message": "Campaign links are temporarily unavailable."}) from None
     raise error
@@ -170,6 +185,16 @@ def list_campaign_links(
         return [_response(record, origin) for record in links.list()]
     except Exception as error:
         _error(error)
+
+
+@router.get("/capability")
+def campaign_links_capability(
+    request: Request,
+    response: Response,
+    user: Annotated[AuthenticatedUser, Depends(verified_user)],
+) -> dict[str, bool]:
+    response.headers["Cache-Control"] = "no-store"
+    return {"allowed": _can_manage(request, user)}
 
 
 @router.post("", response_model=CampaignLinkResponse, status_code=201)

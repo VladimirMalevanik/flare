@@ -122,6 +122,14 @@ async function request(path: string, options: RequestInit = {}): Promise<unknown
   return response.status === 204 ? null : await response.json();
 }
 
+export async function campaignLinksCapability(signal?: AbortSignal): Promise<boolean> {
+  const value = record(await request("/capability", { signal }));
+  if (typeof value.allowed !== "boolean") {
+    throw new CampaignLinkError("The server returned an invalid campaign link capability.");
+  }
+  return value.allowed;
+}
+
 export async function listCampaignLinks(signal?: AbortSignal): Promise<CampaignLink[]> {
   const value = await request("", { signal });
   const rows = Array.isArray(value) ? value : record(value).links;
