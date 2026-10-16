@@ -88,9 +88,11 @@ test('Capture accepts bounded text files, keeps keyboard submission, and gates c
   assert.equal(requests.length, 0);
   assert.equal(messages.filter(x => x === file).length, 2);
   for (const modifier of ['metaKey', 'ctrlKey']) {
-    tree.find(n => n.type === 'textarea').props.onKeyDown({ [modifier]: true, key: 'Enter', preventDefault() {} });
+    const keyboard = capture('Keyboard note');
+    keyboard.tree.find(n => n.type === 'textarea').props.onKeyDown({ [modifier]: true, key: 'Enter', preventDefault() {} });
+    assert.equal(keyboard.requests.length, 1);
   }
-  assert.equal(requests.length, 2);
+  assert.equal(requests.length, 0);
   assert.equal(capture('   ').tree.find(n => n.props?.className === 'button primary').props.disabled, true);
 });
 test('Capture preserves a UTF-8 BOM so file size and uploaded bytes agree', () => {

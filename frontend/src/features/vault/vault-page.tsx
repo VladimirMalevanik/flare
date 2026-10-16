@@ -62,8 +62,22 @@ export function VaultPage() {
   const [editSourceUrl, setEditSourceUrl] = useState("");
   const [editError, setEditError] = useState("");
   const listRequest = useRef(0);
+  const saveLock = useRef(false);
   const closedLinkedItem = useRef<string | null>(null);
   const linkedItemId = params.get("item");
+  useEffect(() => {
+    const dirty = editing && selected && (
+      editTitle !== selected.title || editContent !== selected.content
+      || (selected.type === "url" && editSourceUrl !== (selected.sourceUrl ?? ""))
+    );
+    if (!saving && !dirty) return;
+    const guard = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [saving, editing, selected, editTitle, editContent, editSourceUrl]);
   useEffect(() => {
     if (confirmingDelete) cancelDeleteButton.current?.focus();
     else if (wasConfirmingDelete.current) deleteButton.current?.focus();
@@ -76,7 +90,10 @@ export function VaultPage() {
     const request = ++listRequest.current;
     let live = true;
     const timer = window.setTimeout(() => {
-      if (live && request === listRequest.current) setLoading(true);
+      if (live && request === listRequest.current) {
+        setLoading(true);
+        setLoadingMore(false);
+      }
       void dataProvider.listItems({
         query: query.trim() || undefined,
         type: itemType,
@@ -183,7 +200,8 @@ export function VaultPage() {
     setEditing(true);
   };
   const saveEdit = async () => {
-    if (!selected || saving || !editTitle.trim() || !editContent.trim()) return;
+    if (!selected || saving || saveLock.current || !editTitle.trim() || !editContent.trim()) return;
+    saveLock.current = true;
     setSaving(true);
     setEditError("");
     try {
@@ -213,6 +231,7 @@ export function VaultPage() {
     } catch (caught) {
       setEditError(dataErrorMessage(caught, "The item could not be updated."));
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   };

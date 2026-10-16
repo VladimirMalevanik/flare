@@ -1,0 +1,202 @@
+[
+  {
+    "name": "Mako",
+    "version": "1.4.3",
+    "vulns": []
+  },
+  {
+    "name": "MarkupSafe",
+    "version": "3.0.4",
+    "vulns": []
+  },
+  {
+    "name": "PyJWT",
+    "version": "2.15.1",
+    "vulns": []
+  },
+  {
+    "name": "SQLAlchemy",
+    "version": "2.1.4",
+    "vulns": []
+  },
+  {
+    "name": "alembic",
+    "version": "1.20.0",
+    "vulns": []
+  },
+  {
+    "name": "annotated-doc",
+    "version": "0.0.5",
+    "vulns": []
+  },
+  {
+    "name": "annotated-types",
+    "version": "0.8.0",
+    "vulns": []
+  },
+  {
+    "name": "anyio",
+    "version": "4.15.1",
+    "vulns": []
+  },
+  {
+    "name": "argon2-cffi",
+    "version": "25.1.0",
+    "vulns": []
+  },
+  {
+    "name": "argon2-cffi-bindings",
+    "version": "26.1.0",
+    "vulns": []
+  },
+  {
+    "name": "certifi",
+    "version": "2026.7.22",
+    "vulns": []
+  },
+  {
+    "name": "cffi",
+    "version": "2.1.1",
+    "vulns": []
+  },
+  {
+    "name": "click",
+    "version": "8.5.0",
+    "vulns": []
+  },
+  {
+    "name": "cryptography",
+    "version": "50.0.2",
+    "vulns": []
+  },
+  {
+    "name": "distro",
+    "version": "1.9.0",
+    "vulns": []
+  },
+  {
+    "name": "fastapi",
+    "version": "0.143.2",
+    "vulns": []
+  },
+  {
+    "name": "groq",
+    "version": "1.7.0",
+    "vulns": []
+  },
+  {
+    "name": "h11",
+    "version": "0.16.0",
+    "vulns": []
+  },
+  {
+    "name": "httpcore",
+    "version": "1.0.9",
+    "vulns": []
+  },
+  {
+    "name": "httpx",
+    "version": "0.28.1",
+    "vulns": []
+  },
+  {
+    "name": "idna",
+    "version": "3.20",
+    "vulns": []
+  },
+  {
+    "name": "iniconfig",
+    "version": "2.3.1",
+    "vulns": []
+  },
+  {
+    "name": "opentelemetry-api",
+    "version": "1.45.1",
+    "vulns": []
+  },
+  {
+    "name": "packaging",
+    "version": "26.3",
+    "vulns": []
+  },
+  {
+    "name": "pluggy",
+    "version": "1.7.0",
+    "vulns": []
+  },
+  {
+    "name": "psycopg",
+    "version": "3.3.6",
+    "vulns": []
+  },
+  {
+    "name": "psycopg-binary",
+    "version": "3.3.6",
+    "vulns": []
+  },
+  {
+    "name": "psycopg-pool",
+    "version": "3.3.3",
+    "vulns": []
+  },
+  {
+    "name": "pwdlib",
+    "version": "0.3.1",
+    "vulns": []
+  },
+  {
+    "name": "pycparser",
+    "version": "3.11",
+    "vulns": []
+  },
+  {
+    "name": "pydantic",
+    "version": "2.14.1",
+    "vulns": []
+  },
+  {
+    "name": "pydantic-core",
+    "version": "2.50.1",
+    "vulns": []
+  },
+  {
+    "name": "pygments",
+    "version": "2.21.0",
+    "vulns": []
+  },
+  {
+    "name": "pytest",
+    "version": "9.1.1",
+    "vulns": []
+  },
+  {
+    "name": "python-dotenv",
+    "version": "1.2.4",
+    "vulns": []
+  },
+  {
+    "name": "sniffio",
+    "version": "1.3.1",
+    "vulns": []
+  },
+  {
+    "name": "starlette",
+    "version": "1.8.0",
+    "vulns": []
+  },
+  {
+    "name": "typing-extensions",
+    "version": "4.16.0",
+    "vulns": []
+  },
+  {
+    "name": "typing-inspection",
+    "version": "0.4.4",
+    "vulns": []
+  },
+  {
+    "name": "uvicorn",
+    "version": "0.54.0",
+    "vulns": []
+  }
+]

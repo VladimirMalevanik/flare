@@ -60,7 +60,9 @@ export function AuthForm({ register = false }: { register?: boolean }) {
             : "verificationRequired",
         );
       } else {
-        setError(caught instanceof AuthRequestError && caught.code === "invalid_credentials"
+        setError(caught instanceof AuthRequestError && caught.code === "request_outcome_unknown"
+          ? "authUnconfirmed"
+          : caught instanceof AuthRequestError && caught.code === "invalid_credentials"
           ? "errorCredentials"
           : caught instanceof AuthRequestError && caught.code === "registration_unavailable"
             ? "registrationUnavailable"

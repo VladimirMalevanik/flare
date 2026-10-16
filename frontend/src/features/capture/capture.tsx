@@ -75,6 +75,7 @@ export function Capture() {
   const [hovered, setHovered] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const saveLock = useRef(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
   const [panelClosing, setPanelClosing] = useState(false);
@@ -95,6 +96,16 @@ export function Capture() {
   const ritualActive = funnyMode && ["armed", "shaken", "thinking"].includes(funnyRitual.phase);
   const shakeTracker = useRef<ShakeTracker | null>(null);
   const [shakeOffset, setShakeOffset] = useState(0);
+
+  useEffect(() => {
+    if (!busy && !draft.trim() && !file && !voice.recording && !voiceIsland) return;
+    const guard = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [busy, draft, file, voice.recording, voiceIsland]);
 
   useEffect(() => {
     setFunnyAudioPaused(voiceIsland);
@@ -172,7 +183,7 @@ export function Capture() {
   }, [captureOpen, voiceIsland, captureOrbSize]);
 
   const close = useCallback(() => {
-    if (busy || panelClosing) return;
+    if (busy || saveLock.current || panelClosing) return;
     setDragging(false);
     setHovered(false);
     setPanelClosing(true);
@@ -193,7 +204,7 @@ export function Capture() {
   }, [captureOpen]);
 
   const attach = (next: File | undefined) => {
-    if (!next || voiceIsland || voice.recording || busy) return;
+    if (!next || voiceIsland || voice.recording || busy || saveLock.current) return;
     const format = importFormatForFile(next);
     if (!format) {
       setError("Flare can import CSV, TXT, and Markdown files.");
@@ -314,7 +325,8 @@ export function Capture() {
   };
 
   const submit = async () => {
-    if (busy || voice.recording || voiceIsland || (!draft.trim() && !file)) return;
+    if (busy || saveLock.current || voice.recording || voiceIsland || (!draft.trim() && !file)) return;
+    saveLock.current = true;
     setBusy(true);
     setError("");
     try {
@@ -363,12 +375,14 @@ export function Capture() {
     } catch (caught) {
       setError(caught instanceof CaptureInputError ? caught.message : dataErrorMessage(caught, "Capture failed. Try again."));
     } finally {
+      saveLock.current = false;
       setBusy(false);
     }
   };
 
   const submitVoice = async () => {
-    if (busy || voice.state !== "ready" || !voice.recording) return;
+    if (busy || saveLock.current || voice.state !== "ready" || !voice.recording) return;
+    saveLock.current = true;
     setBusy(true);
     setError("");
     try {
@@ -388,6 +402,7 @@ export function Capture() {
     } catch (caught) {
       setError(dataErrorMessage(caught, "Voice transcription failed. Try again."));
     } finally {
+      saveLock.current = false;
       setBusy(false);
     }
   };

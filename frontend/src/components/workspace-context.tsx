@@ -71,6 +71,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [revision, setRevision] = useState(0);
   const [notice, setNotice] = useState("");
   const [profile, setProfile] = useState<Profile>(defaultProfile);
+  const refresh = useCallback(() => setRevision((n) => n + 1), []);
   useEffect(() => {
     const media = matchMedia("(prefers-color-scheme: dark)");
     const sync = () => {
@@ -221,7 +222,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         draft,
         setDraft,
         revision,
-        refresh: () => setRevision((n) => n + 1),
+        refresh,
         notice,
       }}
     >

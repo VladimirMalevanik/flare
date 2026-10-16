@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 from app.models.tables import ItemRecord
 
@@ -31,6 +31,17 @@ FileType = Annotated[
 ]
 
 
+def _database_text(value: str | None) -> str | None:
+    if value is not None:
+        if "\x00" in value:
+            raise ValueError("Text must not contain NUL characters")
+        try:
+            value.encode("utf-8")
+        except UnicodeError:
+            raise ValueError("Text must be valid UTF-8") from None
+    return value
+
+
 class HealthResponse(BaseModel):
     status: str
 
@@ -45,6 +56,11 @@ class CreateItemRequest(BaseModel):
     file_name: FileName | None = Field(default=None, serialization_alias="fileName", validation_alias="fileName")
     file_size: int | None = Field(default=None, ge=0, serialization_alias="fileSize", validation_alias="fileSize")
     file_type: FileType | None = Field(default=None, serialization_alias="fileType", validation_alias="fileType")
+
+    @field_validator("title", "content", "source_url", "file_name", "file_type")
+    @classmethod
+    def database_text(cls, value: str | None) -> str | None:
+        return _database_text(value)
 
     def effective_content(self) -> str:
         if self.content is not None:
@@ -91,6 +107,11 @@ class UpdateItemRequest(BaseModel):
         serialization_alias="fileType",
         validation_alias="fileType",
     )
+
+    @field_validator("title", "content", "source_url", "file_name", "file_type")
+    @classmethod
+    def database_text(cls, value: str | None) -> str | None:
+        return _database_text(value)
 
     def changes(self) -> dict[str, Any]:
         fields = self.model_fields_set - {"expected_current_version_id"}
