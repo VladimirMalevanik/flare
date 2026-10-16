@@ -64,6 +64,7 @@ export interface FlareDataProvider {
   disconnectGitHub(): Promise<void>;
   listItems(options?: ListItemOptions): Promise<Item[]>;
   getItem(id: string): Promise<Item | null>;
+  getItemVersion(id: string, versionId: string): Promise<import('./types').ItemVersion | null>;
   createItem(input: CreateItemInput): Promise<Item>;
   updateItem(id: string, input: UpdateItemInput): Promise<Item>;
   importTextFile(input: ImportTextFileInput): Promise<ImportResult>;

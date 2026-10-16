@@ -1,6 +1,12 @@
 import { uiEn } from "./ui-en";
 
 export const en = {
+  'Original source version': 'Original source version',
+  'Open current version': 'Open current version',
+  sourceVersionNumber: 'Source version {version}',
+  sourceVersionSavedAt: 'Version {version} · Saved {date}',
+  sourceVersionNotice: 'This is the saved version used for this Flare. You can view the latest note separately.',
+  'This source is unavailable. It may have been removed or your access has changed.': 'This source is unavailable. It may have been removed or your access has changed.',
   ...uiEn,
   language: "Language",
   languageDescription: "Choose the language used by Flare.",

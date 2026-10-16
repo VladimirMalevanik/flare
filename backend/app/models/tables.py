@@ -25,6 +25,13 @@ class ItemRecord:
     updated_at: datetime
 
 
+@dataclass(frozen=True)
+class ItemVersionRecord:
+    item: ItemRecord
+    saved_at: datetime
+    is_current: bool
+
+
 class ItemRepository:
     """Keep SQL and schema-specific mappings outside HTTP and service layers."""
 
@@ -198,6 +205,10 @@ class ItemRepository:
 
     def get_version(self, item_id: UUID, version_id: UUID) -> ItemRecord | None:
         """Read one exact published version while preserving soft-delete hiding."""
+        snapshot = self.get_version_snapshot(item_id, version_id)
+        return snapshot.item if snapshot else None
+
+    def get_version_snapshot(self, item_id: UUID, version_id: UUID) -> ItemVersionRecord | None:
         row = self._connection.execute(
             """
             SELECT d.id,
@@ -209,6 +220,8 @@ class ItemRepository:
                    v.parser_version,
                    v.id AS current_version_id,
                    v.version_number,
+                   v.created_at AS version_created_at,
+                   d.current_version_id = v.id AS is_current,
                    d.created_at,
                    CASE
                        WHEN d.current_version_id = v.id THEN d.updated_at
@@ -230,7 +243,10 @@ class ItemRepository:
             """,
             (item_id, version_id),
         ).fetchone()
-        return self._to_record(row) if row else None
+        if row is None:
+            return None
+        saved_at, is_current = row.pop('version_created_at'), row.pop('is_current')
+        return ItemVersionRecord(self._to_record(row), saved_at, is_current)
 
     def list_active(
         self,

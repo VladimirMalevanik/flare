@@ -2,6 +2,12 @@ import type { TranslationKey } from "./en";
 import { uiEs } from "./ui-es";
 
 export const es = {
+  'Original source version': 'Versión original de la fuente',
+  'Open current version': 'Abrir la versión actual',
+  sourceVersionNumber: 'Versión de la fuente {version}',
+  sourceVersionSavedAt: 'Versión {version} · Guardada el {date}',
+  sourceVersionNotice: 'Esta es la versión guardada que se usó para este Flare. Puedes consultar la nota actual por separado.',
+  'This source is unavailable. It may have been removed or your access has changed.': 'Esta fuente no está disponible. Puede haberse eliminado o tu acceso puede haber cambiado.',
   ...uiEs,
   language: "Idioma",
   languageDescription: "Elige el idioma de Flare.",

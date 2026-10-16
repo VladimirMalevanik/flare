@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import {
   dataProvider,
   type Insight,
+  type Evidence,
   type AnalysisSchedule,
   type DailyAnalysisStatus,
   type AnalysisRun,
@@ -21,6 +22,11 @@ const plural: Record<FlareType, string> = {
   Reminder: "Reminders", Warning: "Warnings", Recommendation: "Recommendations",
 };
 const flareTypeFor = (insight: Insight): FlareType => insight.type;
+
+export function evidenceSourceHref(evidence: Evidence) {
+  const version = evidence.documentVersionId ? `&version=${encodeURIComponent(evidence.documentVersionId)}` : '';
+  return projectHref(`/vault?item=${encodeURIComponent(evidence.itemId)}${version}`);
+}
 
 export function ScheduledAnalysisStatus() {
   const { t, locale } = useI18n();
@@ -395,11 +401,12 @@ export function InsightsPage() {
             {active.evidence.map((e, i) => (
               <article className="quote-card" key={`${e.itemId}-${i}`}>
                 <div className="quote-meta">
-                  <Link onClick={() => { void dataProvider.trackEvent({ eventType: "voluntary_inspection", interactionId: crypto.randomUUID(), flareId: active.id, sourceId: e.itemId }); }} href={projectHref(`/vault?item=${encodeURIComponent(e.itemId)}`)}>{e.sourceTitle}</Link>
+                  <Link onClick={() => { void dataProvider.trackEvent({ eventType: "voluntary_inspection", interactionId: crypto.randomUUID(), flareId: active.id, sourceId: e.itemId }); }} href={evidenceSourceHref(e)}>{e.sourceTitle}</Link>
                   <span className="muted">{label(e.sourceType)}</span>
                 </div>
                 <blockquote>“{e.excerpt}”</blockquote>
-                <Link onClick={() => { void dataProvider.trackEvent({ eventType: "voluntary_inspection", interactionId: crypto.randomUUID(), flareId: active.id, sourceId: e.itemId }); }} className="text-button" href={projectHref(`/vault?item=${encodeURIComponent(e.itemId)}`)}>
+                {e.versionNumber !== undefined && <p className="muted meta">{t('sourceVersionNumber', { version: e.versionNumber })}</p>}
+                <Link onClick={() => { void dataProvider.trackEvent({ eventType: "voluntary_inspection", interactionId: crypto.randomUUID(), flareId: active.id, sourceId: e.itemId }); }} className="text-button" href={evidenceSourceHref(e)}>
                   {t("Open source")}{" "}<Icon name="arrow" />
                 </Link>
               </article>

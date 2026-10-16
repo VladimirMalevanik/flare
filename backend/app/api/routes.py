@@ -7,7 +7,7 @@ from uuid import UUID
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
-from app.api.schemas import CreateItemRequest, HealthResponse, ItemResponse, UpdateItemRequest
+from app.api.schemas import CreateItemRequest, HealthResponse, ItemResponse, ItemVersionResponse, UpdateItemRequest
 from app.api.auth import verified_user
 from app.services.auth_service import AuthenticatedUser
 from app.models.database import (
@@ -177,6 +177,18 @@ def list_items(
         )
         return [ItemResponse.from_record(record) for record in records]
     except MembershipRequiredError as error:
+        _raise_http_error(error)
+
+
+@router.get('/items/{item_id}/versions/{version_id}', response_model=ItemVersionResponse,
+            response_model_by_alias=True, response_model_exclude_none=True, tags=['items'])
+def get_item_version(item_id: UUID, version_id: UUID,
+                     service: Annotated[ItemService, Depends(_item_service)]) -> ItemVersionResponse:
+    try:
+        snapshot = service.get_item_version(item_id, version_id)
+        return ItemVersionResponse(item=ItemResponse.from_record(snapshot.item),
+                                   saved_at=snapshot.saved_at, is_current=snapshot.is_current)
+    except (ItemNotFoundError, MembershipRequiredError) as error:
         _raise_http_error(error)
 
 
