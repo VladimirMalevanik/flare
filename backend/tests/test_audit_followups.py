@@ -148,7 +148,7 @@ def test_two_repairs_of_the_same_plan_publish_only_one_new_version(api_environme
     from concurrent.futures import ThreadPoolExecutor
     from app.services.note_repair import NoteRepair
     with api_environment.client() as client:
-        old = legacy_note(client, monkeypatch, 'Release decision.\n'*1000)
+        old = legacy_note(client, monkeypatch, 'Release decision.\n'*3000)
         service = NoteRepair(client.app.state.database, identity_for(api_environment))
         plan = service.plan(limit=1)
         with ThreadPoolExecutor(max_workers=2) as pool:
@@ -167,7 +167,7 @@ def test_repair_cli_is_dry_run_by_default_and_explicit_apply_is_repeatable(api_e
     cli=importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cli)
     with api_environment.client() as client:
-        old=legacy_note(client,monkeypatch,'A private release decision.\n'*1000)
+        old=legacy_note(client,monkeypatch,'A private release decision.\n'*2000)
         identity=identity_for(api_environment)
         argv=['--workspace',str(identity.workspace_id),'--user',identity.user_id,'--limit','1']
         monkeypatch.delenv('NOTE_REPAIR_DATABASE_URL',raising=False)
@@ -184,3 +184,32 @@ def test_repair_cli_is_dry_run_by_default_and_explicit_apply_is_repeatable(api_e
         assert json.loads(capsys.readouterr().out)['repaired']==1
         assert cli.main(argv)==0
         assert json.loads(capsys.readouterr().out)['planned']==0
+
+
+def test_eligible_legacy_notes_are_not_reversioned(api_environment, monkeypatch):
+    from app.services.note_repair import NoteRepair
+    from app.config import AISettings
+    from app.ai_engine.analysis import Evidence
+    from app.ai_engine.text_analysis_prompts import build_bounded_request
+    with api_environment.client() as client:
+        old=legacy_note(client,monkeypatch,'A clear release decision. '*300)
+        build_bounded_request((Evidence(source_id=str(uuid4()),content=old['content']),),AISettings())
+        service=NoteRepair(client.app.state.database,identity_for(api_environment))
+        assert service.plan(limit=1)==[]
+        assert client.get('/items/'+old['id']).json()['currentVersionId']==old['currentVersionId']
+
+
+def test_repair_uses_the_complete_serialized_budget_not_only_raw_bytes(api_environment, monkeypatch):
+    from app.services.note_repair import NoteRepair
+    from app.config import AISettings
+    from app.ai_engine.analysis import Evidence
+    from app.ai_engine.text_analysis_prompts import build_bounded_request
+    with api_environment.client() as client:
+        old=legacy_note(client,monkeypatch,'"\\\n'*5000)
+        assert len(old['content'].encode('utf-8'))<AISettings().max_input_bytes
+        with pytest.raises(ValueError):
+            build_bounded_request((Evidence(source_id=str(uuid4()),content=old['content']),),AISettings())
+        service=NoteRepair(client.app.state.database,identity_for(api_environment))
+        plan=service.plan(limit=1)
+        assert len(plan)==1 and plan[0]['itemId']==old['id']
+        assert service.apply(plan)=={'repaired':1,'skipped':0}

@@ -1,11 +1,15 @@
 """Explicit owner maintenance of old manual notes. Never rewrites published evidence."""
 from hashlib import sha256
+import json
 import time
 from uuid import UUID, uuid4
 
 from app.models.database import Database, WorkspaceIdentity, WritePermissionRequiredError
 from app.models.tables import ItemRepository
 from app.services.import_service import IMPORT_CHUNK_TARGET_BYTES, _split_exact
+from app.ai_engine.analysis import Evidence
+from app.ai_engine.text_analysis_prompts import build_bounded_request, request_size_bytes
+from app.config import AISettings
 
 MAX_NOTE_BYTES = 800_000  # Existing HTTP contract: at most200000 Unicode characters.
 
@@ -15,8 +19,20 @@ class NoteRepairError(Exception):
 
 
 class NoteRepair:
-    def __init__(self, database: Database, identity: WorkspaceIdentity):
+    def __init__(self, database: Database, identity: WorkspaceIdentity, ai: AISettings | None = None):
         self.database, self.identity = database, identity
+        self.ai = ai or AISettings()
+        # Real selection counts the full request, with content JSON-encoded
+        # inside the user message and again inside the request. UUIDs have the
+        # same serialized width. Match that exact existing bound without AI.
+        sample = Evidence(source_id=str(UUID(int=0)), content='x')
+        encoded = json.dumps(json.dumps('x', ensure_ascii=False), ensure_ascii=False)
+        self.overhead = request_size_bytes(build_bounded_request((sample,), self.ai)) - len(encoded.encode('utf-8'))
+        build_bounded_request((Evidence(source_id=sample.source_id, content='x'*IMPORT_CHUNK_TARGET_BYTES),), self.ai)
+
+    def _ineligible(self, bounds):
+        return (bounds['maximum'] > self.ai.max_input_bytes
+                or bounds['encoded'] + self.overhead > self.ai.max_input_bytes)
 
     def _owner(self, connection):
         row = connection.execute('SELECT role FROM public.workspace_members WHERE workspace_id=%s AND user_id=%s',
@@ -35,13 +51,16 @@ class NoteRepair:
                 FROM public.documents d JOIN public.document_versions v
                   ON(v.workspace_id,v.document_id,v.id)=(d.workspace_id,d.id,d.current_version_id)
                 JOIN LATERAL (SELECT max(octet_length(content)) AS maximum,
-                    sum(octet_length(content)) AS bytes,count(*) AS count FROM public.chunks
+                    sum(octet_length(content)) AS bytes,count(*) AS count,
+                    max(octet_length(to_json(to_json(content)::text)::text)) AS encoded FROM public.chunks
                     WHERE workspace_id=d.workspace_id AND document_version_id=v.id) bounds ON true
                 WHERE d.workspace_id=%s AND d.deleted_at IS NULL AND d.source_type='note'
                   AND v.state='ready' AND v.parser_version='manual-note-v1'
                   AND bounds.maximum>%s AND bounds.bytes<=%s
+                  AND (bounds.maximum>%s OR bounds.encoded+%s>%s)
                 ORDER BY d.id LIMIT %s''', (self.identity.workspace_id, IMPORT_CHUNK_TARGET_BYTES,
-                                           MAX_NOTE_BYTES, limit)).fetchall()
+                                           MAX_NOTE_BYTES, self.ai.max_input_bytes,self.overhead,
+                                           self.ai.max_input_bytes,limit)).fetchall()
             return [dict(itemId=str(row['id']),versionId=str(row['version_id']),
                          versionNumber=row['version_number'],contentBytes=row['bytes'],
                          maxChunkBytes=row['maximum'],chunkCount=row['count']) for row in rows]
@@ -65,12 +84,13 @@ class NoteRepair:
             if not row or row['current_version_id'] != expected or row['source_type'] != 'note':
                 return False
             bounds = connection.execute('''SELECT v.parser_version,v.state,
-                    max(octet_length(c.content)) AS maximum,sum(octet_length(c.content)) AS bytes
+                    max(octet_length(c.content)) AS maximum,sum(octet_length(c.content)) AS bytes,
+                    max(octet_length(to_json(to_json(c.content)::text)::text)) AS encoded
                 FROM public.document_versions v JOIN public.chunks c
                   ON(c.workspace_id,c.document_version_id)=(v.workspace_id,v.id)
                 WHERE v.id=%s AND v.document_id=%s GROUP BY v.id''', (expected,item_id)).fetchone()
             if not bounds or bounds['state']!='ready' or bounds['parser_version']!='manual-note-v1' or not (
-                    IMPORT_CHUNK_TARGET_BYTES < bounds['maximum'] <= bounds['bytes'] <= MAX_NOTE_BYTES):
+                    IMPORT_CHUNK_TARGET_BYTES < bounds['maximum'] <= bounds['bytes'] <= MAX_NOTE_BYTES) or not self._ineligible(bounds):
                 return False
             repository = ItemRepository(connection)
             current = repository.get_active(item_id)
@@ -82,7 +102,9 @@ class NoteRepair:
             for ordinal, content in enumerate(_split_exact(current.content, IMPORT_CHUNK_TARGET_BYTES)):
                 if time.monotonic()-started>30:
                     raise NoteRepairError('Repair deadline reached')
-                repository.insert_chunk(chunk_id=uuid4(),workspace_id=self.identity.workspace_id,
+                chunk_id=uuid4()
+                build_bounded_request((Evidence(source_id=str(chunk_id),content=content),),self.ai)
+                repository.insert_chunk(chunk_id=chunk_id,workspace_id=self.identity.workspace_id,
                     version_id=version_id,ordinal=ordinal,content=content,locator={'kind':'note'})
             repository.mark_version_ready(version_id)
             if not repository.replace_current(document_id=item_id,expected_version_id=expected,version_id=version_id,

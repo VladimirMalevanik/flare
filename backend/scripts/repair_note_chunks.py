@@ -14,6 +14,8 @@ def main(argv=None):
     parser.add_argument('--user',required=True,help='Existing workspace owner identity, never an email or password')
     parser.add_argument('--limit',type=int,default=25,choices=range(1,101),metavar='1..100')
     parser.add_argument('--apply',action='store_true')
+    parser.add_argument('--max-input-bytes',type=int,default=32000,
+                        help='Match deployed LLM_MAX_INPUT_BYTES; default32000')
     args=parser.parse_args(argv)
     # Only a connection explicitly supplied for this tool is used. No .env files
     # or ambient API/migration/worker connection fallback are read.
@@ -32,12 +34,13 @@ def main(argv=None):
         sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
         from app.models.database import Database, WorkspaceIdentity
         from app.services.note_repair import NoteRepair
+        from app.config import AISettings
         database=Database(dsn)
         database.open()
         if not database.is_ready():
             print(json.dumps({'error':'Use the initialized restricted flare_app runtime connection.'}))
             return 2
-        service=NoteRepair(database,WorkspaceIdentity(args.workspace,args.user))
+        service=NoteRepair(database,WorkspaceIdentity(args.workspace,args.user),AISettings(max_input_bytes=args.max_input_bytes))
         plan=service.plan(limit=args.limit)
         result=service.apply(plan) if args.apply else {'planned':len(plan),'items':plan}
         print(json.dumps({'mode':'apply' if args.apply else 'dry-run',**result}))
