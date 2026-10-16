@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 
 from app.models.database import Database, WorkspaceIdentity
 from app.models.import_batches import ImportBatchRepository
-from app.models.tables import ItemRecord, ItemRepository
+from app.models.tables import ItemRecord, ItemRepository, ItemVersionRecord
 from app.services.import_service import (
     IMPORT_CHUNK_TARGET_BYTES, ChunkSpec, ImportService, ImportValidationError, _split_exact,
 )
@@ -208,6 +208,13 @@ class ItemService:
             if item is None:
                 raise ItemNotFoundError
             return item
+
+    def get_item_version(self, item_id: UUID, version_id: UUID) -> ItemVersionRecord:
+        with self._database.workspace_transaction(self._identity) as connection:
+            snapshot = ItemRepository(connection).get_version_snapshot(item_id, version_id)
+            if snapshot is None:
+                raise ItemNotFoundError
+            return snapshot
 
     def update_item(
         self,

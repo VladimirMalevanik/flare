@@ -251,8 +251,15 @@ function mapFlare(value: unknown): Insight {
       const sourceType = stringField(e, "sourceType");
       if (!itemTypes.includes(sourceType as ItemType)) throw new FlareApiError("Invalid evidence type.");
       if (e.sourceUrl !== null && typeof e.sourceUrl !== "string") throw new FlareApiError("Invalid source URL.");
+      const version = e.documentVersionId === undefined ? {} : {
+        documentVersionId: stringField(e, 'documentVersionId'),
+        versionNumber: numberField(e, 'versionNumber'),
+        versionCreatedAt: stringField(e, 'versionCreatedAt'),
+      };
+      if ('versionNumber' in version && (!Number.isInteger(version.versionNumber) || version.versionNumber! < 1
+        || !Number.isFinite(Date.parse(version.versionCreatedAt!)))) throw new FlareApiError('Invalid evidence version.');
       return { itemId: stringField(e, "itemId"), sourceTitle: stringField(e, "sourceTitle"),
-        sourceType: sourceType as ItemType, excerpt: stringField(e, "excerpt"), sourceUrl: e.sourceUrl };
+        sourceType: sourceType as ItemType, excerpt: stringField(e, "excerpt"), sourceUrl: e.sourceUrl, ...version };
     }),
   };
 }
@@ -571,6 +578,20 @@ export class ApiDataProvider implements FlareDataProvider {
   async getItem(id: string): Promise<Item | null> {
     try {
       return mapItem(await this.request(`/items/${encodeURIComponent(id)}`));
+    } catch (error) {
+      if (error instanceof FlareApiError && error.status === 404) return null;
+      throw error;
+    }
+  }
+
+  async getItemVersion(id: string, versionId: string): Promise<import('./types').ItemVersion | null> {
+    try {
+      const body = asRecord(await this.request(`/items/${encodeURIComponent(id)}/versions/${encodeURIComponent(versionId)}`));
+      const savedAt = stringField(body, 'savedAt');
+      const item = mapItem(body.item);
+      if (typeof body.isCurrent !== 'boolean' || !Number.isFinite(Date.parse(savedAt))
+        || item.id !== id || item.currentVersionId !== versionId) throw new FlareApiError('Invalid source version.');
+      return { item, savedAt, isCurrent: body.isCurrent };
     } catch (error) {
       if (error instanceof FlareApiError && error.status === 404) return null;
       throw error;

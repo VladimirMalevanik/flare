@@ -109,6 +109,10 @@ export class ProductionCatalogProvider implements FlareDataProvider {
     return this.unavailable();
   }
 
+  async getItemVersion(_id: string, _versionId: string): Promise<import('./types').ItemVersion | null> {
+    return this.unavailable();
+  }
+
   async createItem(_input: CreateItemInput): Promise<Item> {
     return this.unavailable();
   }

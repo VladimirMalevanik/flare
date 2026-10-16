@@ -364,6 +364,11 @@ export class MockDataProvider implements FlareDataProvider {
   async getItem(id: string) {
     return (await this.listItems()).find((item) => item.id === id) ?? null;
   }
+  async getItemVersion(id: string, versionId: string): Promise<import('./types').ItemVersion | null> {
+    const item = await this.getItem(id);
+    // Local demo storage has no immutable history. Never manufacture an older source.
+    return item?.currentVersionId === versionId ? { item, savedAt: item.updatedAt, isCurrent: true } : null;
+  }
   async createItem(input: CreateItemInput): Promise<Item> {
     if (input.type === "audio") {
       throw new Error("Voice transcription requires the Flare API.");

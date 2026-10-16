@@ -1402,6 +1402,12 @@ blockquote {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.source-version-notice {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+}
+.source-version-notice p + p { margin-top: 8px; }
 .capture-sheet {
   width: 640px;
 }

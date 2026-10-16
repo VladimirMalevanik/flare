@@ -186,6 +186,13 @@ class ItemResponse(BaseModel):
         )
 
 
+class ItemVersionResponse(BaseModel):
+    """The item's published projection at the requested version, never an editor token for today."""
+    item: ItemResponse
+    saved_at: datetime = Field(serialization_alias='savedAt')
+    is_current: bool = Field(serialization_alias='isCurrent')
+
+
 class CreateImportRequest(BaseModel):
     """JSON text-upload contract for the deliberately bounded import v1."""
 

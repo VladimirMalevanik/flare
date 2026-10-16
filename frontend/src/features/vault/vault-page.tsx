@@ -9,6 +9,7 @@ import {
   dataErrorMessage,
   dataProvider,
   type Item,
+  type ItemVersion,
   type ItemType,
   type UpdateItemInput,
 } from "@/lib/data";
@@ -21,6 +22,7 @@ const PAGE_FETCH_SIZE = PAGE_SIZE + 1;
 export function withoutLinkedItem(pathname: string, query: string): string {
   const next = new URLSearchParams(query);
   next.delete("item");
+  next.delete("version");
   const queryString = next.toString();
   return queryString ? `${pathname}?${queryString}` : pathname;
 }
@@ -42,6 +44,8 @@ export function VaultPage() {
   const { revision, refresh } = useWorkspace();
   const [items, setItems] = useState<Item[]>([]);
   const [selected, setSelected] = useState<Item | null>(null);
+  const [sourceVersion, setSourceVersion] = useState<ItemVersion | null>(null);
+  const [sourceError, setSourceError] = useState('');
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<VaultFilter>("all");
   const [view, setView] = useState("grid");
@@ -64,7 +68,10 @@ export function VaultPage() {
   const listRequest = useRef(0);
   const saveLock = useRef(false);
   const closedLinkedItem = useRef<string | null>(null);
+  const closedLinkedVersion = useRef<string | null>(null);
   const linkedItemId = params.get("item");
+  const linkedVersionId = params.get('version');
+  const selectionRequest = useRef(0);
   useEffect(() => {
     const dirty = editing && selected && (
       editTitle !== selected.title || editContent !== selected.content
@@ -127,28 +134,41 @@ export function VaultPage() {
   useEffect(() => {
     if (!linkedItemId) {
       closedLinkedItem.current = null;
+      closedLinkedVersion.current = null;
       return;
     }
-    if (closedLinkedItem.current === linkedItemId) return;
+    if (closedLinkedItem.current === linkedItemId && closedLinkedVersion.current === linkedVersionId) return;
     let live = true;
-    void dataProvider.getItem(linkedItemId)
-      .then((item) => {
-        if (live) setSelected(item);
+    const request = ++selectionRequest.current;
+    const load = linkedVersionId ? dataProvider.getItemVersion(linkedItemId, linkedVersionId)
+      : dataProvider.getItem(linkedItemId).then(item => item ? { item, savedAt: item.updatedAt, isCurrent: true } : null);
+    void load.then((snapshot) => {
+        if (live && request === selectionRequest.current) {
+          if (!snapshot) { setSourceError('This source is unavailable. It may have been removed or your access has changed.'); setSelected(null); setSourceVersion(null); return; }
+          setSourceError('');
+          setSelected(snapshot.item);
+          setSourceVersion(linkedVersionId ? snapshot : null);
+          setEditing(false); setConfirmingDelete(false);
+        }
       })
       .catch((caught) => {
-        if (live) setError(dataErrorMessage(caught, "The linked item could not be loaded."));
+        if (live && request === selectionRequest.current) { setSourceError(dataErrorMessage(caught, "The linked item could not be loaded.")); setSelected(null); setSourceVersion(null); }
       });
     return () => { live = false; };
-  }, [linkedItemId, revision]);
+  }, [linkedItemId, linkedVersionId, revision]);
   const closeSelected = useCallback(() => {
+    ++selectionRequest.current;
     if (linkedItemId) {
       closedLinkedItem.current = linkedItemId;
+      closedLinkedVersion.current = linkedVersionId;
       router.replace(withoutLinkedItem(pathname, params.toString()) as Route, { scroll: false });
     }
     setEditing(false);
     setConfirmingDelete(false);
     setSelected(null);
-  }, [linkedItemId, params, pathname, router]);
+    setSourceVersion(null);
+    setSourceError('');
+  }, [linkedItemId, linkedVersionId, params, pathname, router]);
   const loadMore = async () => {
     const cursor = items.at(-1);
     if (!cursor || loadingMore || !hasMore) return;
@@ -178,6 +198,9 @@ export function VaultPage() {
     }
   };
   const openItem = (item: Item) => {
+    ++selectionRequest.current;
+    setSourceVersion(null);
+    setSourceError('');
     void dataProvider.trackEvent({
       eventType: "item_viewed",
       targetType: "item",
@@ -191,7 +214,7 @@ export function VaultPage() {
     setSelected(item);
   };
   const beginEdit = () => {
-    if (!selected) return;
+    if (!selected || sourceVersion) return;
     setEditTitle(selected.title);
     setEditContent(selected.content);
     setEditSourceUrl(selected.sourceUrl ?? "");
@@ -200,7 +223,7 @@ export function VaultPage() {
     setEditing(true);
   };
   const saveEdit = async () => {
-    if (!selected || saving || saveLock.current || !editTitle.trim() || !editContent.trim()) return;
+    if (!selected || sourceVersion || saving || saveLock.current || !editTitle.trim() || !editContent.trim()) return;
     saveLock.current = true;
     setSaving(true);
     setEditError("");
@@ -236,7 +259,7 @@ export function VaultPage() {
     }
   };
   const deleteSelected = async () => {
-    if (!selected || deleting || deleteLock.current || !confirmingDelete) return;
+    if (!selected || sourceVersion || deleting || deleteLock.current || !confirmingDelete) return;
     deleteLock.current = true;
     setDeleting(true);
     setError("");
@@ -290,6 +313,7 @@ export function VaultPage() {
           ))}
         </div>
       </div>
+      {linkedItemId && sourceError && <p role="alert" className="state error-text">{message(sourceError)}</p>}
       <div className="filters">
         {filters.map((f) => (
           <button
@@ -415,6 +439,12 @@ export function VaultPage() {
               <Icon name="close" />
             </button>
           </header>
+          {sourceVersion && <section className="source-version-notice" aria-label={t('Original source version')}>
+            <h3>{t('Original source version')}</h3>
+            <p className="muted meta">{t('sourceVersionSavedAt', { version: selected.versionNumber,
+              date: new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(sourceVersion.savedAt)) })}</p>
+            <p className="muted">{t('sourceVersionNotice')}</p>
+          </section>}
           {confirmingDelete ? (
             <div className="item-delete-confirmation">
               {error && <p className="error-text meta" role="alert">{message(error)}</p>}
@@ -559,7 +589,9 @@ export function VaultPage() {
               <p className="muted">{t("No related items yet.")}</p>
             )}
           </section>
-          <footer className="form-actions item-sheet-actions">
+          {sourceVersion ? <footer className="form-actions item-sheet-actions">
+            <Link className="button primary" href={projectHref(`/vault?item=${encodeURIComponent(selected.id)}`)}>{t('Open current version')}</Link>
+          </footer> : <footer className="form-actions item-sheet-actions">
             <button
               type="button"
               className="button primary"
@@ -577,7 +609,7 @@ export function VaultPage() {
             >
               {deleting ? t("Deleting…") : t("Delete item")}
             </button>
-          </footer>
+          </footer>}
           </>
           )}
         </Dialog>

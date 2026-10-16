@@ -34,6 +34,14 @@ export interface Evidence {
   sourceType: ItemType;
   excerpt: string;
   sourceUrl?: string | null;
+  documentVersionId?: string;
+  versionNumber?: number;
+  versionCreatedAt?: string;
+}
+export interface ItemVersion {
+  item: Item;
+  savedAt: string;
+  isCurrent: boolean;
 }
 export type FlareType = "Reminder" | "Warning" | "Recommendation";
 export interface Insight {

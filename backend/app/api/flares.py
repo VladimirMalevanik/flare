@@ -17,6 +17,9 @@ class EvidenceResponse(BaseModel):
     sourceType: Literal['note','file','url','audio']
     excerpt: str
     sourceUrl: str | None
+    documentVersionId: UUID
+    versionNumber: int = Field(ge=1)
+    versionCreatedAt: datetime
 
 
 class FlareResponse(BaseModel):
