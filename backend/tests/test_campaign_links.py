@@ -2,7 +2,9 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from dataclasses import replace
 import importlib.util
+import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,9 +12,11 @@ from uuid import UUID, uuid4
 
 import psycopg
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 
 from app.api import campaign_links as campaign_api
+from app.api.auth import verified_user
 from app.config import Settings
 from app.models import campaign_links as campaign_model
 from app.models.campaign_links import (
@@ -30,6 +34,7 @@ from app.services.campaign_links import (
     public_origin,
     validate_destination,
 )
+from app.services.auth_service import AuthenticatedUser
 from test_items_api import ApiEnvironment
 from test_team import team  # noqa: F401; shared Team project fixture
 
@@ -213,6 +218,91 @@ def test_invalid_public_origin_is_rejected_before_create():
     assert calls == []
 
 
+def test_production_management_requires_exact_private_account_grant():
+    user = AuthenticatedUser(
+        f"auth:{uuid4()}", uuid4(), "founder@flare.example", "Founder",
+        "owner", "Flare", True, True,
+    )
+    settings = SimpleNamespace(
+        dev_mode=False,
+        environment="production",
+        developer_mail_accounts=json.dumps({user.user_id: user.email}),
+    )
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(settings=settings)))
+
+    assert campaign_api._can_manage(request, user) is True
+    for denied in (
+        replace(user, user_id=f"auth:{uuid4()}"),
+        replace(user, email="customer@example.invalid"),
+        replace(user, email_verified=False),
+        replace(user, legal_accepted=False),
+        replace(user, role="editor"),
+    ):
+        assert campaign_api._can_manage(request, denied) is False
+        with pytest.raises(HTTPException) as raised:
+            campaign_api._owner(request, denied)
+        assert raised.value.status_code == 403
+        assert raised.value.detail == {
+            "code": "campaign_links_forbidden",
+            "message": "Campaign links are unavailable for this account.",
+        }
+
+    settings.developer_mail_accounts = None
+    assert campaign_api._can_manage(request, user) is False
+
+
+def test_campaign_capability_is_no_store_and_local_dev_remains_usable():
+    user = AuthenticatedUser(
+        "api-test|internal", uuid4(), "", "Local", "owner", "Local", True, True,
+    )
+    settings = SimpleNamespace(
+        dev_mode=True, environment="test", developer_mail_accounts=None,
+        dev_user_id=user.user_id, dev_workspace_id=user.workspace_id,
+    )
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(settings=settings)))
+    response = SimpleNamespace(headers={})
+
+    assert campaign_api.campaign_links_capability(request, response, user) == {"allowed": True}
+    assert response.headers == {"Cache-Control": "no-store"}
+    assert campaign_api.campaign_links_capability(
+        request, SimpleNamespace(headers={}), replace(user, role="viewer"),
+    ) == {"allowed": False}
+    assert campaign_api._can_manage(
+        request, replace(user, user_id="api-test|outsider"),
+    ) is False
+
+
+def test_customer_owner_cannot_call_any_management_endpoint():
+    user = AuthenticatedUser(
+        f"auth:{uuid4()}", uuid4(), "customer@example.invalid", "Customer",
+        "owner", "Customer", True, True,
+    )
+    application = FastAPI()
+    application.state.settings = SimpleNamespace(
+        dev_mode=False, environment="production", developer_mail_accounts=None,
+    )
+    application.state.database = object()
+    application.include_router(campaign_api.router)
+    application.dependency_overrides[verified_user] = lambda: user
+
+    link_id = uuid4()
+    with TestClient(application) as client:
+        capability = client.get("/campaign-links/capability")
+        assert capability.status_code == 200
+        assert capability.json() == {"allowed": False}
+        assert capability.headers["cache-control"] == "no-store"
+        responses = (
+            client.get("/campaign-links"),
+            client.post("/campaign-links", json=PAYLOAD),
+            client.get(f"/campaign-links/{link_id}"),
+            client.patch(f"/campaign-links/{link_id}", json={"label": "No"}),
+            client.post(f"/campaign-links/{link_id}/archive"),
+        )
+
+    assert {response.status_code for response in responses} == {403}
+    assert all(response.json()["detail"]["code"] == "campaign_links_forbidden" for response in responses)
+
+
 def _environment():
     runtime = os.getenv("DATABASE_URL")
     admin = os.getenv("TEST_DATABASE_URL")
@@ -239,6 +329,7 @@ def _create(client, **changes):
 @pytest.mark.integration
 def test_selected_team_project_scope_and_ownership_transfer(team):
     owner, owner_client = team.account()
+    team.config.developer_mail_accounts = json.dumps({owner.user_id: owner.email})
     project_id = team.create(owner, owner_client)
     personal = _create(owner_client, label="Personal campaign")
     selected_response = owner_client.post(
@@ -267,6 +358,11 @@ def test_selected_team_project_scope_and_ownership_transfer(team):
     assert owner_client.get(
         "/campaign-links", params={"workspace": project_id},
     ).status_code == 403
+    new_owner_list = member_client.get(
+        "/campaign-links", params={"workspace": project_id},
+    )
+    assert new_owner_list.status_code == 403
+    team.config.developer_mail_accounts = json.dumps({member.user_id: member.email})
     new_owner_list = member_client.get(
         "/campaign-links", params={"workspace": project_id},
     )

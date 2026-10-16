@@ -94,6 +94,21 @@ test("campaign operations stay scoped to the selected team workspace", async () 
   assert.ok(urls.every(url => !url.includes("personal-initial")));
 });
 
+test("campaign capability is project-scoped and fails closed on malformed responses", async () => {
+  const calls = [];
+  const client = loadClient(async url => {
+    calls.push(url);
+    return { ok: true, status: 200, json: async () => ({ allowed: true }) };
+  }, "internal-project");
+  assert.equal(await client.campaignLinksCapability(), true);
+  assert.deepEqual(calls, ["/api/campaign-links/capability?workspace=internal-project"]);
+
+  const malformed = loadClient(async () => ({
+    ok: true, status: 200, json: async () => ({ allowed: "yes" }),
+  }));
+  await assert.rejects(malformed.campaignLinksCapability(), /invalid campaign link capability/i);
+});
+
 test("campaign client rejects invalid labels, UTM tokens, destinations and malformed stats", async () => {
   let calls = 0;
   const client = loadClient(async () => { calls += 1; return { ok: true, status: 200, json: async () => [] }; });
@@ -120,15 +135,27 @@ function renderedText(node) {
   return node ? renderedText(node.props?.children) : "";
 }
 
-function uiHarness({ locale = "en", role = "owner", createStatus = null } = {}) {
+function uiHarness({ locale = "en", role = "owner", createStatus = null, capability = true } = {}) {
   let currentRole = role;
-  const state = [], dependencies = [], effects = [], copied = [], archived = [], created = [];
+  let currentCapability = capability;
+  const stores = {
+    panel: { state: [], dependencies: [], effects: [] },
+    access: { state: [], dependencies: [], effects: [] },
+  };
+  const copied = [], archived = [], created = [], capabilityCalls = [];
+  let mode = "panel";
+  let mountedCapabilityKey = null;
   let cursor = 0;
   class CampaignLinkError extends Error { constructor(message, status) { super(message); this.status = status; } }
   class CampaignLinkDraftError extends CampaignLinkError {}
   const client = {
     CampaignLinkError,
     CampaignLinkDraftError,
+    campaignLinksCapability: async () => {
+      capabilityCalls.push(true);
+      if (currentCapability instanceof Error) throw currentCapability;
+      return currentCapability;
+    },
     listCampaignLinks: async () => [sample],
     createCampaignLink: async draft => {
       created.push(draft);
@@ -149,19 +176,23 @@ function uiHarness({ locale = "en", role = "owner", createStatus = null } = {}) 
       if (name === "react/jsx-runtime") return jsx;
       if (name === "react") return {
         useState(initial) {
+          const state = stores[mode].state;
           const index = cursor++;
           if (!(index in state)) state[index] = initial;
           return [state[index], value => { state[index] = typeof value === "function" ? value(state[index]) : value; }];
         },
         useEffect(effect, values) {
+          const dependencies = stores[mode].dependencies;
           const index = cursor++;
           if (!dependencies[index] || values.some((value, offset) => value !== dependencies[index][offset])) {
             dependencies[index] = values;
-            effects.push(effect);
+            stores[mode].effects.push(effect);
           }
         },
       };
-      if (name === "@/components/auth-session") return { useSession: () => ({ workspace: { role: currentRole } }) };
+      if (name === "@/components/auth-session") return { useSession: () => ({
+        user: { id: "internal-user" }, workspace: { id: "project-1", role: currentRole },
+      }) };
       if (name === "@/components/icons") return { Icon: "icon" };
       if (name === "@/components/select") return { Select: "select" };
       if (name === "@/i18n/provider") return { useI18n: () => ({ locale }) };
@@ -171,25 +202,53 @@ function uiHarness({ locale = "en", role = "owner", createStatus = null } = {}) 
     },
   });
   const app = {
-    exports, copied, archived, created,
-    render() { cursor = 0; return exports.CampaignLinksPanel(); },
-    wrapper() { return exports.CampaignLinks(); },
+    exports, copied, archived, created, capabilityCalls,
+    render() { mode = "panel"; cursor = 0; return exports.CampaignLinksPanel(); },
+    wrapper() {
+      cursor = 0;
+      const result = exports.CampaignLinks();
+      const nextKey = result?.props?.capabilityKey ?? null;
+      if (nextKey !== mountedCapabilityKey) {
+        stores.access = { state: [], dependencies: [], effects: [] };
+        mountedCapabilityKey = nextKey;
+      }
+      return result;
+    },
+    access(key = mountedCapabilityKey) {
+      mode = "access";
+      cursor = 0;
+      return exports.CampaignLinksAccess({ capabilityKey: key });
+    },
     setRole(value) { currentRole = value; },
+    setCapability(value) { currentCapability = value; },
     async ready() {
       app.render();
-      for (const effect of effects.splice(0)) effect();
+      for (const effect of stores.panel.effects.splice(0)) effect();
       await new Promise(resolve => setImmediate(resolve));
+    },
+    async authorize() {
+      const wrapper = app.wrapper();
+      if (!wrapper) return null;
+      app.access(wrapper.props.capabilityKey);
+      for (const effect of stores.access.effects.splice(0)) effect();
+      await new Promise(resolve => setImmediate(resolve));
+      return app.access(wrapper.props.capabilityKey);
     },
   };
   return app;
 }
 
-test("campaign Settings UI is owner-only, exposes honest counts, copy and archive", async () => {
+test("campaign Settings UI is internal-owner-only, exposes honest counts, copy and archive", async () => {
   const app = uiHarness();
   app.setRole("editor");
   assert.equal(app.wrapper(), null);
+  assert.equal(app.capabilityCalls.length, 0);
   app.setRole("owner");
-  assert.ok(app.wrapper());
+  const wrapper = app.wrapper();
+  assert.ok(wrapper);
+  assert.equal(app.access(wrapper.props.capabilityKey), null);
+  assert.ok(await app.authorize());
+  assert.equal(app.capabilityCalls.length, 1);
   await app.ready();
   let tree = app.render();
   assert.match(renderedText(tree), /aggregate count with no visitor identifiers/i);
@@ -208,6 +267,27 @@ test("campaign Settings UI is owner-only, exposes honest counts, copy and archiv
   tree = app.render();
   assert.match(renderedText(tree), /Archived/);
   assert.match(renderedText(tree), /still redirect, but no longer increase this count/);
+});
+
+test("campaign Settings stays hidden when the private capability denies or fails", async () => {
+  for (const capability of [false, new Error("private failure")]) {
+    const app = uiHarness({ capability });
+    assert.equal(await app.authorize(), null);
+    assert.equal(app.capabilityCalls.length, 1);
+  }
+});
+
+test("campaign Settings discards an old grant across role changes", async () => {
+  const app = uiHarness({ capability: true });
+  assert.ok(await app.authorize());
+  app.setRole("editor");
+  assert.equal(app.wrapper(), null);
+  app.setCapability(false);
+  app.setRole("owner");
+  const wrapper = app.wrapper();
+  assert.equal(app.access(wrapper.props.capabilityKey), null);
+  assert.equal(await app.authorize(), null);
+  assert.equal(app.capabilityCalls.length, 2);
 });
 
 test("campaign Settings UI includes complete Spanish copy and targeted public rewrite", () => {

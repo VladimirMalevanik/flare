@@ -8,6 +8,16 @@ imports to the same services; coordinate the release instead of overwriting it.
 
 ## Product and design decisions
 
+- Campaign-link management is an internal Flare team tool. Customer workspace
+  ownership alone does not grant access. The API requires both workspace-owner
+  role and an exact verified account ID/email pair from the private API-only
+  `DEVELOPER_MAIL_ACCOUNTS` grant map. Settings requests a fail-closed capability
+  before mounting the panel; no account list is shipped to the browser or source.
+  Local test/development identities remain usable only outside production.
+- Public `/r/:slug` redirects remain public so campaign recipients can follow a
+  generated link. The private grant protects list/create/read/rename/archive and
+  aggregate statistics, not the redirect itself.
+
 - Keep the three prepared links: source `x`, medium `organic_social`, campaign
   `launch_2026_10`, with `utm_content` and `ref` set to `ilyas`, `fedor`, or `flare`.
   `ref` is the existing aggregate grouping field; it is not a reward programme.
