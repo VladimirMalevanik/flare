@@ -1,6 +1,7 @@
 import { uiEn } from "./ui-en";
 
 export const en = {
+  'Import closed for this visit. Browser storage is unavailable.': 'Import closed for this visit. Browser storage is unavailable.',
   'Original source version': 'Original source version',
   'Open current version': 'Open current version',
   sourceVersionNumber: 'Source version {version}',
