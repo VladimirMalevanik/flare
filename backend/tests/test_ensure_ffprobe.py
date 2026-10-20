@@ -4,6 +4,7 @@ from io import BytesIO
 from http.client import IncompleteRead
 from pathlib import Path
 import tarfile
+from types import SimpleNamespace
 from urllib.error import URLError
 from urllib.request import Request
 
@@ -94,7 +95,9 @@ def transport(monkeypatch, outcomes):
         return Opener()
 
     monkeypatch.setattr(ensure, "build_opener", factory)
-    monkeypatch.setattr(ensure.time, "sleep", lambda _: None)
+    monkeypatch.setattr(ensure, "time", SimpleNamespace(
+        monotonic=ensure.time.monotonic, sleep=lambda _: None,
+    ))
     return calls
 
 
@@ -195,7 +198,9 @@ def test_unannounced_oversize_is_rejected_without_installation(tmp_path, monkeyp
 
 def test_total_deadline_stops_slow_reads_without_another_request(tmp_path, monkeypatch):
     clock = [0]
-    monkeypatch.setattr(ensure.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(ensure, "time", SimpleNamespace(
+        monotonic=lambda: clock[0], sleep=lambda _: None,
+    ))
 
     class Slow(Response):
         def read(self, size=-1):
