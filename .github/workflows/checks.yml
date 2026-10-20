@@ -43,6 +43,23 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install -e 'backend[dev]'
+      - name: Cache pinned ffprobe
+        if: matrix.database_provider == 'self-managed'
+        # Cache availability is optional; verification below is always required.
+        continue-on-error: true
+        timeout-minutes: 2
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        env:
+          SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
+        with:
+          path: ${{ runner.temp }}/flare-tools/ffprobe-7.0.2/ffprobe
+          key: ffprobe-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('backend/deploy/ensure_ffprobe.py') }}
+      - name: Verify pinned ffprobe and voice runtime
+        if: matrix.database_provider == 'self-managed'
+        timeout-minutes: 3
+        run: |
+          python backend/deploy/ensure_ffprobe.py --destination "$RUNNER_TEMP/flare-tools/ffprobe-7.0.2/ffprobe"
+          PYTHONPATH=backend python backend/scripts/check_voice_runtime.py --ffprobe-path "$RUNNER_TEMP/flare-tools/ffprobe-7.0.2/ffprobe"
       - if: matrix.database_provider == 'self-managed'
         run: psql -h 127.0.0.1 -U postgres -d flare -v ON_ERROR_STOP=1 -f backend/db/init-role.sql
       - if: matrix.database_provider == 'yandex'
@@ -60,10 +77,6 @@ jobs:
         run: psql -h 127.0.0.1 -U postgres -d flare -v ON_ERROR_STOP=1 -f backend/db/configure-worker.sql
       - run: python -m pip check
       - run: pytest -q backend/tests
-      - if: matrix.database_provider == 'self-managed'
-        run: python backend/deploy/ensure_ffprobe.py --destination /tmp/flare-ffprobe
-      - if: matrix.database_provider == 'self-managed'
-        run: PYTHONPATH=backend python backend/scripts/check_voice_runtime.py --ffprobe-path /tmp/flare-ffprobe
 
   frontend:
     runs-on: ubuntu-latest
