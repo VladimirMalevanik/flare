@@ -2,6 +2,7 @@ import type { TranslationKey } from "./en";
 import { uiEs } from "./ui-es";
 
 export const es = {
+  'Import closed for this visit. Browser storage is unavailable.': 'Importación cerrada durante esta visita. El almacenamiento del navegador no está disponible.',
   'Original source version': 'Versión original de la fuente',
   'Open current version': 'Abrir la versión actual',
   sourceVersionNumber: 'Versión de la fuente {version}',

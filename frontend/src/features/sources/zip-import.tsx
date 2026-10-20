@@ -4,8 +4,10 @@ import Link from "next/link";
 import { projectHref } from "@/lib/team-context";
 import { Dialog } from "@/components/dialog";
 import { Icon } from "@/components/icons";
+import { useSession } from "@/components/auth-session";
 import { useI18n } from "@/i18n/provider";
 import { dataProvider, type ImportPackage, type ImportPackageReport, type ZipSourceKind } from "@/lib/data";
+import { dismissImport, importDismissalKey, wasImportDismissed } from "./zip-import-dismissal";
 
 export const isImportActive = (job: ImportPackage) => ["uploading", "staged", "queued", "processing", "retry_wait"].includes(job.status);
 export const importPhaseLabel = (job: ImportPackage) => {
@@ -41,12 +43,19 @@ async function resolveImportReceipt(job: ImportPackage, history: ImportPackage[]
 }
 
 export function ZipImport({ sourceKind }: { sourceKind: ZipSourceKind }) {
+  const session = useSession();
+  const dismissalKey = session ? importDismissalKey(session.user.id, session.workspace.id, sourceKind) : null;
+  return <ZipImportReceipt key={dismissalKey ?? sourceKind} sourceKind={sourceKind} dismissalKey={dismissalKey} />;
+}
+
+function ZipImportReceipt({ sourceKind, dismissalKey }: { sourceKind: ZipSourceKind; dismissalKey: string | null }) {
   const { t, label, message } = useI18n();
   const [capabilities, setCapabilities] = useState<{ available: boolean; maxUploadBytes: number | null } | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [job, setJob] = useState<ImportPackage | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [dismissNotice, setDismissNotice] = useState(false);
   const [report, setReport] = useState<ImportPackageReport | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -66,6 +75,7 @@ export function ZipImport({ sourceKind }: { sourceKind: ZipSourceKind }) {
   const actionLock = useRef(false);
   const cancelLock = useRef(false);
   const requestKey = useRef<{ file: File; key: string } | null>(null);
+  const receiptRequestId = useRef<string | null>(null);
   useEffect(() => {
     mounted.current = true;
     let live = true;
@@ -77,10 +87,14 @@ export function ZipImport({ sourceKind }: { sourceKind: ZipSourceKind }) {
     void dataProvider.listImportPackages(controller.signal).then(async (list) => {
       const recent = list.find((entry) => entry.sourceKind === sourceKind);
       const receipt = recent ? await resolveImportReceipt(recent, list, controller.signal) : null;
-      if (live && epoch.current === initialEpoch) { setJob(receipt); setReport(null); }
+      if (live && epoch.current === initialEpoch) {
+        receiptRequestId.current = recent?.id ?? null;
+        setJob(receipt && recent && !wasImportDismissed(dismissalKey, recent.id, receipt) ? receipt : null);
+        setReport(null);
+      }
     }).catch(() => { if (live && epoch.current === initialEpoch) setError("Import history could not be loaded."); });
     return () => { live = false; mounted.current = false; epoch.current += 1; controller.abort(); upload.current?.abort(); reportRequest.current?.abort(); };
-  }, [sourceKind]);
+  }, [sourceKind, dismissalKey]);
   useEffect(() => {
     if (!job || !isImportActive(job) || job.status === "uploading" || job.status === "staged" || busy || pollPaused) return;
     let live = true;
@@ -110,6 +124,7 @@ export function ZipImport({ sourceKind }: { sourceKind: ZipSourceKind }) {
     if (capabilities.maxUploadBytes !== null && file.size > capabilities.maxUploadBytes) { setError("ZIP exceeds this workspace’s configured import limits."); return; }
     actionLock.current = true;
     const operation = ++epoch.current;
+    receiptRequestId.current = null; setDismissNotice(false);
     setBusy(true); setPollPaused(false); setCancelPending(false); setJob(null); setError(""); setReport(null); setReportBusy(false); setReportOpen(false); setPickerOpen(false); setDragging(false); setFile(file);
     reportRequest.current?.abort(); reportVersion.current += 1;
     const controller = new AbortController(); upload.current = controller;
@@ -119,6 +134,7 @@ export function ZipImport({ sourceKind }: { sourceKind: ZipSourceKind }) {
       if (session && !isImportActive(session)) { requestKey.current = { file, key: crypto.randomUUID() }; session = null; }
       session ??= await dataProvider.createImportPackage({ sourceKind, fileName: file.name, fileSize: file.size, requestKey: requestKey.current.key }, controller.signal);
       if (controller.signal.aborted || !mounted.current || epoch.current !== operation) return;
+      receiptRequestId.current = session.id;
       setJob(session);
       if (!["uploading", "staged"].includes(session.status)) {
         const receipt = await resolveImportReceipt(session, [], controller.signal);
@@ -148,6 +164,7 @@ export function ZipImport({ sourceKind }: { sourceKind: ZipSourceKind }) {
       if (!target && file && requestKey.current) {
         target = await dataProvider.createImportPackage({ sourceKind, fileName: file.name, fileSize: file.size, requestKey: requestKey.current.key }, controller.signal);
         if (!mounted.current || epoch.current !== operation) return;
+        receiptRequestId.current = target.id;
         setJob(target);
       }
       if (!target) return;
@@ -218,6 +235,8 @@ export function ZipImport({ sourceKind }: { sourceKind: ZipSourceKind }) {
   }
   function resetResult(chooseAnother = false) {
     if (active || busy) return;
+    setDismissNotice(!!job && !dismissImport(dismissalKey, receiptRequestId.current ?? job.id, job));
+    receiptRequestId.current = null;
     epoch.current += 1; reportVersion.current += 1;
     upload.current?.abort(); reportRequest.current?.abort(); requestKey.current = null;
     setJob(null); setFile(null); setReport(null); setReportOpen(false); setReportBusy(false);
@@ -236,6 +255,7 @@ export function ZipImport({ sourceKind }: { sourceKind: ZipSourceKind }) {
   const visibleEntries = report?.entries.filter((entry) => reportFilter === "all" || reportIssue(entry)) ?? [];
   const displayJob = job && !(busy && file && file.name !== job.fileName);
   return <div className="zip-import">
+    {dismissNotice && <p role="status" className="muted">{t("Import closed for this visit. Browser storage is unavailable.")}</p>}
     {capabilities && !capabilities.available && <p role="status" className="muted">{t("ZIP import is unavailable in this environment.")}</p>}
     {((!active || job?.status === "uploading") && !busy) && <button ref={startButton} type="button" className="button zip-import-start" disabled={!capabilities?.available || cancelPending} onClick={() => file && error && !terminal ? void start(file) : setPickerOpen(true)}><Icon name="file" />{file && error && !terminal && !cancelPending ? t("Retry upload") : t("Import ZIP")}</button>}
     {(displayJob || busy) && <section className="zip-progress" aria-label={t("ZIP import progress")}>

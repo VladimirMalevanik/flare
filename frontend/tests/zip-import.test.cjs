@@ -17,20 +17,34 @@ function text(node) {
   if (Array.isArray(node)) return node.map(text).join(' ');
   return node ? text(node.props?.children) : '';
 }
-function harness(provider, history = [], sourceKind = 'obsidian') {
+const identity = (user = 'user-1', workspace = 'workspace-1') => ({user:{id:user},workspace:{id:workspace}});
+const localStorage = () => {
+  const values = new Map();
+  return {values,getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value)};
+};
+function harness(provider, history = [], sourceKind = 'obsidian', options = {}) {
   let cursor=0, timerId=0, requestId=0;const state=[],effects=[],timers=new Map(),deps=[],cleanups=[];
   provider.getImportCapabilities ??= async()=>({available:true,maxUploadBytes:100000});
   provider.listImportPackages ??= async()=>history;
   const exports={};
   const code=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/features/sources/zip-import.tsx'),'utf8'),{
     compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;
-  vm.runInNewContext(code,{exports,AbortController,crypto:{randomUUID:()=> `request-${++requestId}`},
+  const browser = {localStorage:options.storage??localStorage()};
+  vm.runInNewContext(code,{exports,AbortController,window:browser,crypto:{randomUUID:()=> `request-${++requestId}`},
     setTimeout(fn){const id=++timerId;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);},require(name){
       if(name==='react/jsx-runtime')return jsx;
       if(name==='next/link')return {default:'a'};
       if(name==='@/components/dialog')return {Dialog:'dialog'};
       if(name==='@/components/icons')return {Icon:'icon'};
       if(name==='@/lib/data')return {dataProvider:provider};
+      if(name==='@/components/auth-session')return {useSession:()=>options.session===undefined?identity():options.session};
+      if(name==='./zip-import-dismissal') {
+        const helperModule={exports:{}};
+        const helper=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/features/sources/zip-import-dismissal.ts'),'utf8'),{
+          compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+        vm.runInNewContext(helper,{exports:helperModule.exports,window:browser});
+        return helperModule.exports;
+      }
       if(name==='@/i18n/provider')return {useI18n:()=>({t:s=>s,label:s=>s,message:s=>s})};
       if(name==='react')return {
         useState(initial){const i=cursor++;if(!(i in state))state[i]=initial;return[state[i],v=>state[i]=typeof v==='function'?v(state[i]):v];},
@@ -40,7 +54,7 @@ function harness(provider, history = [], sourceKind = 'obsidian') {
       if (name === '@/lib/team-context') return { projectHref: url => url };
     throw Error(name);
     }});
-  function render(){cursor=0;return exports.ZipImport({sourceKind});}
+  function render(){cursor=0;let node=exports.ZipImport({sourceKind});while(typeof node.type==='function')node=node.type(node.props);return node;}
   return {render,buttons:()=>nodes(render()).filter(n=>n.type==='button'),
     async effects(){for(const fn of effects.splice(0))fn();await new Promise(r=>setImmediate(r));},
     async poll(){const ready=[...timers.values()];timers.clear();for(const fn of ready)fn();await new Promise(r=>setImmediate(r));},
@@ -49,6 +63,99 @@ function harness(provider, history = [], sourceKind = 'obsidian') {
     dispose(){for(const fn of cleanups.splice(0).reverse())if(typeof fn==='function')fn();},
     exports};
 }
+
+for (const sourceKind of ['notion','obsidian']) for (const status of ['failed','cancelled','expired','completed','completed_with_skips']) {
+ test(`${sourceKind}: closing ${status} survives a fresh page instance`,async()=>{
+  const storage=localStorage(),receipt=fixture({sourceKind,status,errorCode:status==='failed'?'job_deadline':null});
+  const app=harness({},[receipt],sourceKind,{storage});app.render();await app.effects();
+  await app.click('Close import');app.dispose();
+  const reload=harness({},[receipt],sourceKind,{storage});reload.render();await reload.effects();
+  assert.ok(!nodes(reload.render()).some(n=>n.props?.role==='progressbar'));
+  assert.doesNotMatch(text(reload.render()),/Import failed|snapshot.zip/);
+  assert.ok(reload.buttons().some(n=>text(n).trim()==='Import ZIP'));
+ });
+}
+
+test('dismissal belongs to one user, workspace and source; it never mutates server history',async()=>{
+ const storage=localStorage(),receipt=fixture({status:'failed',fileName:'private-name.zip'});let writes=0;
+ const app=harness({async importPackageAction(){writes++;throw Error('must not mutate');}},[receipt],'obsidian',{storage});
+ app.render();await app.effects();await app.click('Close import');app.dispose();assert.equal(writes,0);
+ assert.equal(storage.values.size,1);assert.ok([...storage.values.values()].every(value=>!value.includes('private-name.zip')));
+ for(const [session,sourceKind] of [[identity('user-2'),'obsidian'],[identity('user-1','workspace-2'),'obsidian'],[identity(),'notion']]){
+  const other=harness({},[{...receipt,sourceKind}],sourceKind,{storage,session});other.render();await other.effects();
+  assert.match(text(other.render()),/Import failed/);other.dispose();
+ }
+ const reload=harness({},[receipt],'obsidian',{storage});reload.render();await reload.effects();
+ assert.doesNotMatch(text(reload.render()),/Import failed/);
+});
+
+test('a new package or changed terminal result stays visible; older history never replaces a dismissed latest receipt',async()=>{
+ const storage=localStorage(),receipt=fixture({status:'failed'});
+ const app=harness({},[receipt],'obsidian',{storage});app.render();await app.effects();await app.click('Close import');app.dispose();
+ for(const current of [fixture({id:'new-package',status:'failed'}),fixture({status:'completed',phase:'complete',entryCount:1,importedCount:1})]){
+  const next=harness({},[current,receipt],'obsidian',{storage});next.render();await next.effects();
+  assert.ok(nodes(next.render()).some(n=>n.props?.role==='progressbar'));next.dispose();
+ }
+ const reload=harness({},[receipt,fixture({id:'older-package',status:'failed'})],'obsidian',{storage});reload.render();await reload.effects();
+ assert.ok(!nodes(reload.render()).some(n=>n.props?.role==='progressbar'));
+});
+
+for(const status of ['uploading','staged','queued','processing','retry_wait']){
+ test(`dismissed failure cannot hide a ${status} retry`,async()=>{
+  const storage=localStorage(),app=harness({},[fixture({status:'failed'})],'obsidian',{storage});
+  app.render();await app.effects();await app.click('Close import');app.dispose();
+  const retry=harness({},[fixture({status})],'obsidian',{storage});retry.render();await retry.effects();
+  assert.ok(nodes(retry.render()).some(n=>n.props?.role==='progressbar'));
+  assert.ok(retry.buttons().some(n=>text(n).trim()==='Cancel import'));retry.dispose();
+ });
+}
+
+test('canonical receipt dismissal survives reload but a new duplicate attempt stays visible',async()=>{
+ const storage=localStorage(),canonical=fixture({id:'canonical',status:'completed',phase:'complete',entryCount:2,importedCount:2});
+ const duplicate=fixture({id:'duplicate-1',canonicalId:'canonical',status:'duplicate'});
+ const app=harness({},[duplicate,canonical],'obsidian',{storage});app.render();await app.effects();
+ assert.match(text(app.render()),/Import complete/);await app.click('Close import');app.dispose();
+ const reload=harness({async getImportPackage(id){assert.equal(id,'canonical');return canonical;}},[duplicate],'obsidian',{storage});reload.render();await reload.effects();
+ assert.ok(!nodes(reload.render()).some(n=>n.props?.role==='progressbar'));reload.dispose();
+ const next=harness({},[{...duplicate,id:'duplicate-2'},canonical],'obsidian',{storage});next.render();await next.effects();
+ assert.match(text(next.render()),/Import complete/);next.dispose();
+});
+
+test('a newly uploaded duplicate records its request identity when closed',async()=>{
+ const storage=localStorage(),canonical=fixture({id:'canonical',status:'completed',phase:'complete',entryCount:1,importedCount:1});
+ const duplicate=fixture({id:'new-duplicate',canonicalId:'canonical',status:'duplicate'});
+ const app=harness({async createImportPackage(){return duplicate;},async getImportPackage(){return canonical;},async importPackageAction(){throw Error('must not finalize');}},[],'obsidian',{storage});
+ app.render();await app.effects();await app.select();assert.match(text(app.render()),/Import complete/);
+ await app.click('Close import');app.dispose();
+ const reload=harness({},[duplicate,canonical],'obsidian',{storage});reload.render();await reload.effects();
+ assert.ok(!nodes(reload.render()).some(n=>n.props?.role==='progressbar'));
+});
+
+test('choosing another ZIP also dismisses the previous failure if the picker is abandoned',async()=>{
+ const storage=localStorage(),receipt=fixture({status:'failed'});
+ const app=harness({},[receipt],'obsidian',{storage});app.render();await app.effects();await app.click('Choose another ZIP');
+ assert.ok(nodes(app.render()).some(n=>n.type==='dialog'));await app.click('Close import window');app.dispose();
+ const reload=harness({},[receipt],'obsidian',{storage});reload.render();await reload.effects();
+ assert.ok(!nodes(reload.render()).some(n=>n.props?.role==='progressbar'));
+});
+
+test('blocked or full storage still closes the card and explains that dismissal lasts for this visit',async()=>{
+ for(const storage of [{getItem(){throw Error('blocked');},setItem(){throw Error('blocked');}},
+   {getItem(){return null;},setItem(){throw Error('quota');}}]){
+  const app=harness({},[fixture({status:'failed'})],'obsidian',{storage});app.render();await app.effects();
+  await app.click('Close import');assert.ok(!nodes(app.render()).some(n=>n.props?.role==='progressbar'));
+  assert.match(text(app.render()),/Import closed for this visit. Browser storage is unavailable./);app.dispose();
+ }
+});
+
+test('malformed saved preference and absent identity cannot hide or share a receipt',async()=>{
+ const storage=localStorage();storage.getItem=()=>'{not-valid-json';
+ const corrupt=harness({},[fixture({status:'failed'})],'obsidian',{storage});corrupt.render();await corrupt.effects();
+ assert.match(text(corrupt.render()),/Import failed/);corrupt.dispose();
+ const app=harness({},[fixture({status:'failed'})],'obsidian',{storage,session:null});app.render();await app.effects();
+ assert.match(text(app.render()),/Import failed/);await app.click('Close import');
+ assert.equal(storage.values.size,0);assert.match(text(app.render()),/closed for this visit/);
+});
 
 for (const sourceKind of ['notion','obsidian']) for (const status of ['failed','cancelled','expired']) {
  test(`${sourceKind}: ${status} with unknown counts stops animation and can be closed without server deletion`,async()=>{
