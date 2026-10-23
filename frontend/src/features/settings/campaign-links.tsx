@@ -15,11 +15,15 @@ import {
   type CampaignLink,
   type CampaignLinkDraft,
 } from "./campaign-links-client";
+import { CampaignActivityPanel } from "./campaign-activity";
 import "./campaign-links.css";
 
 const copy = {
   en: {
     title: "Campaign links",
+    activityView: "Activity",
+    linksView: "Links",
+    views: "Campaign link views",
     subtitle: "Create trackable Flare links and compare their aggregate recorded opens.",
     label: "Link label",
     labelPlaceholder: "October founder post",
@@ -56,6 +60,9 @@ const copy = {
   },
   es: {
     title: "Enlaces de campaña",
+    activityView: "Actividad",
+    linksView: "Enlaces",
+    views: "Vistas de enlaces de campaña",
     subtitle: "Crea enlaces medibles de Flare y compara sus aperturas registradas agregadas.",
     label: "Nombre del enlace",
     labelPlaceholder: "Publicación de fundadores de octubre",
@@ -139,6 +146,9 @@ export function CampaignLinksPanel() {
   const { locale } = useI18n();
   const c = copy[locale];
   const [links, setLinks] = useState<CampaignLink[]>([]);
+  const [view, setView] = useState<"activity" | "links">("activity");
+  const [listFailed, setListFailed] = useState(false);
+  const [listRevision, setListRevision] = useState(0);
   const [draft, setDraft] = useState<CampaignLinkDraft>(emptyDraft);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -149,16 +159,17 @@ export function CampaignLinksPanel() {
   useEffect(() => {
     const controller = new AbortController();
     void listCampaignLinks(controller.signal)
-      .then(values => setLinks(visibleCampaignLinks(values)))
+      .then(values => { if (!controller.signal.aborted) setLinks(visibleCampaignLinks(values)); })
       .catch(() => {
         if (!controller.signal.aborted) {
+          setListFailed(true);
           setError(true);
           setStatus(c.failed);
         }
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [c.failed]);
+  }, [c.failed, listRevision]);
 
   function update(field: keyof CampaignLinkDraft, value: string) {
     setDraft(current => ({ ...current, [field]: value }));
@@ -225,6 +236,15 @@ export function CampaignLinksPanel() {
         <h2><Icon name="url" />{c.title}</h2>
         <p className="muted meta">{c.subtitle}</p>
       </header>
+      {status && !(listFailed && view === "activity") && <p className={`campaign-link-status ${error ? "is-error" : ""}`} role={error ? "alert" : "status"}>{status}</p>}
+      <div className="campaign-views" role="group" aria-label={c.views}>
+        <button id="campaign-view-activity" type="button" aria-pressed={view === "activity"} aria-controls="campaign-activity-panel" onClick={() => setView("activity")}>{c.activityView}</button>
+        <button id="campaign-view-links" type="button" aria-pressed={view === "links"} aria-controls="campaign-links-panel" onClick={() => setView("links")}>{c.linksView}{links.length > 0 && <span>{links.length}</span>}</button>
+      </div>
+      {view === "activity" && <div id="campaign-activity-panel"><CampaignActivityPanel links={links} loading={loading} failed={listFailed}
+        onRetryLinks={() => { setLoading(true); setListFailed(false); setStatus(""); setListRevision(value => value + 1); }}
+        onManage={() => setView("links")} /></div>}
+      <div id="campaign-links-panel" hidden={view !== "links"}>
       <form className="campaign-link-form" onSubmit={submit} noValidate>
         <label>{c.label}
           <input value={draft.label} maxLength={80} placeholder={c.labelPlaceholder}
@@ -262,7 +282,6 @@ export function CampaignLinksPanel() {
           </button>
         </div>
       </form>
-      {status && <p className={`campaign-link-status ${error ? "is-error" : ""}`} role={error ? "alert" : "status"}>{status}</p>}
       <div className="campaign-links-heading">
         <h3>{c.activeLinks}</h3>
         <p className="muted meta">{c.countNote}</p>
@@ -297,6 +316,7 @@ export function CampaignLinksPanel() {
           </li>)}
         </ul>
       )}
+      </div>
     </section>
   );
 }

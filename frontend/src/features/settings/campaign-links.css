@@ -67,3 +67,78 @@
   .campaign-links-list li { grid-template-columns: 1fr; }
   .campaign-link-metric { text-align: left; }
 }
+
+/* Activity uses the same Settings surfaces, typography and action accent. */
+.campaign-links-section [hidden] { display: none !important; }
+.campaign-views { display: flex; gap: 24px; margin: 22px 0 24px; border-bottom: 1px solid var(--divider); }
+.campaign-views > button {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 42px; padding: 0 2px 12px;
+  border: 0; border-bottom: 2px solid transparent; background: none; color: var(--secondary); font: inherit; font-size: 13px; cursor: pointer;
+}
+.campaign-views > button[aria-pressed="true"] { border-bottom-color: var(--accent-text); color: var(--ink); font-weight: 600; }
+.campaign-views > button > span { padding: 1px 6px; border-radius: 5px; background: var(--inset); color: var(--secondary); font-size: 10px; }
+.campaign-views > button:focus-visible, .campaign-periods button:focus-visible,
+.campaign-ranking:focus-visible, .campaign-chart svg:focus-visible, .campaign-chart-data summary:focus-visible {
+  outline: 2px solid var(--accent-text); outline-offset: 4px;
+}
+.campaign-activity-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 28px; }
+.campaign-activity-controls > .flare-select { flex: 1; min-width: 160px; max-width: 320px; }
+.campaign-activity-controls .flare-select-trigger { width: 100%; }
+.campaign-activity-controls > .button { margin-left: auto; }
+.campaign-periods { display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: var(--inset); }
+.campaign-periods button { min-height: 32px; padding: 4px 10px; border: 0; border-radius: 6px; background: none; color: var(--secondary); font: inherit; font-size: 12px; cursor: pointer; }
+.campaign-periods button[aria-pressed="true"] { background: var(--card, var(--surface, var(--inset))); color: var(--ink); box-shadow: 0 1px 3px #00000013; font-weight: 600; }
+.campaign-activity-state { display: grid; justify-items: start; gap: 14px; padding: 30px 0 36px; font-size: 13px; }
+.campaign-activity-empty { padding: 40px 0 46px; }
+.campaign-activity-state h3 { font-size: 17px; }
+.campaign-activity-state p { max-width: 60ch; line-height: 1.6; }
+.campaign-activity-metrics { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 24px; margin: 0 0 30px; }
+.campaign-activity-metrics > div { min-width: 0; }
+.campaign-activity-metrics dt { color: var(--secondary); font-size: 12px; line-height: 1.5; }
+.campaign-activity-metrics dd { margin: 7px 0 0; color: var(--ink); font-size: 28px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; letter-spacing: -.035em; }
+.campaign-activity-metrics .campaign-peak { font-size: 19px; letter-spacing: -.02em; }
+.campaign-peak span { display: block; margin-top: 3px; color: var(--secondary); font-size: 11px; font-weight: 400; letter-spacing: 0; }
+.campaign-chart { margin: 0; }
+.campaign-chart figcaption { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; margin-bottom: 10px; }
+.campaign-chart h3, .campaign-breakdown h3 { color: var(--ink); font-size: 13px; font-weight: 600; }
+.campaign-chart-value { color: var(--secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
+.campaign-chart svg { display: block; width: 100%; height: auto; overflow: visible; border-radius: 4px; }
+.campaign-chart-grid line { stroke: var(--divider); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.campaign-chart-grid text, .campaign-chart-date { fill: var(--secondary); font-size: 12px; font-family: inherit; }
+.campaign-chart-line { fill: none; stroke: var(--accent-text); stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.campaign-chart-area { fill: var(--accent-text); opacity: .055; }
+.campaign-chart-dot { fill: var(--accent-text); stroke: var(--inset); stroke-width: 2; }
+.campaign-chart-cursor { stroke: var(--accent-text); stroke-dasharray: 3 5; opacity: .45; vector-effect: non-scaling-stroke; }
+.campaign-chart-zero { margin: 10px 0; }
+.campaign-chart-data { margin: 14px 0 0; color: var(--secondary); font-size: 11px; }
+.campaign-chart-data summary { width: fit-content; cursor: pointer; padding: 7px 0; color: var(--accent-text); }
+.campaign-chart-data > div { max-height: 250px; overflow: auto; margin-top: 8px; border: 1px solid var(--divider); border-radius: 8px; }
+.campaign-chart-data table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; font-variant-numeric: tabular-nums; }
+.campaign-chart-data th, .campaign-chart-data td { padding: 9px 12px; border-bottom: 1px solid var(--divider); font-weight: 400; }
+.campaign-chart-data thead th { color: var(--ink); font-weight: 600; }
+.campaign-chart-data td, .campaign-chart-data th:last-child { text-align: right; }
+.campaign-coverage { max-width: 92ch; margin: 12px 0 0; line-height: 1.6; }
+.campaign-breakdown { margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--divider); }
+.campaign-breakdown-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.campaign-breakdown ul { list-style: none; padding: 0; margin: 0; }
+.campaign-ranking { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 9px 20px; padding: 13px 0; width: 100%; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; text-align: left; }
+.campaign-ranking-name { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
+.campaign-ranking:hover .campaign-ranking-name { color: var(--accent-text); }
+.campaign-ranking-count { display: flex; align-items: center; gap: 16px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.campaign-ranking-count > span { min-width: 44px; text-align: right; color: var(--secondary); font-size: 11px; font-weight: 400; }
+.campaign-ranking-track { grid-column: 1 / -1; height: 4px; overflow: hidden; border-radius: 2px; background: var(--inset); }
+.campaign-ranking-track > span { display: block; height: 100%; background: var(--accent-text); opacity: .7; border-radius: 2px; }
+.campaign-activity-footnote { margin: 24px 0 0; padding-top: 16px; border-top: 1px solid var(--divider); max-width: 92ch; line-height: 1.7; }
+@media (max-width: 600px) {
+  .campaign-activity-controls { gap: 10px; margin-bottom: 24px; }
+  .campaign-activity-controls > .flare-select { flex-basis: 100%; max-width: none; }
+  .campaign-activity-controls > .button { min-height: 40px; }
+  .campaign-periods { flex: 1; }
+  .campaign-periods button { flex: 1; min-height: 36px; }
+  .campaign-activity-metrics { gap: 14px; grid-template-columns: 1fr 1fr; }
+  .campaign-activity-metrics > div:last-child { grid-column: 1 / -1; display: flex; gap: 14px; align-items: baseline; }
+  .campaign-activity-metrics .campaign-peak { margin: 0; font-size: 16px; }
+  .campaign-peak span { display: inline; margin-left: 8px; }
+  .campaign-chart figcaption { align-items: flex-start; flex-direction: column; gap: 7px; }
+  .campaign-chart-grid text, .campaign-chart-date { font-size: 22px; }
+}

@@ -197,6 +197,7 @@ function uiHarness({ locale = "en", role = "owner", createStatus = null, capabil
       if (name === "@/components/select") return { Select: "select" };
       if (name === "@/i18n/provider") return { useI18n: () => ({ locale }) };
       if (name === "./campaign-links-client") return client;
+      if (name === "./campaign-activity") return { CampaignActivityPanel: "campaign-activity" };
       if (name === "./campaign-links.css") return {};
       throw Error(name);
     },
@@ -332,4 +333,16 @@ test("campaign Settings UI explains the active-link cap instead of suggesting a 
   const text = renderedText(app.render());
   assert.match(text, /up to 25 active campaign links/i);
   assert.match(text, /Archive one before creating another/i);
+});
+
+
+test("campaign views open on activity and keep link editing in its own view", async () => {
+  const app = uiHarness(); await app.ready();
+  let tree = app.render();
+  assert.equal(nodes(tree).find(node => node.props?.id === "campaign-links-panel").props.hidden, true);
+  assert.ok(nodes(tree).some(node => node.type === "campaign-activity"));
+  nodes(tree).find(node => node.props?.id === "campaign-view-links").props.onClick();
+  tree = app.render();
+  assert.equal(nodes(tree).find(node => node.props?.id === "campaign-links-panel").props.hidden, false);
+  assert.ok(!nodes(tree).some(node => node.type === "campaign-activity"));
 });

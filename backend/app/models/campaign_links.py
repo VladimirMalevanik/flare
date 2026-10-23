@@ -1,7 +1,7 @@
 """Workspace campaign-link persistence and anonymous aggregate opens."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta, timezone
 import logging
 import re
 import secrets
@@ -150,6 +150,64 @@ class CampaignLinkRepository:
         if row is None:
             raise CampaignLinkNotFound
         return CampaignLinkRecord(**row)
+
+    def activity(self, days: int, link_id: UUID | None = None) -> dict:
+        if days not in {7, 30, 90}:
+            raise ValueError("Unsupported campaign activity period")
+        with self.database.workspace_transaction(
+            self.identity, snapshot=True, statement_timeout_ms=1_000,
+        ) as connection:
+            generated = connection.execute("SELECT transaction_timestamp() AS now").fetchone()["now"]
+            today = generated.astimezone(timezone.utc).date()
+            start = today - timedelta(days=days - 1)
+            parameters = (self.identity.workspace_id, link_id, link_id)
+            # One SQL snapshot keeps the time series, totals and ranking consistent
+            # even when another connection records an open during this request.
+            result = connection.execute(
+                """WITH links AS MATERIALIZED (
+                       SELECT id,label,archived_at,created_at,activity_started_at
+                       FROM public.campaign_links
+                       WHERE workspace_id=%s AND (%s::uuid IS NULL OR id=%s)
+                   ), counts AS MATERIALIZED (
+                       SELECT daily.link_id,daily.day,daily.opens
+                       FROM public.campaign_link_daily_opens daily
+                       JOIN links ON links.id=daily.link_id
+                       WHERE daily.day BETWEEN %s AND %s
+                   ), per_day AS (
+                       SELECT day,sum(opens)::bigint AS opens FROM counts GROUP BY day
+                   ), ranked AS (
+                       SELECT links.id,links.label,links.archived_at,
+                              coalesce(sum(counts.opens),0)::bigint AS opens
+                       FROM links LEFT JOIN counts ON counts.link_id=links.id
+                       GROUP BY links.id,links.label,links.archived_at,links.created_at
+                       ORDER BY opens DESC,links.created_at DESC,links.id LIMIT 10
+                   )
+                   SELECT min(activity_started_at) AS started_at,count(*) AS links,
+                          (SELECT jsonb_agg(to_jsonb(per_day)) FROM per_day) AS daily,
+                          (SELECT jsonb_agg(to_jsonb(ranked)) FROM ranked) AS top_links
+                   FROM links""",
+                (*parameters, start, today),
+            ).fetchone()
+            if link_id is not None and result["links"] == 0:
+                raise CampaignLinkNotFound
+            rows = result["daily"] or []
+            top_links = result["top_links"] or []
+        counts = {date.fromisoformat(row["day"]): row["opens"] for row in rows}
+        started = result["started_at"]
+        first_day = started.astimezone(timezone.utc).date() if started else None
+        daily = []
+        for offset in range(days):
+            day = start + timedelta(days=offset)
+            daily.append({"date": day, "opens": counts.get(day, 0)
+                          if first_day is not None and day >= first_day else None})
+        return {
+            "days": days, "timezone": "UTC", "generatedAt": generated,
+            "recordingStartedAt": started, "daily": daily,
+            "totalOpens": sum(counts.values()),
+            "topLinks": [{"id": row["id"], "label": row["label"],
+                          "archivedAt": row["archived_at"], "opens": row["opens"]}
+                         for row in top_links],
+        }
 
     def rename(self, link_id: UUID, label: str) -> CampaignLinkRecord:
         with self.database.workspace_transaction(

@@ -1,12 +1,12 @@
 """Owner-managed UTM links and public aggregate redirect counting."""
 
-from datetime import datetime
+from datetime import date, datetime
 import threading
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 import psycopg
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -68,6 +68,28 @@ class CampaignLinkResponse(BaseModel):
     click_count: int = Field(alias="clickCount", ge=0)
     created_at: datetime = Field(alias="createdAt")
     archived_at: datetime | None = Field(alias="archivedAt")
+
+
+class CampaignActivityDay(BaseModel):
+    date: date
+    opens: int | None = Field(ge=0)
+
+
+class CampaignActivityLink(BaseModel):
+    id: UUID
+    label: str
+    opens: int = Field(ge=0)
+    archivedAt: datetime | None
+
+
+class CampaignActivityResponse(BaseModel):
+    days: Literal[7, 30, 90]
+    timezone: Literal["UTC"]
+    generatedAt: datetime
+    recordingStartedAt: datetime | None
+    totalOpens: int = Field(ge=0)
+    daily: list[CampaignActivityDay]
+    topLinks: list[CampaignActivityLink]
 
 
 def _can_manage(request: Request, user: AuthenticatedUser) -> bool:
@@ -216,6 +238,23 @@ def create_campaign_link(
             utm_content=payload.utm_content,
         )
         return _response(record, origin)
+    except Exception as error:
+        _error(error)
+
+
+@router.get("/activity", response_model=CampaignActivityResponse)
+def campaign_link_activity(
+    response: Response,
+    user: Annotated[AuthenticatedUser, Depends(_owner)],
+    database: Annotated[Database, Depends(_database)],
+    days: Annotated[int, Query(ge=7, le=90)] = 30,
+    link_id: Annotated[UUID | None, Query(alias="linkId")] = None,
+) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    if days not in {7, 30, 90}:
+        raise HTTPException(422, "Choose a 7, 30 or 90 day period.")
+    try:
+        return CampaignLinkRepository(database, user.identity).activity(days, link_id)
     except Exception as error:
         _error(error)
 
