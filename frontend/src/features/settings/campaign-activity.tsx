@@ -18,6 +18,7 @@ const copy = {
     coverage: "Daily recording started", coverageEnd: "Earlier opens remain in lifetime totals. The first day and today may be partial.",
     timezone: "Days are shown in UTC.", keyboard: "Use the left and right arrow keys to explore days; Home and End jump to the first and last day.",
     scope: "Repeat opens and automated previews can count. These are not unique visitors or signup conversions.",
+    shortLinks: "Only Flare short links (/r/…) are counted here; direct URLs with UTM tags are not included.",
     share: "of recorded opens", updated: "Updated", choose: "View activity for",
   },
   es: {
@@ -32,6 +33,7 @@ const copy = {
     coverage: "El registro diario comenzó el", coverageEnd: "Las aperturas anteriores permanecen en los totales históricos. El primer día y hoy pueden estar incompletos.",
     timezone: "Los días se muestran en UTC.", keyboard: "Usa las flechas izquierda y derecha para explorar; Inicio y Fin van al primer y último día.",
     scope: "Las aperturas repetidas y las vistas previas automáticas pueden contar. No son visitantes únicos ni conversiones de registro.",
+    shortLinks: "Aquí solo se cuentan los enlaces cortos de Flare (/r/…); las URL directas con etiquetas UTM no se incluyen.",
     share: "de las aperturas registradas", updated: "Actualizado", choose: "Ver actividad de",
   },
 };
@@ -80,7 +82,7 @@ export function CampaignActivityPanel({ links, loading, failed, onRetryLinks, on
         {([7, 30, 90] as const).map(period => <button type="button" key={period} aria-pressed={days === period}
           onClick={() => setDays(period)}>{c.days(period)}</button>)}
       </div>
-      <button type="button" className="button" onClick={() => setRevision(value => value + 1)}>{c.refresh}</button>
+      <button type="button" className="button" onClick={() => { setRevision(value => value + 1); onRetryLinks(); }}>{c.refresh}</button>
     </div>
     <CampaignActivityResult key={`${days}:${selected?.id ?? "all"}:${revision}:${linksRevision}`}
       days={days} linkId={selected?.id ?? null} c={c} locale={locale}
@@ -124,7 +126,7 @@ export function CampaignActivityResult({ days, linkId, c, locale, onRetry, onSel
       <div className="campaign-breakdown-heading"><h3>{c.comparison}</h3><p className="muted meta">{c.top}</p></div>
       <ul>{result.topLinks.map(link => <li key={link.id}>
         <button type="button" className="campaign-ranking" onClick={() => onSelect({ id: link.id, label: link.label })}
-          aria-label={`${c.choose} ${link.label}`}>
+          aria-label={`${c.choose} ${link.label}, ${link.opens.toLocaleString(locale)} ${c.dayOpens.toLowerCase()}`}>
           <span className="campaign-ranking-name">{link.label}{link.archivedAt && <span className="badge">{c.archived}</span>}</span>
           <span className="campaign-ranking-count">{link.opens.toLocaleString(locale)}
             <span>{new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 1 }).format(result.totalOpens ? link.opens / result.totalOpens : 0)}</span>
@@ -133,8 +135,8 @@ export function CampaignActivityResult({ days, linkId, c, locale, onRetry, onSel
         </button>
       </li>)}</ul>
     </section>
-    <p className="muted meta campaign-activity-footnote">{c.scope} {c.timezone}<br />
-      {c.updated} <time dateTime={result.generatedAt}>{new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(new Date(result.generatedAt))} UTC</time>.
+    <p className="muted meta campaign-activity-footnote">{c.scope} {c.shortLinks} {c.timezone}<br />
+      {c.updated} <time dateTime={result.generatedAt}>{new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(new Date(result.generatedAt))} {result.timezone}</time>.
     </p>
   </div>;
 }

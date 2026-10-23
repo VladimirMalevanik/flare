@@ -236,7 +236,7 @@ export function CampaignLinksPanel() {
         <h2><Icon name="url" />{c.title}</h2>
         <p className="muted meta">{c.subtitle}</p>
       </header>
-      {status && <p className={`campaign-link-status ${error ? "is-error" : ""}`} role={error ? "alert" : "status"}>{status}</p>}
+      {status && !(listFailed && view === "activity") && <p className={`campaign-link-status ${error ? "is-error" : ""}`} role={error ? "alert" : "status"}>{status}</p>}
       <div className="campaign-views" role="group" aria-label={c.views}>
         <button id="campaign-view-activity" type="button" aria-pressed={view === "activity"} aria-controls="campaign-activity-panel" onClick={() => setView("activity")}>{c.activityView}</button>
         <button id="campaign-view-links" type="button" aria-pressed={view === "links"} aria-controls="campaign-links-panel" onClick={() => setView("links")}>{c.linksView}{links.length > 0 && <span>{links.length}</span>}</button>

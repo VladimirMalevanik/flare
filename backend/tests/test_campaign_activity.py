@@ -15,8 +15,8 @@ import pytest
 
 from app.api import campaign_links as api
 from app.api.auth import verified_user
-from app.models.campaign_links import CampaignLinkOpener
-from app.models.database import Database, WorkspaceIdentity
+from app.models import campaign_links as campaign_model
+from app.models.database import _connection_is_ready
 from app.services.auth_service import AuthenticatedUser
 from test_campaign_links import campaign_environment, _create
 
@@ -136,15 +136,14 @@ def test_link_filter_and_rls_cannot_read_another_workspace_or_write_daily_rows()
         with environment.client() as other:
             assert other.get("/campaign-links/activity").json()["totalOpens"] == 0
             assert other.get("/campaign-links/activity", params={"linkId": first["id"]}).status_code == 404
-        database = Database(environment.runtime_url)
-        try:
-            with database.workspace_transaction(WorkspaceIdentity(uuid4(), user)) as connection:
-                assert connection.execute("SELECT * FROM public.campaign_link_daily_opens").fetchall() == []
-            with pytest.raises(psycopg.errors.InsufficientPrivilege):
-                with database.workspace_transaction(WorkspaceIdentity(workspace, user), write=True) as connection:
-                    connection.execute("INSERT INTO public.campaign_link_daily_opens(link_id,day,opens) VALUES(%s,current_date,10)", (UUID(first["id"]),))
-        finally:
-            database.close()
+        with psycopg.connect(environment.runtime_url) as connection:
+            connection.execute("SELECT set_config('app.workspace_id',%s,true),set_config('app.user_id',%s,true)", (str(uuid4()), user))
+            assert connection.execute("SELECT * FROM public.campaign_link_daily_opens").fetchall() == []
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            with psycopg.connect(environment.runtime_url) as connection:
+                connection.execute("SELECT set_config('app.workspace_id',%s,true),set_config('app.user_id',%s,true)", (str(workspace), user))
+                connection.execute("INSERT INTO public.campaign_link_daily_opens(link_id,day,opens) VALUES(%s,current_date,10)", (UUID(first["id"]),))
+
 
 
 @pytest.mark.integration
@@ -163,7 +162,8 @@ def test_counter_function_uses_utc_and_concurrent_opens_remain_exact():
 
 
 @pytest.mark.integration
-def test_daily_write_failure_rolls_back_both_counters_but_does_not_break_redirect():
+def test_daily_write_failure_rolls_back_both_counters_but_does_not_break_redirect(monkeypatch):
+    monkeypatch.setattr(campaign_model, "_LAST_COUNT_WARNING", float("-inf"))
     with campaign_environment() as environment, environment.client() as client:
         link = _create(client)
         environment.execute_admin("INSERT INTO public.campaign_link_daily_opens(link_id,day,opens) VALUES(%s,(clock_timestamp() AT TIME ZONE 'UTC')::date,9223372036854775807)", (UUID(link["id"]),))
@@ -171,3 +171,32 @@ def test_daily_write_failure_rolls_back_both_counters_but_does_not_break_redirec
         assert response.status_code == 302
         assert client.get(f"/campaign-links/{link['id']}").json()["clickCount"] == 0
         assert environment.fetchone_admin("SELECT opens FROM public.campaign_link_daily_opens WHERE link_id=%s", (UUID(link["id"]),))[0] == 9223372036854775807
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("tamper", [
+    "ALTER TABLE public.campaign_link_daily_opens DISABLE ROW LEVEL SECURITY",
+    "GRANT SELECT ON public.campaign_link_daily_opens TO PUBLIC",
+    "GRANT UPDATE ON public.campaign_link_daily_opens TO flare_app",
+    "CREATE POLICY leak ON public.campaign_link_daily_opens TO flare_app USING(true)",
+])
+def test_readiness_rejects_weakened_daily_counter_security(tamper):
+    with campaign_environment() as environment, environment.client() as client:
+        assert client.get("/campaign-links/activity").status_code == 200
+        with psycopg.connect(environment.admin_url) as connection:
+            connection.execute(tamper)
+            connection.execute("SET LOCAL ROLE flare_app")
+            assert _connection_is_ready(connection) is False
+            connection.rollback()
+
+
+@pytest.mark.integration
+def test_ranking_is_bounded_but_timeline_includes_every_link():
+    with campaign_environment() as environment, environment.client() as client:
+        for i in range(12):
+            link = _create(client, label=f"Campaign {i}")
+            client.get(f"/campaign-links/r/{link['slug']}", follow_redirects=False)
+        data = client.get("/campaign-links/activity").json()
+        assert len(data["topLinks"]) == 10
+        assert data["totalOpens"] == 12
+        assert sum(row["opens"] for row in data["daily"] if row["opens"] is not None) == 12

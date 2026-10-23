@@ -14,7 +14,7 @@ from psycopg_pool import ConnectionPool
 from pwdlib import PasswordHash
 
 
-CURRENT_SCHEMA_REVISION = "0025"
+CURRENT_SCHEMA_REVISION = "0026"
 DATABASE_STARTUP_TIMEOUT_SECONDS = 300
 DATABASE_READINESS_TIMEOUT_SECONDS = 3
 IMPORT_STAGING_TABLES = ("import_staging_blocks", "import_staging_health")
@@ -64,6 +64,7 @@ TENANT_TABLES = (
     "billing_subscriptions",
     "source_connections", "source_auth_states", "source_jobs", "source_items",
     "campaign_links",
+    "campaign_link_daily_opens",
 )
 
 
@@ -205,6 +206,7 @@ def _connection_is_ready(connection: Connection) -> bool:
                UNION ALL SELECT 1 FROM (SELECT workspace_id FROM public.source_jobs) source_jobs_visible
                UNION ALL SELECT 1 FROM (SELECT workspace_id FROM public.source_items) source_items_visible
                UNION ALL SELECT 1 FROM public.campaign_links
+               UNION ALL SELECT 1 FROM public.campaign_link_daily_opens
            )"""
     ).fetchone()
     if customer_rows_are_hidden != (True,):
@@ -250,6 +252,8 @@ def _connection_is_ready(connection: Connection) -> bool:
     if not _import_staging_is_safe(connection):
         return False
 
+    if not _campaign_activity_is_safe(connection):
+        return False
     if not _campaign_links_are_safe(connection):
         return False
 
@@ -258,6 +262,38 @@ def _connection_is_ready(connection: Connection) -> bool:
         "WHERE extname IN ('vector', 'pgvector') AND to_regtype('vector') IS NOT NULL"
     ).fetchone()
     return extension is not None
+
+
+def _campaign_activity_is_safe(connection: Connection) -> bool:
+    """Daily aggregates are read-only for owners and private to the same tenant."""
+    safe = connection.execute("""SELECT relrowsecurity AND relforcerowsecurity
+        AND has_table_privilege('flare_app',oid,'SELECT')
+        AND NOT has_table_privilege('flare_app',oid,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+        AND NOT has_any_column_privilege('flare_app',oid,'INSERT,UPDATE,REFERENCES')
+        AND NOT has_table_privilege('flare_worker',oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+        AND NOT has_any_column_privilege('flare_worker',oid,'SELECT,INSERT,UPDATE,REFERENCES')
+        AND NOT has_table_privilege('public',oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+        AND NOT has_any_column_privilege('public',oid,'SELECT,INSERT,UPDATE,REFERENCES')
+        AND NOT has_column_privilege('flare_app','public.campaign_links','activity_started_at','INSERT')
+        AND NOT has_column_privilege('flare_app','public.campaign_links','activity_started_at','UPDATE')
+        AND (SELECT count(*)=2 FROM pg_policy WHERE polrelid='public.campaign_link_daily_opens'::regclass)
+        AND EXISTS(SELECT 1 FROM pg_policy p
+            WHERE p.polrelid='public.campaign_link_daily_opens'::regclass
+              AND p.polname='campaign_daily_owner' AND p.polcmd='r'
+              AND p.polroles=ARRAY[(SELECT oid FROM pg_roles WHERE rolname='flare_app')]
+              AND position('app.workspace_id' IN pg_get_expr(p.polqual,p.polrelid))>0
+              AND position('app.user_id' IN pg_get_expr(p.polqual,p.polrelid))>0
+              AND position('owner' IN pg_get_expr(p.polqual,p.polrelid))>0)
+        AND EXISTS(SELECT 1 FROM pg_policy p
+            WHERE p.polrelid='public.campaign_link_daily_opens'::regclass
+              AND p.polname='campaign_daily_executor' AND p.polcmd='*'
+              AND cardinality(p.polroles)=1
+              AND EXISTS(SELECT 1 FROM pg_roles r WHERE r.oid=p.polroles[1]
+                  AND r.rolname IN ('flare_owner','flare_job_executor'))
+              AND pg_get_expr(p.polqual,p.polrelid)='true'
+              AND pg_get_expr(p.polwithcheck,p.polrelid)='true')
+        FROM pg_class WHERE oid='public.campaign_link_daily_opens'::regclass""").fetchone()
+    return safe == (True,)
 
 
 def _campaign_links_are_safe(connection: Connection) -> bool:

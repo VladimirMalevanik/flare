@@ -155,7 +155,7 @@ class CampaignLinkRepository:
         if days not in {7, 30, 90}:
             raise ValueError("Unsupported campaign activity period")
         with self.database.workspace_transaction(
-            self.identity, statement_timeout_ms=1_000,
+            self.identity, snapshot=True, statement_timeout_ms=1_000,
         ) as connection:
             generated = connection.execute("SELECT transaction_timestamp() AS now").fetchone()["now"]
             today = generated.astimezone(timezone.utc).date()

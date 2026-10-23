@@ -334,3 +334,15 @@ test("campaign Settings UI explains the active-link cap instead of suggesting a 
   assert.match(text, /up to 25 active campaign links/i);
   assert.match(text, /Archive one before creating another/i);
 });
+
+
+test("campaign views open on activity and keep link editing in its own view", async () => {
+  const app = uiHarness(); await app.ready();
+  let tree = app.render();
+  assert.equal(nodes(tree).find(node => node.props?.id === "campaign-links-panel").props.hidden, true);
+  assert.ok(nodes(tree).some(node => node.type === "campaign-activity"));
+  nodes(tree).find(node => node.props?.id === "campaign-view-links").props.onClick();
+  tree = app.render();
+  assert.equal(nodes(tree).find(node => node.props?.id === "campaign-links-panel").props.hidden, false);
+  assert.ok(!nodes(tree).some(node => node.type === "campaign-activity"));
+});
