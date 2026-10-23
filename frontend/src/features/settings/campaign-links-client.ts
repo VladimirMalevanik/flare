@@ -157,3 +157,57 @@ export async function archiveCampaignLink(id: string): Promise<void> {
   if (!id || id.length > 100) throw new CampaignLinkError("Campaign link is unavailable.");
   await request(`/${encodeURIComponent(id)}/archive`, { method: "POST" });
 }
+
+export type CampaignActivity = {
+  days: 7 | 30 | 90;
+  timezone: "UTC";
+  generatedAt: string;
+  recordingStartedAt: string | null;
+  totalOpens: number;
+  daily: { date: string; opens: number | null }[];
+  topLinks: { id: string; label: string; opens: number; archivedAt: string | null }[];
+};
+
+export function mapCampaignActivity(value: unknown): CampaignActivity {
+  const item = record(value);
+  const fail = (): never => { throw new CampaignLinkError("The server returned an invalid campaign activity report."); };
+  const count = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) >= 0;
+  if (![7, 30, 90].includes(item.days as number) || item.timezone !== "UTC" ||
+      !count(item.totalOpens) || !Array.isArray(item.daily) || item.daily.length !== item.days ||
+      !Array.isArray(item.topLinks) || item.topLinks.length > 10) return fail();
+  const generatedAt = text(item, "generatedAt");
+  if (!Number.isFinite(Date.parse(generatedAt))) return fail();
+  const recordingStartedAt = nullableDate(item, "recordingStartedAt");
+  const end = new Date(generatedAt).toISOString().slice(0, 10);
+  const start = Date.parse(`${end}T00:00:00Z`) - ((item.days as number) - 1) * 86400000;
+  const coverage = recordingStartedAt ? new Date(recordingStartedAt).toISOString().slice(0, 10) : null;
+  const daily = item.daily.map((raw, index) => {
+    const row = record(raw), day = new Date(start + index * 86400000).toISOString().slice(0, 10);
+    if (row.date !== day || !(row.opens === null || count(row.opens)) ||
+        ((coverage === null || day < coverage) !== (row.opens === null))) return fail();
+    return { date: day, opens: row.opens as number | null };
+  });
+  if (daily.reduce((sum, day) => sum + (day.opens ?? 0), 0) !== item.totalOpens) return fail();
+  const ids = new Set<string>();
+  const topLinks = item.topLinks.map(raw => {
+    const row = record(raw), id = text(row, "id"), label = text(row, "label");
+    if (!id || !label || label.length > 80 || ids.has(id) || !count(row.opens) || row.opens > (item.totalOpens as number)) return fail();
+    ids.add(id);
+    return { id, label, opens: row.opens, archivedAt: nullableDate(row, "archivedAt") };
+  });
+  if (topLinks.reduce((sum, link) => sum + link.opens, 0) > item.totalOpens) return fail();
+  return { days: item.days as 7 | 30 | 90, timezone: "UTC", generatedAt,
+    recordingStartedAt, totalOpens: item.totalOpens, daily, topLinks };
+}
+
+export async function getCampaignActivity(days: 7 | 30 | 90, linkId: string | null, signal?: AbortSignal): Promise<CampaignActivity> {
+  if (![7, 30, 90].includes(days) || (linkId !== null && (!linkId || linkId.length > 100))) {
+    throw new CampaignLinkError("Choose a valid campaign activity filter.");
+  }
+  const value = await request(`/activity?days=${days}${linkId ? `&linkId=${encodeURIComponent(linkId)}` : ""}`, { signal });
+  const result = mapCampaignActivity(value);
+  if (result.days !== days || (linkId !== null && (result.topLinks.length !== 1 || result.topLinks[0].id !== linkId))) {
+    throw new CampaignLinkError("The server returned activity for a different filter.");
+  }
+  return result;
+}

@@ -1,7 +1,7 @@
 """Workspace campaign-link persistence and anonymous aggregate opens."""
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import logging
 import re
 import secrets
@@ -161,36 +161,39 @@ class CampaignLinkRepository:
             today = generated.astimezone(timezone.utc).date()
             start = today - timedelta(days=days - 1)
             parameters = (self.identity.workspace_id, link_id, link_id)
-            coverage = connection.execute(
-                """SELECT min(activity_started_at) AS started_at, count(*) AS links
-                   FROM public.campaign_links
-                   WHERE workspace_id=%s AND (%s::uuid IS NULL OR id=%s)""",
-                parameters,
-            ).fetchone()
-            if link_id is not None and coverage["links"] == 0:
-                raise CampaignLinkNotFound
-            rows = connection.execute(
-                """SELECT daily.day, sum(daily.opens)::bigint AS opens
-                   FROM public.campaign_link_daily_opens daily
-                   JOIN public.campaign_links link ON link.id=daily.link_id
-                   WHERE link.workspace_id=%s AND (%s::uuid IS NULL OR link.id=%s)
-                     AND daily.day BETWEEN %s AND %s
-                   GROUP BY daily.day ORDER BY daily.day""",
+            # One SQL snapshot keeps the time series, totals and ranking consistent
+            # even when another connection records an open during this request.
+            result = connection.execute(
+                """WITH links AS MATERIALIZED (
+                       SELECT id,label,archived_at,created_at,activity_started_at
+                       FROM public.campaign_links
+                       WHERE workspace_id=%s AND (%s::uuid IS NULL OR id=%s)
+                   ), counts AS MATERIALIZED (
+                       SELECT daily.link_id,daily.day,daily.opens
+                       FROM public.campaign_link_daily_opens daily
+                       JOIN links ON links.id=daily.link_id
+                       WHERE daily.day BETWEEN %s AND %s
+                   ), per_day AS (
+                       SELECT day,sum(opens)::bigint AS opens FROM counts GROUP BY day
+                   ), ranked AS (
+                       SELECT links.id,links.label,links.archived_at,
+                              coalesce(sum(counts.opens),0)::bigint AS opens
+                       FROM links LEFT JOIN counts ON counts.link_id=links.id
+                       GROUP BY links.id,links.label,links.archived_at,links.created_at
+                       ORDER BY opens DESC,links.created_at DESC,links.id LIMIT 10
+                   )
+                   SELECT min(activity_started_at) AS started_at,count(*) AS links,
+                          (SELECT jsonb_agg(to_jsonb(per_day)) FROM per_day) AS daily,
+                          (SELECT jsonb_agg(to_jsonb(ranked)) FROM ranked) AS top_links
+                   FROM links""",
                 (*parameters, start, today),
-            ).fetchall()
-            top_links = connection.execute(
-                """SELECT link.id,link.label,link.archived_at,
-                          coalesce(sum(daily.opens),0)::bigint AS opens
-                   FROM public.campaign_links link
-                   LEFT JOIN public.campaign_link_daily_opens daily
-                     ON daily.link_id=link.id AND daily.day BETWEEN %s AND %s
-                   WHERE link.workspace_id=%s AND (%s::uuid IS NULL OR link.id=%s)
-                   GROUP BY link.id
-                   ORDER BY opens DESC,link.created_at DESC,link.id LIMIT 10""",
-                (start, today, *parameters),
-            ).fetchall()
-        counts = {row["day"]: row["opens"] for row in rows}
-        started = coverage["started_at"]
+            ).fetchone()
+            if link_id is not None and result["links"] == 0:
+                raise CampaignLinkNotFound
+            rows = result["daily"] or []
+            top_links = result["top_links"] or []
+        counts = {date.fromisoformat(row["day"]): row["opens"] for row in rows}
+        started = result["started_at"]
         first_day = started.astimezone(timezone.utc).date() if started else None
         daily = []
         for offset in range(days):

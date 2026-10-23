@@ -197,6 +197,7 @@ function uiHarness({ locale = "en", role = "owner", createStatus = null, capabil
       if (name === "@/components/select") return { Select: "select" };
       if (name === "@/i18n/provider") return { useI18n: () => ({ locale }) };
       if (name === "./campaign-links-client") return client;
+      if (name === "./campaign-activity") return { CampaignActivityPanel: "campaign-activity" };
       if (name === "./campaign-links.css") return {};
       throw Error(name);
     },
