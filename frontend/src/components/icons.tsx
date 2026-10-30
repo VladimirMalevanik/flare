@@ -1,5 +1,7 @@
 import type { ComponentType, SVGProps } from "react";
 import {
+  EyeIcon,
+  EyeSlashIcon,
   ShareIcon,
   UserGroupIcon,
   MoonIcon,
@@ -29,6 +31,8 @@ import {
   ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 export type IconName =
+  | "eye"
+  | "eye-off"
   | "team"
   | "sources"
   | "moon"
@@ -54,6 +58,8 @@ export type IconName =
   | "arrow"
   | "reset";
 const icons: Record<IconName, ComponentType<SVGProps<SVGSVGElement>>> = {
+  eye: EyeIcon,
+  "eye-off": EyeSlashIcon,
   team: UserGroupIcon,
   sources: ShareIcon,
   moon: MoonIcon,

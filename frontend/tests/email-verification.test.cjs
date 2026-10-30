@@ -19,6 +19,7 @@ function load(relative, mocks = {}, globals = {}) {
     exports,
     require(name) {
       if (name in mocks) return mocks[name];
+      if (name === "@/components/password-field") return { PasswordField: "password-field" };
       if (name === "@/lib/data/import-request") return load("../src/lib/data/import-request.ts", {}, { AbortController, setTimeout, clearTimeout });
       if (name === "./acquisition") return { currentAcquisitionOptIn: () => false, resetAcquisitionConsent() {} };
       if (name === "@/i18n/provider") return require("./i18n-utils.cjs").i18nMock();

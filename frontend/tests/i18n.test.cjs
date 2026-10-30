@@ -17,6 +17,7 @@ function load(relative, mocks = {}, globals = {}) {
   const exports = {};
   vm.runInNewContext(code, { exports, Intl, ...globals, require(name) {
     if (name in mocks) return mocks[name];
+      if (name === "@/components/password-field") return { PasswordField: "password-field" };
       if (name === '@/lib/data/import-request') return loadPure('../src/lib/data/import-request.ts');
     if (name === '@/lib/team-context') return { projectApiUrl: url => url, projectHref: path => path };
       if (name === '@/features/team/project-menu') return { ProjectMenu: () => null };

@@ -1,4 +1,6 @@
 export const uiEn = {
+  "Show password": "Show password",
+  "Hide password": "Hide password",
   "Connect your account": "Connect your account",
   "Cancel connection": "Cancel connection",
   "Connect your account to resume sync. Saved notes stay in Vault.": "Connect your account to resume sync. Saved notes stay in Vault.",
