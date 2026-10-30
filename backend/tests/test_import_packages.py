@@ -91,6 +91,7 @@ def test_end_to_end_gate_provenance_exact_retry_no_ai(env,kind,monkeypatch):
         items=client.get('/items').json()
         assert len(items)==3
         assert all(item['relativePath'] and item['importPackageId']==id for item in items)
+        assert all(item['createdBy']==user for item in items)
         assert len([item for item in items if item['title']=='Idea'])==2
         assert client.get('/imports/packages/publications').json()['publications'][0]['package_id']==id
         assert admin(e,'SELECT count(*) FROM analysis_jobs WHERE workspace_id=%s',(ws,))==[(0,)]

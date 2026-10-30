@@ -1,4 +1,8 @@
 export const uiEn = {
+  "Connect your account": "Connect your account",
+  "Cancel connection": "Cancel connection",
+  "Connect your account to resume sync. Saved notes stay in Vault.": "Connect your account to resume sync. Saved notes stay in Vault.",
+
   "Notes added after preparation may wait for the following scheduled run.": "Notes added after preparation may wait for the following scheduled run.",
   "Checking insight schedule…": "Checking insight schedule…",
   "Your content is saved. The insight time is unavailable.": "Your content is saved. The insight time is unavailable.",
