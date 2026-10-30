@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import asyncio
 import logging
 import psycopg
 from time import perf_counter
@@ -15,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 from app.api.acquisition import router as acquisition_router
 from app.api.analytics import router as analytics_router
-from app.api.auth import router as auth_router
+from app.api.auth import router as auth_router, AuthBodyLimit
 from app.api.billing import router as billing_router, WEBHOOK_PATH
 from app.api.team import router as team_router, TeamBodyLimit
 from app.api.flares import router as flares_router
@@ -36,6 +37,7 @@ from app.config import Settings, settings
 from app.models.database import Database, WorkspaceIdentity
 from app.services.email import EmailSender
 from app.services.smtp_email import LoggingEmailSender, SmtpEmailSender
+from app.services.password_recovery import RecoveryDispatcher
 
 
 # Uvicorn configures this logger at INFO even when its raw access logger is off.
@@ -72,16 +74,12 @@ def create_app(
         configured.validate()
         if email_sender is not None:
             application.state.email_sender = email_sender
-        elif configured.team_enabled and configured.smtp_url:
+        elif configured.smtp_url and configured.email_from:
             application.state.email_sender = SmtpEmailSender(configured.smtp_url, configured.email_from or "")
         elif configured.team_enabled and configured.environment != 'production' and configured.app_public_url:
             application.state.email_sender = LoggingEmailSender()
         elif not configured.email_verification_required:
             application.state.email_sender = None
-        elif configured.smtp_url:
-            application.state.email_sender = SmtpEmailSender(
-                configured.smtp_url, configured.email_from or ""
-            )
         else:
             # validate() limits this sender to explicit localhost development/test.
             application.state.email_sender = LoggingEmailSender()
@@ -91,6 +89,8 @@ def create_app(
         if managed_database is None and configured.database_url:
             managed_database = Database(configured.database_url)
         application.state.database = managed_database
+        dispatcher = RecoveryDispatcher()
+        application.state.recovery_dispatcher = dispatcher
         try:
             if managed_database is not None:
                 managed_database.open()
@@ -103,6 +103,7 @@ def create_app(
                     )
             yield
         finally:
+            await asyncio.to_thread(dispatcher.close)
             if owns_database and managed_database is not None and database_opened:
                 managed_database.close()
 
@@ -116,6 +117,7 @@ def create_app(
     application.state.database = database
     application.state.email_sender = email_sender
     application.add_middleware(TeamBodyLimit)
+    application.add_middleware(AuthBodyLimit)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=configured.cors_origins,

@@ -47,7 +47,9 @@ export function AuthForm({ register = false }: { register?: boolean }) {
       // Full navigation clears any previous user's client state and route cache.
       window.location.replace("/vault");
     } catch (caught) {
-      if (
+      if (caught instanceof AuthRequestError && caught.code === "auth_busy") {
+        setError("Please wait a moment and try again.");
+      } else if (
         caught instanceof AuthRequestError &&
         ["email_verification_required", "email_delivery_failed"].includes(
           caught.code ?? "",
@@ -148,6 +150,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
               {t("passwordHelp")}
             </p>
           )}
+          {!register && <Link href="/forgot-password">{t("Forgot password?")}</Link>}
           {register && (
             <label className="legal-consent">
               <input
