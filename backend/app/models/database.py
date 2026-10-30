@@ -14,7 +14,7 @@ from psycopg_pool import ConnectionPool
 from pwdlib import PasswordHash
 
 
-CURRENT_SCHEMA_REVISION = "0026"
+CURRENT_SCHEMA_REVISION = "0027"
 DATABASE_STARTUP_TIMEOUT_SECONDS = 300
 DATABASE_READINESS_TIMEOUT_SECONDS = 3
 IMPORT_STAGING_TABLES = ("import_staging_blocks", "import_staging_health")
@@ -106,6 +106,27 @@ def _connection_is_ready(connection: Connection) -> bool:
         "SELECT version_num FROM public.alembic_version"
     ).fetchone()
     if revision != (CURRENT_SCHEMA_REVISION,):
+        return False
+
+    reset_private = connection.execute("""SELECT count(*)=1 AND bool_and(
+        pg_get_userbyid(c.relowner) NOT IN ('flare_app','flare_worker')
+        AND (SELECT count(*) FROM pg_attribute a WHERE a.attrelid=c.oid AND NOT a.attisdropped
+            AND a.attname=ANY(ARRAY['token_hash','user_id','email','created_at','expires_at','sent_at']))=6
+        AND has_table_privilege('flare_app',c.oid,'SELECT')
+        AND has_table_privilege('flare_app',c.oid,'INSERT')
+        AND has_table_privilege('flare_app',c.oid,'UPDATE')
+        AND has_table_privilege('flare_app',c.oid,'DELETE')
+        AND NOT has_table_privilege('flare_app',c.oid,'TRUNCATE,REFERENCES,TRIGGER')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(c.relacl) a
+            WHERE a.grantee=(SELECT oid FROM pg_roles WHERE rolname='flare_app') AND a.is_grantable)
+        AND NOT has_table_privilege('flare_worker',c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE a.grantee=0)
+        AND NOT EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attnum>0
+            AND (has_column_privilege('flare_worker',c.oid,a.attnum,'SELECT,INSERT,UPDATE,REFERENCES')
+                 OR EXISTS(SELECT 1 FROM aclexplode(a.attacl) x WHERE x.grantee=0))))
+        FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE n.nspname='public' AND c.relname='auth_password_resets'""").fetchone()
+    if reset_private != (True,):
         return False
 
     team_tables = ['team_policy','team_projects','team_invitations','team_tasks','team_task_history','team_member_events']

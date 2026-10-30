@@ -7,6 +7,24 @@ class EmailSender(Protocol):
     def send(self, *, to: str, subject: str, text: str) -> None: ...
 
 
+def password_reset_message(app_public_url: str, token: str) -> tuple[str, str]:
+    # Fragments are not sent to the HTTP server or included in Referer headers.
+    link = f"{app_public_url.rstrip('/')}/reset-password#token={token}"
+    return "Reset your Flare password", (
+        f"Someone requested a password reset for your Flare account.\n\n{link}\n\n"
+        "This one-use link expires in 30 minutes. If you did not request it, "
+        "ignore this email. Your password has not changed."
+    )
+
+
+def password_changed_message() -> tuple[str, str]:
+    return "Your Flare password was changed", (
+        "Your Flare password has been changed and your previous sessions have ended. "
+        "Sign in again with your new password. If you did not make this change, "
+        "request a new password reset from Flare and secure your email account."
+    )
+
+
 def verification_message(app_public_url: str, token: str, ttl_seconds: int) -> tuple[str, str]:
     link = f"{app_public_url.rstrip('/')}/verify-email?token={token}"
     subject = "Verify your Flare email"

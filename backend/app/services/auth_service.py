@@ -1,9 +1,11 @@
 """Opaque, revocable database sessions and atomic first-workspace onboarding."""
 
 from dataclasses import dataclass
+from contextlib import contextmanager
 from hashlib import sha256
 import re
 import secrets
+from threading import BoundedSemaphore
 from uuid import UUID, uuid4
 
 from psycopg.errors import UniqueViolation
@@ -11,15 +13,31 @@ from pwdlib import PasswordHash
 
 from app.models.auth import AuthRepository
 from app.models.database import Database, MembershipRequiredError, WorkspaceIdentity
-from app.services.email import EmailSender, verification_message
+from app.services.email import EmailSender, verification_message, password_reset_message, password_changed_message
 
 _PASSWORDS = PasswordHash.recommended()
 _DUMMY_HASH = _PASSWORDS.hash(secrets.token_urlsafe(32))
 _TOKEN = re.compile(r"[A-Za-z0-9_-]{43}\Z")
+_RESET_CAPACITY = BoundedSemaphore(2)
+_PASSWORD_CAPACITY = BoundedSemaphore(2)
 
 
 class InvalidCredentials(Exception):
     pass
+
+
+class AuthenticationBusy(Exception):
+    """Bound Argon2 memory/CPU across login, registration and recovery."""
+
+
+@contextmanager
+def password_work():
+    if not _PASSWORD_CAPACITY.acquire(timeout=0.5):
+        raise AuthenticationBusy
+    try:
+        yield
+    finally:
+        _PASSWORD_CAPACITY.release()
 
 
 class RegistrationUnavailable(Exception):
@@ -35,7 +53,15 @@ class VerificationInvalid(Exception):
 
 
 class EmailDeliveryFailed(Exception):
-    """Verification state is durable, but the outbound message was not delivered."""
+    """An outbound attempt failed; its delivery outcome may be unknown."""
+
+
+class PasswordResetInvalid(Exception):
+    """Unknown, expired, reused, disabled-account or malformed recovery token."""
+
+
+class PasswordResetBusy(Exception):
+    """Bound concurrent expensive reset hashes without consuming a valid link."""
 
 
 @dataclass(frozen=True)
@@ -83,7 +109,8 @@ class AuthService:
     def register(self, email: str, password: str, name: str, *, acquisition_reference: str | None = None) -> str:
         email = email.strip().lower()
         name = name.strip()
-        password_hash = _PASSWORDS.hash(password)
+        with password_work():
+            password_hash = _PASSWORDS.hash(password)
         session_token = secrets.token_urlsafe(32)
         user_id, workspace_id = f"auth:{uuid4()}", uuid4()
         verification_token = (
@@ -148,9 +175,10 @@ class AuthService:
     def login(self, email: str, password: str) -> str:
         with self.database.connection() as connection:
             user = AuthRepository(connection).find_user(email.strip().lower())
-        valid = _PASSWORDS.verify(
-            password, user["password_hash"] if user else _DUMMY_HASH
-        )
+        with password_work():
+            valid = _PASSWORDS.verify(
+                password, user["password_hash"] if user else _DUMMY_HASH
+            )
         if not valid or user is None or user["disabled"]:
             raise InvalidCredentials
         if self.email_verification_required and user["email_verified_at"] is None:
@@ -158,13 +186,78 @@ class AuthService:
         identity = WorkspaceIdentity(user["initial_workspace_id"], user["id"])
         token = secrets.token_urlsafe(32)
         with self.database.workspace_transaction(identity) as connection:
-            AuthRepository(connection).insert_session(
+            repository = AuthRepository(connection)
+            current = repository.find_user(user["email"], lock=True)
+            # Reset may have committed while the old password was being checked.
+            # Revoke-before-insert must not resurrect an old credential session.
+            if (current is None or current["id"] != user["id"] or current["disabled"]
+                    or current["password_hash"] != user["password_hash"]):
+                raise InvalidCredentials
+            if self.email_verification_required and current["email_verified_at"] is None:
+                raise EmailNotVerified
+            repository.insert_session(
                 token_digest(token),
                 user["id"],
                 identity.workspace_id,
                 self.lifetime,
             )
         return token
+
+    def request_password_reset(self, email: str) -> None:
+        normalized = email.strip().lower()
+        token = secrets.token_urlsafe(32)
+        digest = token_digest(token)
+        with self._recovery_transaction() as connection:
+            repository = AuthRepository(connection)
+            user = repository.find_user(normalized, lock=True)
+            if user is None or user["disabled"] or not repository.insert_password_reset(digest, user):
+                return
+        try:
+            if self.email_sender is None or not self.app_public_url:
+                raise EmailDeliveryFailed
+            subject, text = password_reset_message(self.app_public_url, token)
+            self.email_sender.send(to=normalized, subject=subject, text=text)
+            with self._recovery_transaction() as connection:
+                connection.execute("UPDATE public.auth_password_resets SET sent_at=clock_timestamp() WHERE token_hash=%s", (digest,))
+        except Exception:
+            # SMTP can accept a message before its final acknowledgement is lost.
+            # Keep that link usable. The next explicit request may retire an
+            # unconfirmed attempt after the cooldown, so crashes cannot fill all
+            # five slots and lock recovery for the full token lifetime.
+            raise EmailDeliveryFailed from None
+
+    def reset_password(self, token: str, password: str) -> str:
+        if not _TOKEN.fullmatch(token) or not 8 <= len(password) <= 128:
+            raise PasswordResetInvalid
+        if not _RESET_CAPACITY.acquire(blocking=False):
+            raise PasswordResetBusy
+        try:
+            digest = token_digest(token)
+            with self._recovery_transaction() as connection:
+                target = AuthRepository(connection).reset_target(digest)
+            if target is None:
+                raise PasswordResetInvalid
+            with password_work():
+                password_hash = _PASSWORDS.hash(password)
+            with self._recovery_transaction() as connection:
+                repository = AuthRepository(connection)
+                user = repository.find_user(target["email"], lock=True)
+                if user is None or user["disabled"] or not repository.change_password(digest, user, password_hash):
+                    raise PasswordResetInvalid
+            return user["email"]
+        finally:
+            _RESET_CAPACITY.release()
+
+    @contextmanager
+    def _recovery_transaction(self):
+        with self.database.connection(timeout=3) as connection, connection.transaction():
+            connection.execute("SELECT set_config('statement_timeout','5000',true), set_config('lock_timeout','1000',true)")
+            yield connection
+
+    def notify_password_changed(self, email: str) -> None:
+        if self.email_sender is not None:
+            subject, text = password_changed_message()
+            self.email_sender.send(to=email, subject=subject, text=text)
 
     def current(self, token: str | None) -> AuthenticatedUser:
         if not token or not _TOKEN.fullmatch(token):

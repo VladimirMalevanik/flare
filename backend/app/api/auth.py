@@ -4,9 +4,14 @@ from typing import Annotated, Literal
 from dataclasses import replace
 from uuid import UUID
 from hashlib import sha256
+import asyncio
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from starlette.responses import JSONResponse
+from psycopg.errors import LockNotAvailable, QueryCanceled, DeadlockDetected, SerializationFailure
+from psycopg_pool import PoolTimeout
 
 from app.api.acquisition import COOKIE, clear_acquisition
 from app.models.auth import AuthRepository
@@ -19,6 +24,9 @@ from app.services.auth_service import (
     InvalidCredentials,
     RegistrationUnavailable,
     VerificationInvalid,
+    PasswordResetInvalid,
+    PasswordResetBusy,
+    AuthenticationBusy,
 )
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -26,6 +34,10 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 
 def auth_error(status_code: int, code: str, message: str) -> HTTPException:
     return HTTPException(status_code, {"code": code, "message": message})
+
+
+def busy_auth_error(code: str = "auth_busy") -> HTTPException:
+    return HTTPException(429, {"code": code, "message": "Please try again shortly."}, headers={"Retry-After": "2"})
 
 
 class LoginRequest(BaseModel):
@@ -90,6 +102,12 @@ class ResendVerificationRequest(BaseModel):
     @classmethod
     def email_format(cls, value: str) -> str:
         return LoginRequest.email_format(value)
+
+
+class ResetPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    token: str = Field(min_length=43, max_length=43)
+    password: str = Field(min_length=8, max_length=128)
 
 
 def auth_service(request: Request) -> AuthService:
@@ -228,6 +246,8 @@ def register(payload: RegisterRequest, request: Request, response: Response):
             acquisition_reference=(request.cookies.get(COOKIE) if payload.acquisitionOptIn is True
                 and not request.cookies.get(request.app.state.settings.session_cookie_name) else None),
         )
+    except AuthenticationBusy:
+        raise busy_auth_error() from None
     except RegistrationUnavailable:
         raise auth_error(
             409,
@@ -251,6 +271,8 @@ def register(payload: RegisterRequest, request: Request, response: Response):
 def login(payload: LoginRequest, request: Request, response: Response):
     try:
         token = auth_service(request).login(payload.email, payload.password)
+    except AuthenticationBusy:
+        raise busy_auth_error() from None
     except EmailNotVerified:
         raise auth_error(
             403,
@@ -343,3 +365,85 @@ def resend_verification(payload: ResendVerificationRequest, request: Request):
         "ok": True,
         "message": "If verification is available for that address, a new email will arrive shortly.",
     }
+
+
+@router.post("/forgot-password", status_code=202)
+def forgot_password(payload: ResendVerificationRequest, request: Request):
+    service = auth_service(request)
+    if service.email_sender is None or not service.app_public_url:
+        raise auth_error(503, "password_recovery_unavailable", "Password recovery is temporarily unavailable. Try again later.")
+    # Enqueue before any account-dependent work, including DB lookup and SMTP.
+    if not request.app.state.recovery_dispatcher.submit(service.request_password_reset, payload.email):
+        raise busy_auth_error("password_recovery_busy")
+    return {"ok": True, "message": "If password recovery is available for that address, an email will arrive shortly."}
+
+
+@router.post("/reset-password")
+def reset_password(payload: ResetPasswordRequest, request: Request):
+    service = auth_service(request)
+    try:
+        email = service.reset_password(payload.token, payload.password)
+    except PasswordResetInvalid:
+        raise auth_error(400, "password_reset_invalid", "This reset link is invalid or has expired. Request a new link.") from None
+    except (PasswordResetBusy, AuthenticationBusy, LockNotAvailable, QueryCanceled,
+            DeadlockDetected, SerializationFailure, PoolTimeout):
+        raise busy_auth_error("password_recovery_busy") from None
+    # Notification failure cannot undo a committed password/session update.
+    if not request.app.state.recovery_dispatcher.submit(service.notify_password_changed, email):
+        logging.getLogger(__name__).warning("password_change_notice_not_queued")
+    return {"ok": True}
+
+
+class AuthBodyLimit:
+    """Bound streamed auth bodies before JSON/password validation."""
+    limit = 8192
+    timeout = 10
+    paths = frozenset({"/auth/forgot-password", "/auth/reset-password", "/auth/login", "/auth/register",
+        "/auth/verify-email", "/auth/resend-verification", "/auth/accept-legal"})
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope.get("method") != "POST" or scope.get("path") not in self.paths:
+            return await self.app(scope, receive, send)
+        lengths = [v for k, v in scope.get("headers", []) if k.lower() == b"content-length"]
+        if lengths:
+            try:
+                if len(lengths) != 1 or int(lengths[0]) < 0:
+                    raise ValueError
+                if int(lengths[0]) > self.limit:
+                    return await JSONResponse({"detail": "Request body is too large"}, status_code=413)(scope, receive, send)
+            except ValueError:
+                return await JSONResponse({"detail": "Invalid request length"}, status_code=400)(scope, receive, send)
+        body = bytearray()
+
+        async def read():
+            while True:
+                message = await receive()
+                if message["type"] == "http.disconnect":
+                    return False
+                part = message.get("body", b"")
+                if len(body) + len(part) > self.limit:
+                    raise OverflowError
+                body.extend(part)
+                if not message.get("more_body", False):
+                    return True
+
+        try:
+            if not await asyncio.wait_for(read(), self.timeout):
+                return
+        except OverflowError:
+            return await JSONResponse({"detail": "Request body is too large"}, status_code=413)(scope, receive, send)
+        except TimeoutError:
+            return await JSONResponse({"detail": "Request body timed out"}, status_code=408)(scope, receive, send)
+        delivered = False
+
+        async def replay():
+            nonlocal delivered
+            if not delivered:
+                delivered = True
+                return {"type": "http.request", "body": bytes(body), "more_body": False}
+            return await receive()
+
+        await self.app(scope, replay, send)

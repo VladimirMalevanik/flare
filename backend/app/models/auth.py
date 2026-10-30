@@ -20,6 +20,65 @@ class AuthRepository:
             f"SELECT * FROM public.auth_users WHERE email = %s{suffix}", (email,)
         ).fetchone()
 
+    def reset_target(self, token_hash: str):
+        return self.connection.execute(
+            """SELECT u.email FROM public.auth_password_resets r
+               JOIN public.auth_users u ON u.id=r.user_id AND u.email=r.email
+               WHERE r.token_hash=%s AND r.expires_at>clock_timestamp() AND NOT u.disabled""",
+            (token_hash,),
+        ).fetchone()
+
+    def insert_password_reset(self, token_hash: str, user) -> bool:
+        # Caller holds the user lock. Preserve already delivered valid links and
+        # cap both stored state and inbox traffic, including after SMTP failure.
+        self.connection.execute(
+            """DELETE FROM public.auth_password_resets WHERE user_id=%s AND (
+               expires_at<=clock_timestamp() OR
+               (sent_at IS NULL AND created_at<=clock_timestamp()-interval '60 seconds'))""",
+            (user["id"],),
+        )
+        admitted = self.connection.execute(
+            """UPDATE public.auth_users SET password_reset_requested_at=clock_timestamp()
+               WHERE id=%s AND (password_reset_requested_at IS NULL OR
+                   password_reset_requested_at<=clock_timestamp()-interval '60 seconds')
+                 AND (SELECT count(*) FROM public.auth_password_resets WHERE user_id=%s)<5
+               RETURNING id""", (user["id"], user["id"]),
+        ).fetchone()
+        if admitted is None:
+            return False
+        self.connection.execute(
+            """INSERT INTO public.auth_password_resets(token_hash,user_id,email,expires_at)
+               VALUES(%s,%s,%s,clock_timestamp()+interval '30 minutes')""",
+            (token_hash, user["id"], user["email"]),
+        )
+        return True
+
+    def change_password(self, token_hash: str, user, password_hash: str) -> bool:
+        # User-before-token lock order matches requests and session creation.
+        token = self.connection.execute(
+            """SELECT token_hash FROM public.auth_password_resets
+               WHERE token_hash=%s AND user_id=%s AND email=%s FOR UPDATE""",
+            (token_hash, user["id"], user["email"]),
+        ).fetchone()
+        if token is None:
+            return False
+        # Check wall-clock expiry after acquiring both locks, including if a
+        # transaction waited past the deadline for the token row itself.
+        updated = self.connection.execute(
+            """UPDATE public.auth_users SET password_hash=%s WHERE id=%s AND EXISTS(
+               SELECT 1 FROM public.auth_password_resets WHERE token_hash=%s
+                 AND expires_at>clock_timestamp()) RETURNING id""",
+            (password_hash, user["id"], token_hash),
+        ).fetchone()
+        if updated is None:
+            return False
+        self.connection.execute(
+            "UPDATE public.auth_sessions SET revoked_at=clock_timestamp() WHERE user_id=%s AND revoked_at IS NULL",
+            (user["id"],),
+        )
+        self.connection.execute("DELETE FROM public.auth_password_resets WHERE user_id=%s", (user["id"],))
+        return True
+
     def insert_user(
         self,
         user_id: str,
