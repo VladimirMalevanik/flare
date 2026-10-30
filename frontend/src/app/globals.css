@@ -2940,4 +2940,10 @@ html[data-funny-mode="true"] .insight-feed:has(.funny-ritual-panel) {
 .capture-toast-copy { display: grid; gap: 4px; }
 .capture-toast-copy strong { font-weight: 500; }
 .capture-toast-copy small { color: var(--secondary); font-size: 11px; max-width: 240px; line-height: 1.45; }
+.capture-toast { align-items: flex-start; max-width: 440px; padding: 14px; gap: 14px; }
+.capture-toast-copy { min-width: 0; gap: 7px; }
+.capture-toast-copy .capture-schedule-copy { max-width: 340px; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.capture-toast-copy a { justify-self: start; }
+.capture-schedule-link { font-size: 12px; }
+.settings-section[id] { scroll-margin-top: 80px; }
 @media (max-width: 767px) { .analysis-result-notice { padding: 18px; gap: 12px; } .capture-toast { max-width: calc(100vw - 32px); right: 16px; bottom: 16px; } }

@@ -1,4 +1,13 @@
 export const uiEn = {
+  "Notes added after preparation may wait for the following scheduled run.": "Notes added after preparation may wait for the following scheduled run.",
+  "Checking insight schedule…": "Checking insight schedule…",
+  "Your content is saved. The insight time is unavailable.": "Your content is saved. The insight time is unavailable.",
+  "Scheduled insights are off. Set a time to analyze your saved notes.": "Scheduled insights are off. Set a time to analyze your saved notes.",
+  "Your schedule is on. Check its next run in Settings.": "Your schedule is on. Check its next run in Settings.",
+  "Set insight time": "Set insight time",
+  "At most one scheduled insight run is allowed per workspace day.": "At most one scheduled insight run is allowed per workspace day.",
+  "Data storage": "Data storage",
+  "Saved notes do not expire automatically. Manage individual notes in Vault.": "Saved notes do not expire automatically. Manage individual notes in Vault.",
   "Sync cancelled. Context already saved in Vault is kept.": "Sync cancelled. Context already saved in Vault is kept.",
   "Last completed sync": "Last completed sync",
   "Always excluded": "Always excluded",
