@@ -14,7 +14,7 @@ from psycopg_pool import ConnectionPool
 from pwdlib import PasswordHash
 
 
-CURRENT_SCHEMA_REVISION = "0027"
+CURRENT_SCHEMA_REVISION = "0028"
 DATABASE_STARTUP_TIMEOUT_SECONDS = 300
 DATABASE_READINESS_TIMEOUT_SECONDS = 3
 IMPORT_STAGING_TABLES = ("import_staging_blocks", "import_staging_health")

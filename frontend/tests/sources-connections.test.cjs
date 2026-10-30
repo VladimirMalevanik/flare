@@ -74,6 +74,9 @@ test('connection decoder exposes only known public fields and rejects unsafe cap
   const conn = { id:'c', provider:'gmail', owner:true, canDisconnect:true, accountLabel:'Test', scopeRevision:1, status:'ready', enabled:true, resources:[], lastSyncAt:null, nextSyncAt:null, errorCode:null, lastResult:null, job:null, credentialBlob:'PRIVATE' };
   const dto = componentModule.mapSourceConnections({ providers:[{provider:'gmail',available:true,syncAvailable:false}],connections:[conn] });
   assert.ok(!JSON.stringify(dto).includes('PRIVATE'));
+  assert.equal(dto.connections[0].canReconnect, false);
+  assert.equal(componentModule.mapSourceConnections({providers:[],connections:[{...conn,canReconnect:true}]}).connections[0].canReconnect, true);
+  assert.throws(() => componentModule.mapSourceConnections({providers:[],connections:[{...conn,canReconnect:'true'}]}));
   assert.throws(() => componentModule.mapSourceConnections({providers:[{provider:'unknown',available:true,syncAvailable:true}],connections:[]}));
   assert.throws(() => componentModule.mapSourceConnections({providers:[],connections:[{...conn,status:'pretend-success'}]}));
 });
@@ -97,4 +100,28 @@ test('cancelled run displays its saved partial counts and preserves the last com
   const tree = app.render(); assert.ok(tree.some(node => text(node).includes('Added: 3')));
   assert.ok(tree.some(node => text(node).includes('Sync cancelled. Context already saved in Vault is kept.')));
   assert.equal(app.button('Cancel sync'), undefined);
+});
+
+
+test('reconnect uses an explicit server capability and does not expose teammate controls', async () => {
+  const app = harness(); Object.assign(app.props.connection, {owner: false, status: 'disabled'});
+  assert.equal(app.button('Connect').props.disabled, true);
+  app.props.connection.canReconnect = true;
+  assert.equal(app.button('Connect your account').props.disabled, false);
+  assert.equal(app.button('Choose context'), undefined);
+  assert.equal(app.button('Sync now'), undefined);
+  app.button('Connect your account').props.onClick(); await flush();
+  assert.equal(app.calls.filter(call => call[0] === 'connect').length, 1);
+  app.props.connection.status = 'pending';
+  assert.equal(app.button('Connect').props.disabled, true);
+  assert.ok(app.button('Cancel connection'));
+});
+
+test('a pending setup can be cancelled; unavailable provider still cannot reconnect', async () => {
+  const app = harness(); Object.assign(app.props.connection, {status: 'pending'});
+  app.button('Cancel connection').props.onClick(); await flush();
+  assert.deepEqual(app.calls.find(call => call[0] === 'action').slice(1,3), ['c1', 'disconnect']);
+  Object.assign(app.props.connection, {owner: false, canReconnect: true, status: 'disabled'});
+  app.props.available = false;
+  assert.equal(app.button('Connect your account').props.disabled, true);
 });

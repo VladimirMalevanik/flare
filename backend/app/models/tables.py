@@ -35,8 +35,19 @@ class ItemVersionRecord:
 class ItemRepository:
     """Keep SQL and schema-specific mappings outside HTTP and service layers."""
 
+    _CREATOR_COLUMNS = """
+               d.workspace_id AS _creator_workspace_id,
+               d.import_package_id AS _creator_package_id,
+               CASE WHEN nullif(v.snapshot_metadata->>'createdBy', '') IS NULL
+                          OR nullif(v.snapshot_metadata->>'createdByName', '') IS NULL THEN (
+                   SELECT jsonb_build_object('parser', first.parser_version, 'metadata', first.snapshot_metadata)
+                     FROM public.document_versions first
+                    WHERE first.workspace_id=d.workspace_id AND first.document_id=d.id AND first.version_number=1
+               ) END AS _creator_origin,
+    """
+
     _SELECT_ITEM = """
-        SELECT d.id,
+        SELECT """ + _CREATOR_COLUMNS + """ d.id,
                d.source_type AS item_type,
                v.snapshot_title AS title,
                v.snapshot_source_url AS source_url,
@@ -211,7 +222,7 @@ class ItemRepository:
     def get_version_snapshot(self, item_id: UUID, version_id: UUID) -> ItemVersionRecord | None:
         row = self._connection.execute(
             """
-            SELECT d.id,
+            SELECT """ + self._CREATOR_COLUMNS + """ d.id,
                    d.source_type AS item_type,
                    v.snapshot_title AS title,
                    v.snapshot_source_url AS source_url,
@@ -286,7 +297,7 @@ class ItemRepository:
             + " ORDER BY d.updated_at DESC, d.id DESC LIMIT %s",
             parameters,
         ).fetchall()
-        return [self._to_record(row) for row in rows]
+        return self._to_records(rows)
 
     def soft_delete(self, item_id: UUID) -> bool:
         row = self._connection.execute(
@@ -296,6 +307,69 @@ class ItemRepository:
         ).fetchone()
         return row is not None
 
+    def _to_record(self, row: dict[str, Any]) -> ItemRecord:
+        return self._to_records([row])[0]
+
+    def _to_records(self, rows: list[dict[str, Any]]) -> list[ItemRecord]:
+        """Enrich missing display authors, without changing immutable snapshots.
+
+        Only server-owned package pointers or first source-version provenance can
+        select a creator. Caller metadata/current viewer never supplies one.
+        Lookups are batched, scoped to the selected workspace and uncached.
+        """
+        records, packages, sources = [], {}, {}
+        for raw in rows:
+            row = dict(raw)
+            workspace = row.pop('_creator_workspace_id', None)
+            package = row.pop('_creator_package_id', None)
+            origin = row.pop('_creator_origin', None) or {}
+            metadata = dict(row['metadata'])
+            original = origin.get('metadata', {})
+            self._fill_creator(metadata, original)
+            row['metadata'] = metadata
+            records.append(row)
+            if metadata.get('createdBy') and metadata.get('createdByName'):
+                continue
+            if package is not None:
+                packages.setdefault(workspace, []).append((package, metadata))
+            elif origin.get('parser') == 'source-text-v1':
+                try:
+                    connection = UUID(original.get('sourceConnectionId', ''))
+                except (ValueError, TypeError, AttributeError):
+                    continue
+                sources.setdefault(connection, []).append(metadata)
+        for workspace, items in packages.items():
+            result = self._connection.execute(
+                """SELECT p.id, p.requested_by_user_id AS "createdBy", a.name AS "createdByName"
+                     FROM public.import_packages p JOIN public.auth_users a ON a.id=p.requested_by_user_id
+                    WHERE p.workspace_id=%s AND p.id=ANY(%s)
+                      AND p.status IN ('completed','completed_with_skips')""",
+                (workspace, list({package for package, _ in items})),
+            ).fetchall()
+            creators = {row['id']: row for row in result}
+            for package, metadata in items:
+                self._fill_creator(metadata, creators.get(package, {}))
+        ids = list(sources)
+        for offset in range(0, len(ids), 100):
+            result = self._connection.execute(
+                "SELECT public.source_api('creators',NULL,%s) AS creators",
+                (Jsonb({'connectionIds': [str(id) for id in ids[offset:offset + 100]]}),),
+            ).fetchone()['creators']
+            if isinstance(result, list):
+                for creator in result:
+                    for metadata in sources.get(UUID(creator['id']), []):
+                        self._fill_creator(metadata, creator)
+        return [ItemRecord(**row) for row in records]
+
     @staticmethod
-    def _to_record(row: dict[str, Any]) -> ItemRecord:
-        return ItemRecord(**row)
+    def _fill_creator(metadata: dict[str, Any], creator: dict[str, Any]) -> None:
+        id = creator.get('createdBy')
+        if not isinstance(id, str) or not id:
+            return
+        if not isinstance(metadata.get('createdBy'), str) or not metadata.get('createdBy'):
+            metadata['createdBy'] = id
+            metadata.pop('createdByName', None)
+        if metadata.get('createdBy') == id and not metadata.get('createdByName'):
+            name = creator.get('createdByName')
+            if isinstance(name, str) and name:
+                metadata['createdByName'] = name

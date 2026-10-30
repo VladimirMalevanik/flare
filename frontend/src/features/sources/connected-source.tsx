@@ -30,6 +30,7 @@ export function ConnectedSource({ provider, connection, available, syncAvailable
   const pending = useRef<AbortController | null>(null), dialogEpoch = useRef(0), writePending = useRef(false);
   useEffect(() => () => { pending.current?.abort(); dialogEpoch.current++; }, []);
   const connected = !!connection && !["pending", "disabled"].includes(connection.status);
+  const reclaim = !!connection && !connection.owner && connection.canReconnect === true && connection.status === "disabled";
   const active = !!connection?.job && ["queued", "processing", "retry_wait"].includes(connection.job.status);
   async function action(run: (signal: AbortSignal) => Promise<unknown>) {
     if (writePending.current) return;
@@ -55,7 +56,7 @@ export function ConnectedSource({ provider, connection, available, syncAvailable
   function choose() { setSelected(connection?.resources.map(item => item.id) ?? []); setConsent(false); setOpen(true); void loadResources(); }
   const counts = connection?.job ?? connection?.lastResult;
   return <div className="github-source-controls">
-    <p className="muted meta">{!available ? t("Connection is not enabled yet.") : !connected ? t("Read-only sync of selected context.") : connection?.owner ? connection.accountLabel : t("Managed by a teammate.")}</p>
+    <p className="muted meta">{!available ? t("Connection is not enabled yet.") : !connected ? t(reclaim ? "Connect your account to resume sync. Saved notes stay in Vault." : "Read-only sync of selected context.") : connection?.owner ? connection.accountLabel : t("Managed by a teammate.")}</p>
     {connected && <>
       <p className="muted meta">{active ? t("Syncing selected context…") : connection?.status === "error" ? t("Sync needs attention.") : connection?.enabled ? t(syncAvailable ? "Selected context syncs automatically." : "Selection saved. Sync is paused.") : t("Choose context to start syncing.")}</p>
       {connection?.job?.status === "cancelled" && <p role="status" className="muted meta">{t("Sync cancelled. Context already saved in Vault is kept.")}</p>}
@@ -67,14 +68,14 @@ export function ConnectedSource({ provider, connection, available, syncAvailable
     </>}
     {error && <p className="error-text" role="alert">{message(error)}</p>}
     <div className="tags">
-      {!connected && <button type="button" className="button" disabled={!available || busy || !!connection && !connection.owner} onClick={() => void action(async signal => { const result = await dataProvider.connectSource(provider, signal); if (result.url) window.location.assign(result.url); })}>{busy ? t("Connecting…") : t("Connect")}</button>}
+      {!connected && <button type="button" className="button" disabled={!available || busy || !!connection && !connection.owner && !reclaim} onClick={() => void action(async signal => { const result = await dataProvider.connectSource(provider, signal); if (result.url) window.location.assign(result.url); })}>{busy ? t("Connecting…") : t(reclaim ? "Connect your account" : "Connect")}</button>}
       {connected && connection?.owner && <>
         <button type="button" className="button" disabled={!available || busy} onClick={choose}>{t("Choose context")}</button>
         <button type="button" className="button" disabled={!syncAvailable || busy || !connection.enabled || active} onClick={() => void action(signal => dataProvider.sourceConnectionAction(connection.id, "sync", signal))}>{t("Sync now")}</button>
         {active && <button type="button" className="button" disabled={busy} onClick={() => void action(signal => dataProvider.sourceConnectionAction(connection.id, "cancel", signal))}>{t("Cancel sync")}</button>}
         {connection.status === "error" && <button type="button" className="button" disabled={!available || busy} onClick={() => void action(async signal => { const result = await dataProvider.connectSource(provider, signal); if (result.url) window.location.assign(result.url); })}>{t("Reconnect")}</button>}
       </>}
-      {connection?.canDisconnect && !["pending", "disabled"].includes(connection.status) && <button type="button" className="button" disabled={busy} onClick={() => void action(signal => dataProvider.sourceConnectionAction(connection.id, "disconnect", signal))}>{t("Disconnect")}</button>}
+      {connection?.canDisconnect && connection.status !== "disabled" && <button type="button" className="button" disabled={busy} onClick={() => void action(signal => dataProvider.sourceConnectionAction(connection.id, "disconnect", signal))}>{t(connection.status === "pending" ? "Cancel connection" : "Disconnect")}</button>}
       <button type="button" className="button" disabled={busy} onClick={() => void action(() => refresh())}>{t("Check status")}</button>
     </div>
     {connected && <p className="muted meta">{t("Disconnect stops future sync. Saved Vault context stays available.")}</p>}

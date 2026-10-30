@@ -1,6 +1,10 @@
 import type { uiEn } from "./ui-en";
 
 export const uiEs = {
+  "Connect your account": "Conectar tu cuenta",
+  "Cancel connection": "Cancelar conexión",
+  "Connect your account to resume sync. Saved notes stay in Vault.": "Conecta tu cuenta para reanudar la sincronización. Las notas guardadas se conservan en Vault.",
+
   "Notes added after preparation may wait for the following scheduled run.": "Las notas añadidas después de la preparación pueden esperar al siguiente análisis programado.",
   "Checking insight schedule…": "Consultando el horario de análisis…",
   "Your content is saved. The insight time is unavailable.": "Tu contenido está guardado. No se pudo consultar el próximo análisis.",
