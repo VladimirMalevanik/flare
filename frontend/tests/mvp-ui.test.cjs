@@ -20,6 +20,7 @@ function load(relative, mocks) {
     if (name === "./zip-import") return { ZipImport: () => null };
     if (name === "./connected-source") return { ConnectedSource: () => null };
     if (name === '@/lib/team-context') return { projectHref: url => url };
+    if (name === './capture-schedule') return { CaptureConfirmation: 'capture-confirmation' };
     throw Error(`Unexpected import ${name}`);
   } });
   return exports;
@@ -37,10 +38,11 @@ function textContent(node) {
   return textContent(node.props?.children);
 }
 function capture(draft) {
-  const requests = [], messages = [];
+  const requests = [], messages = [], state = [];
+  let cursor = 0;
   const mocks = {
     'react/jsx-runtime': jsx,
-    react: { useState: (initial) => [initial, (value) => messages.push(value)], useRef: () => ({ current: null }), useEffect: () => {}, useLayoutEffect: () => {}, useCallback: (fn) => fn },
+    react: { useState(initial) { const i = cursor++; if (!(i in state)) state[i] = initial; return [state[i], value => { messages.push(value); state[i] = typeof value === 'function' ? value(state[i]) : value; }]; }, useRef(initial) { const i = cursor++; return state[i] ??= { current: initial }; }, useEffect: () => {}, useLayoutEffect: () => {}, useCallback: (fn) => fn },
     'next/link': { default: 'a' },
     '@/components/icons': { Icon: 'icon' },
     '@/components/workspace-context': { useWorkspace: () => ({ captureOpen: true, draft, captureOrbSize: 'medium', funnyMode: false, funnySounds: true, funnyRitual: { phase: 'idle', requestId: 0, shakes: 0 }, funnyAudioPaused: false, setFunnyRitual() {}, setFunnyAudioPaused() {}, openCapture() {}, closeCapture() {}, setDraft() {}, refresh() {} }) },
@@ -56,7 +58,9 @@ function capture(draft) {
     },
     './use-voice-capture': { useVoiceCapture: () => ({ state: 'idle', recording: null, error: '', cancel() {}, start() {}, stop() {} }) },
   };
-  return { tree: nodes(load('../src/features/capture/capture.tsx', mocks).Capture()), requests, messages };
+  const { Capture } = load('../src/features/capture/capture.tsx', mocks);
+  const render = () => { cursor = 0; return nodes(Capture()); };
+  return { tree: render(), render, requests, messages };
 }
 for (const draft of ['A project note', 'https://example.com/context']) {
   test(`Capture submits text as a Note: ${draft}`, async () => {
@@ -104,12 +108,14 @@ test('Capture preserves a UTF-8 BOM so file size and uploaded bytes agree', () =
   assert.equal(bomText, '\ufeffa');
   assert.equal(Buffer.byteLength(bomText, 'utf8'), 4);
 });
-test('Capture toast auto-dismisses and both explicit actions cancel its timer', () => {
-  const source = fs.readFileSync(path.join(__dirname, '../src/features/capture/capture.tsx'), 'utf8');
-  assert.match(source, /CAPTURE_TOAST_DISMISS_MS = 4000/);
-  assert.match(source, /return \(\) => \{\s*if \(toastTimer\.current !== null\) window\.clearTimeout\(toastTimer\.current\)/s);
-  assert.match(source, /<Link href=\{projectHref\(`\/vault\?item=\$\{saved\}`\)\} onClick=\{dismissToast\}>/);
-  assert.match(source, /aria-label=\{t\("Dismiss capture confirmation"\)\}[\s\S]*?onClick=\{dismissToast\}/);
+test('Capture exposes the saved item to its confirmation, and explicit dismissal removes it', async () => {
+  const h = capture('A saved note');
+  h.tree.find(n => n.props?.className === 'button primary').props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  const notice = h.render().find(n => n.type === 'capture-confirmation');
+  assert.ok(notice); assert.equal(notice.props.itemId, 'saved');
+  notice.props.onDismiss();
+  assert.ok(!h.render().some(n => n.type === 'capture-confirmation'));
 });
 test('Vault cards render voice as transcript provenance without prominent audio chrome', () => {
   const source = fs.readFileSync(path.join(__dirname, '../src/features/vault/vault-page.tsx'), 'utf8');

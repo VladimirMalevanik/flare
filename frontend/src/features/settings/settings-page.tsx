@@ -9,7 +9,6 @@ import {
   type CaptureOrbSize,
   type Theme,
 } from "@/components/workspace-context";
-import { readLocal, writeLocal } from "@/lib/storage/preferences";
 import { LanguageSelector } from "@/components/language-selector";
 import { Select } from "@/components/select";
 import { useI18n } from "@/i18n/provider";
@@ -23,12 +22,6 @@ import {
   dataProvider,
   type AnalysisSchedule,
 } from "@/lib/data";
-const defaults = {
-  alerts: true,
-  privateChannels: true,
-  retention: "30",
-  telegram: true,
-};
 export function SettingsPage({ supportEmail, subscription }: { supportEmail: string | null; subscription?: ReactNode }) {
   const { locale, t, label, message: localizeMessage } = useI18n();
   const session = useSession();
@@ -53,7 +46,6 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
     profile,
     updateProfile,
   } = useWorkspace();
-  const [settings, setSettings] = useState(defaults);
   const [analysisSchedule, setAnalysisSchedule] = useState<AnalysisSchedule | null>(null);
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduleEmailNotifications, setScheduleEmailNotifications] = useState(true);
@@ -80,21 +72,6 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
     "Preferences are saved in this browser",
   );
   const [supportCopied, setSupportCopied] = useState(false);
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const value = readLocal<Partial<typeof defaults>>(
-        "flare-settings-v1",
-        {},
-      );
-      setSettings({
-        alerts: value.alerts ?? defaults.alerts,
-        privateChannels: value.privateChannels ?? defaults.privateChannels,
-        retention: value.retention ?? defaults.retention,
-        telegram: value.telegram ?? defaults.telegram,
-      });
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, []);
   useEffect(() => {
     let live = true;
     void dataProvider.getAnalysisSchedule()
@@ -149,19 +126,6 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
         timeZone: analysisSchedule?.timezone ?? scheduleTimezone,
       }).format(new Date(value))
     : "—";
-  function update<K extends keyof typeof defaults>(
-    key: K,
-    value: (typeof defaults)[K],
-  ) {
-    const next = { ...settings, [key]: value };
-    setSettings(next);
-    try {
-      writeLocal("flare-settings-v1", next);
-      setMessage("All changes saved locally");
-    } catch {
-      setMessage("Could not save preferences. Browser storage is unavailable.");
-    }
-  }
   return (
     <section className="page settings-page">
       <header className="page-heading heading-row">
@@ -310,25 +274,7 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
           </div>
         </SettingRow>
       </SettingsSection>
-      <SettingsSection
-        title={t("In-app notifications")}
-        subtitle={t("Choose which updates appear in your workspace.")}
-        icon="insights"
-      >
-        <SettingRow
-          title={t("Alerts for important Flares")}
-          description={t("A nudge when enough evidence points to something worth reviewing.")}
-        >
-          <input
-            type="checkbox"
-            className="switch"
-            aria-label={t("Instant alerts")}
-            checked={settings.alerts}
-            onChange={(e) => update("alerts", e.target.checked)}
-          />
-        </SettingRow>
-      </SettingsSection>
-      <SettingsSection
+      <SettingsSection id="daily-insight"
         title={t("Daily insight")}
         subtitle={t("Choose one workspace insight time. Flare freezes the latest supported source versions 30 minutes beforehand.")}
         icon="insights"
@@ -339,7 +285,7 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
           <>
             <SettingRow
               title={t("Automatic daily insight")}
-              description={t("At most one insight run is allowed per workspace day, including manual Analyze.")}
+              description={t("At most one scheduled insight run is allowed per workspace day.")}
             >
               <input
                 type="checkbox"
@@ -430,15 +376,10 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
           <span className="badge">{t("Always excluded")}</span>
         </SettingRow>
         <SettingRow
-          title={t("Workspace data retention")}
-          description={t("Saved preference; automatic deletion is not enabled.")}
+          title={t("Data storage")}
+          description={t("Saved notes do not expire automatically. Manage individual notes in Vault.")}
         >
-          <Select
-            aria-label={t("Data retention")}
-            value={settings.retention}
-            onValueChange={(value) => update("retention", value)}
-            options={[{ value: "30", label: t("30 days rolling memory") }, { value: "90", label: t("90 days rolling memory") }, { value: "365", label: t("1 year") }]}
-          />
+          <Link className="button" href={projectHref("/vault")}>{t("Open Vault")}</Link>
         </SettingRow>
         <SettingRow
           title={t("Export workspace data")}
@@ -553,12 +494,14 @@ export function SettingsPage({ supportEmail, subscription }: { supportEmail: str
   );
 }
 function SettingsSection({
+  id,
   title,
   subtitle,
   icon,
   className = "",
   children,
 }: {
+  id?: string;
   title: string;
   subtitle: string;
   icon: Parameters<typeof Icon>[0]["name"];
@@ -566,7 +509,7 @@ function SettingsSection({
   children: ReactNode;
 }) {
   return (
-    <section className={`card settings-section ${className}`}>
+    <section id={id} className={`card settings-section ${className}`}>
       <header>
         <h2>
           <Icon name={icon} />

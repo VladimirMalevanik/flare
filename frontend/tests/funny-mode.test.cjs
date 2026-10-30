@@ -17,6 +17,7 @@ function load(relative, mocks = {}, globals = {}) {
     if (name === 'react/jsx-runtime') return jsx;
     if (name === '@/i18n/provider') return i18nMock();
     if (name === '@/lib/team-context') return { projectHref: url => url };
+    if (name === './capture-schedule') return { CaptureConfirmation: 'capture-confirmation' };
     throw Error(`Unexpected import ${name}`);
   } });
   return exports;

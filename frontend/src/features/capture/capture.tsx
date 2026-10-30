@@ -1,8 +1,6 @@
 "use client";
 import { useI18n } from "@/i18n/provider";
 
-import Link from "next/link";
-import { projectHref } from "@/lib/team-context";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { Icon } from "@/components/icons";
 import { useWorkspace } from "@/components/workspace-context";
@@ -26,12 +24,12 @@ import {
 import { useVoiceCapture } from "./use-voice-capture";
 import { advanceFunnyShake, beginShake, funnyMessage, moveShake, REQUIRED_SHAKES, type ShakeTracker } from "@/features/funny/funny-state";
 import { playFunnySound } from "@/features/funny/funny-sounds";
+import { CaptureConfirmation } from "./capture-schedule";
 
 class CaptureInputError extends Error {}
 
 const ORB_POSITION_KEY = "flare-orb-position-v1";
 const MAX_IMPORT_BYTES = 200_000;
-export const CAPTURE_TOAST_DISMISS_MS = 4000;
 type PointerStart = {
   pointerId: number;
   pointerX: number;
@@ -89,7 +87,6 @@ export function Capture() {
   const fileInput = useRef<HTMLInputElement>(null);
   const pointerStart = useRef<PointerStart | null>(null);
   const suppressClick = useRef(false);
-  const toastTimer = useRef<number | null>(null);
   const closeTimer = useRef<number | null>(null);
   const voice = useVoiceCapture();
   const voiceIsland = !["idle", "error", "ready"].includes(voice.state);
@@ -121,18 +118,7 @@ export function Capture() {
     if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
   }, []);
 
-  useEffect(() => {
-    if (!saved) return;
-    toastTimer.current = window.setTimeout(() => setSaved(""), CAPTURE_TOAST_DISMISS_MS);
-    return () => {
-      if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
-      toastTimer.current = null;
-    };
-  }, [saved]);
-
   const dismissToast = useCallback(() => {
-    if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
-    toastTimer.current = null;
     setSaved("");
   }, []);
 
@@ -710,20 +696,7 @@ export function Capture() {
           event.target.value = "";
         }}
       />
-      {saved && (
-        <div className="toast capture-toast" role="status">
-          <span className="capture-toast-copy"><strong>{t("Captured in Vault")}</strong><small>{t("Insights follow your project’s analysis schedule.")}</small></span>
-          <Link href={projectHref(`/vault?item=${saved}`)} onClick={dismissToast}>
-            {t("View item →")}</Link>
-          <button
-            className="icon-button"
-            aria-label={t("Dismiss capture confirmation")}
-            onClick={dismissToast}
-          >
-            <Icon name="close" />
-          </button>
-        </div>
-      )}
+      {saved && <CaptureConfirmation key={saved} itemId={saved} onDismiss={dismissToast} />}
     </>
   );
 }
