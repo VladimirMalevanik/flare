@@ -42,6 +42,7 @@ function setup({ reset = false, fragment = '#token=' + TOKEN, locale = 'en', req
     FormData: class { constructor(values) { this.values = values; } get(key) { return this.values[key] ?? null; } },
     require(name) {
       if (name === 'react/jsx-runtime') return jsx;
+      if (name === '@/components/password-field') return { PasswordField: 'password-field' };
       if (name === 'react') return react;
       if (name === 'next/link') return { default: 'a' };
       if (name === '@/i18n/provider') return i18nMock(locale);

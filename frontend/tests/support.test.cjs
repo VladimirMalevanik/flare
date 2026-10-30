@@ -19,6 +19,7 @@ function load(relative, mocks = {}) {
     exports,
     require(name) {
       if (name in mocks) return mocks[name];
+      if (name === "@/components/password-field") return { PasswordField: "password-field" };
       if (name === '@/lib/team-context') return { projectApiUrl: url => url, projectHref: path => path };
       if (name === '@/features/team/project-menu') return { ProjectMenu: () => null };
 

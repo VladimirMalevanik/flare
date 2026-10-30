@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { PasswordField } from "@/components/password-field";
 import { BrandMark } from "@/components/brand-mark";
 import { LanguageSelector } from "@/components/language-selector";
 import { useI18n } from "@/i18n/provider";
@@ -107,9 +108,9 @@ export function PasswordRecovery({ reset = false }: { reset?: boolean }) {
       {phase === "loading" && <p role="status">{t("Checking reset link…")}</p>}
       {phase === "ready" && <form onSubmit={submit} className="auth-form" aria-busy={pending}>
         {reset ? <>
-          <label>{t("New password")}<input name="password" type="password" autoComplete="new-password" required maxLength={128} disabled={pending} aria-describedby="recovery-password-help" /></label>
+          <PasswordField id="recovery-password" label={t("New password")} name="password" autoComplete="new-password" required maxLength={128} disabled={pending} aria-describedby="recovery-password-help" />
           <p className="muted" id="recovery-password-help">{t("Use a password with 8 to 128 characters.")}</p>
-          <label>{t("Confirm new password")}<input name="confirmPassword" type="password" autoComplete="new-password" required maxLength={128} disabled={pending} /></label>
+          <PasswordField id="recovery-confirm-password" label={t("Confirm new password")} name="confirmPassword" autoComplete="new-password" required maxLength={128} disabled={pending} />
         </> : <label>{t("email")}<input name="email" type="email" autoComplete="username" required maxLength={254} disabled={pending} /></label>}
         {error && <p className="auth-error" role="alert">{t(error)}</p>}
         <button className="button primary" disabled={pending}>{pending ? t("pleaseWait") : reset ? t("Save new password") : t("Send reset link")}</button>

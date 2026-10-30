@@ -2617,6 +2617,14 @@ html[data-funny-mode="true"] .insight-feed:has(.funny-ritual-panel) {
 .auth-form label { display: grid; gap: 7px; font-weight: 500; }
 .auth-form input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--inset); }
 .auth-form .button { min-height: 44px; justify-content: center; }
+.password-field { display: grid; gap: 7px; min-width: 0; }
+.password-input { position: relative; min-width: 0; }
+.auth-form .password-input input { padding-inline-end: 54px; }
+.password-input input::-ms-reveal { display: none; }
+.password-visibility { position: absolute; inset-inline-end: 0; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; color: var(--muted); }
+.password-visibility:hover { color: var(--ink); }
+.password-visibility svg { width: 20px; height: 20px; }
+
 .auth-form p { margin: 0; }
 .auth-error { color: var(--red); }
 .auth-alternative { margin: 24px 0 0; color: var(--secondary); }

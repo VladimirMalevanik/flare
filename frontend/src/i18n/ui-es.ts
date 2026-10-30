@@ -1,6 +1,8 @@
 import type { uiEn } from "./ui-en";
 
 export const uiEs = {
+  "Show password": "Mostrar contraseña",
+  "Hide password": "Ocultar contraseña",
   "Connect your account": "Conectar tu cuenta",
   "Cancel connection": "Cancelar conexión",
   "Connect your account to resume sync. Saved notes stay in Vault.": "Conecta tu cuenta para reanudar la sincronización. Las notas guardadas se conservan en Vault.",

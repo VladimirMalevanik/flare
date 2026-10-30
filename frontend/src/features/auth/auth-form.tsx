@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
+import { PasswordField } from "@/components/password-field";
 import { BrandMark } from "@/components/brand-mark";
 import { LanguageSelector } from "@/components/language-selector";
 import { useI18n } from "@/i18n/provider";
@@ -132,19 +133,17 @@ export function AuthForm({ register = false }: { register?: boolean }) {
               disabled={pending}
             />
           </label>
-          <label>
-            {t("password")}
-            <input
-              name="password"
-              type="password"
-              autoComplete={register ? "new-password" : "current-password"}
-              minLength={register ? 8 : 1}
-              maxLength={128}
-              required
-              disabled={pending}
-              aria-describedby={register ? "password-help" : undefined}
-            />
-          </label>
+          <PasswordField
+            id="auth-password"
+            label={t("password")}
+            name="password"
+            autoComplete={register ? "new-password" : "current-password"}
+            minLength={register ? 8 : 1}
+            maxLength={128}
+            required
+            disabled={pending}
+            aria-describedby={register ? "password-help" : undefined}
+          />
           {register && (
             <p id="password-help" className="muted">
               {t("passwordHelp")}
