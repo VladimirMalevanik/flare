@@ -139,3 +139,51 @@ test('Settings source and import guide navigation preserves the selected Team pr
   assert.ok(links.includes('/privacy'));
   assert.ok(links.includes('/terms'));
 });
+
+function settingsHarness() {
+  const slots = [], effects = [], updates = [];
+  let cursor = 0, mounted = false;
+  const schedule = { enabled: true, emailNotificationsEnabled: true, localTime: '19:00', timezone: 'UTC', nextRunAt: '2026-10-31T19:00:00Z', nextRefreshAt: '2026-10-31T18:30:00Z' };
+  const { SettingsPage } = load('../src/features/settings/settings-page.tsx', {
+    react: {
+      useState(value) { const i = cursor++; if (!(i in slots)) slots[i] = value; return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next; }]; },
+      useEffect(fn) { if (!mounted) effects.push(fn); }, useMemo: fn => fn(),
+    },
+    'next/link': { default: 'a' }, '@/components/auth-session': { useSession: () => ({ workspace: { role: 'owner' }, capabilities: {} }) },
+    '@/lib/auth/session': {}, '@/components/icons': { Icon: 'icon' },
+    '@/components/workspace-context': { useWorkspace: () => ({ profile: { name: 'Fedor', role: 'owner', timezone: 'UTC' }, theme: 'light' }) },
+    '@/lib/storage/preferences': { readLocal() { assert.fail('Do not read inactive browser preferences'); }, writeLocal() { assert.fail('Do not rewrite stored legacy preferences'); } },
+    '@/components/language-selector': { LanguageSelector: 'language-selector' }, '@/components/select': { Select: 'select' },
+    '@/features/telemetry/analytics-preferences': { AnalyticsPreferences: 'analytics' },
+    '@/features/acquisition/preferences': { AcquisitionPreferences: 'acquisition-preferences' },
+    '@/lib/data': { dataProvider: {
+      async getAnalysisSchedule() { return schedule; },
+      async updateAnalysisSchedule(value) { updates.push(value); return { ...schedule, ...value }; },
+    }, dataErrorMessage: (_, fallback) => fallback },
+  });
+  return { updates, render() { cursor = 0; const tree = SettingsPage({ supportEmail: null }); mounted = true; return tree; },
+    async ready() { this.render(); for (const effect of effects.splice(0)) effect(); await new Promise(resolve => setImmediate(resolve)); return this.render(); } };
+}
+
+test('Settings removes inactive alerts/retention controls and gives a real Vault action without deleting preferences', async () => {
+  const h = settingsHarness(), all = nodes(await h.ready());
+  assert.ok(!all.some(n => ['In-app notifications', 'Alerts for important Flares', 'Workspace data retention'].includes(n.props?.title)));
+  assert.ok(!all.some(n => ['Instant alerts', 'Data retention'].includes(n.props?.['aria-label'])));
+  assert.ok(!all.some(n => /manual Analyze/.test(n.props?.description ?? '')));
+  const storage = all.find(n => n.props?.title === 'Data storage'); assert.ok(storage);
+  assert.match(storage.props.description, /do not expire automatically/);
+  assert.ok(nodes(storage).some(n => n.type === 'a' && n.props.href === '/vault'));
+  const anchor = all.find(n => n.props?.id === 'daily-insight'); assert.ok(anchor);
+  assert.equal(anchor.type(anchor.props).props.id, 'daily-insight');
+});
+
+test('removing inactive alerts preserves real server-backed scheduled email preferences', async () => {
+  const h = settingsHarness(); let all = nodes(await h.ready());
+  const email = all.find(n => n.props?.['aria-label'] === 'Email new scheduled Flares');
+  assert.ok(email); assert.equal(email.props.checked, true);
+  email.props.onChange({ target: { checked: false } });
+  all = nodes(h.render());
+  const save = all.find(n => n.type === 'button' && n.props.children === 'Save insight schedule'); assert.ok(save);
+  save.props.onClick(); await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(JSON.parse(JSON.stringify(h.updates)), [{ enabled: true, emailNotificationsEnabled: false, timezone: 'UTC', localTime: '19:00' }]);
+});

@@ -40,6 +40,7 @@ function load(relative, mocks = {}, globals = {}) {
     if (name === '@/lib/support') return { DEFAULT_SUPPORT_EMAIL: 'support@flare4u.tech', supportMailto: () => 'mailto:support@flare4u.tech' };
     if (name === "./connected-source") return { ConnectedSource: () => null };
     if (name === "./zip-import") return { ZipImport: () => null };
+    if (name === './capture-schedule') return { CaptureConfirmation: 'capture-confirmation' };
     throw Error(`Unexpected import ${name}`);
   } });
   return exports;

@@ -1,6 +1,15 @@
 import type { uiEn } from "./ui-en";
 
 export const uiEs = {
+  "Notes added after preparation may wait for the following scheduled run.": "Las notas añadidas después de la preparación pueden esperar al siguiente análisis programado.",
+  "Checking insight schedule…": "Consultando el horario de análisis…",
+  "Your content is saved. The insight time is unavailable.": "Tu contenido está guardado. No se pudo consultar el próximo análisis.",
+  "Scheduled insights are off. Set a time to analyze your saved notes.": "Los análisis programados están desactivados. Elige una hora para analizar tus notas guardadas.",
+  "Your schedule is on. Check its next run in Settings.": "Tu horario está activo. Consulta el próximo análisis en Configuración.",
+  "Set insight time": "Elegir hora de análisis",
+  "At most one scheduled insight run is allowed per workspace day.": "Se permite como máximo un análisis programado por día del espacio de trabajo.",
+  "Data storage": "Almacenamiento de datos",
+  "Saved notes do not expire automatically. Manage individual notes in Vault.": "Las notas guardadas no caducan automáticamente. Gestiona las notas individuales en Vault.",
   "Sync cancelled. Context already saved in Vault is kept.": "Sincronización cancelada. El contexto ya guardado en Vault se conserva.",
   "Last completed sync": "Última sincronización completada",
   "Always excluded": "Siempre excluidos",
