@@ -26,3 +26,26 @@ The second pass classifies all42 existing CJM cases by current automated/browser
 proof and remaining server/external acceptance. Local checks use isolated synthetic
 accounts; production, paid calls, real mail and real provider accounts are separate.
 API-005 remains Vova's task, with no changes to generation or budgets.
+
+
+## Verification replay found during the second pass
+
+The full-source browser exposed Q02: React effect setup/cleanup/setup issued two
+requests for the one-use verification link. The first succeeded; the second showed
+an invalid-link screen even though /auth/me already reported emailVerified=true.
+Reuse the pending attempt in a component-local ref and attach the active effect to
+its result. Unmount fences remain in place. Different links get fresh keyed state;
+there is no global/persistent token cache and backend token semantics are unchanged.
+Regression tests cover successful and invalid replay and late unmounted results.
+
+## Local journey acceptance
+
+A full-source local app uses actual routing, auth/session, API and restricted
+PostgreSQL with synthetic accounts, a memory inbox and isolated ZIP storage.
+Telemetry is explicitly off; the fixture alone aliases its missing reused SDK so
+it can compile. This does not change product source or establish a production
+build; the exact locked CI build is required. No mail/provider/AI/payment network
+calls occur. Actual browser checks confirm input DOM identity, unchanged password,
+selection and pointer focus, a non-submitting eye, visible keyboard focus and
+registration/verification/navigation/persistence. Mobile and recovery results are
+recorded with the completed map recheck.

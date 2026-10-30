@@ -66,6 +66,11 @@ function hookHarness() {
           state[index] = typeof value === "function" ? value(state[index]) : value;
         }];
       },
+      useRef(initial) {
+        const index = cursor++;
+        if (!(index in state)) state[index] = { current: initial };
+        return state[index];
+      },
       useEffect(effect) {
         effects.push(effect);
       },
@@ -260,4 +265,34 @@ test("verification page covers pending, success, invalid, resend, and support st
       assert.equal(calls[1][0], "resend-verification");
     }
   }
+});
+
+
+for (const succeeds of [true, false]) test("one-use verification request survives effect replay: " + succeeds, async () => {
+  const hooks=hookHarness(); let calls=0, finish;
+  const attempt=new Promise((resolve,reject)=>{finish=()=>succeeds?resolve({ok:true}):reject(Error('invalid'));});
+  const {VerifyEmail}=load('../src/features/auth/verify-email.tsx',{
+    'react/jsx-runtime':jsx,react:hooks.react,'next/link':{default:'a'},
+    '@/lib/auth/session':{apiBaseUrl:'/api',authRequest(){calls++;return attempt;}},
+  },{fetch:async()=>({ok:false})});
+  hooks.render(()=>VerifyEmail({token:'single-use-token',awaitingEmail:false}));
+  const cleanup=hooks.runEffects(); cleanup.forEach(fn=>fn?.());
+  hooks.runEffects(); // React setup/cleanup/setup on the same mounted component.
+  assert.equal(calls,1);
+  finish();await new Promise(resolve=>setImmediate(resolve));
+  const tree=hooks.render(()=>VerifyEmail({token:'single-use-token',awaitingEmail:false}));
+  assert.ok(tree.some(n=>n.props?.children===(succeeds?'Email verified':'Link unavailable')));
+});
+
+test('a late verification attempt cannot update an unmounted screen',async()=>{
+  const hooks=hookHarness();let finish;
+  const attempt=new Promise(resolve=>{finish=resolve;});
+  const {VerifyEmail}=load('../src/features/auth/verify-email.tsx',{
+    'react/jsx-runtime':jsx,react:hooks.react,'next/link':{default:'a'},
+    '@/lib/auth/session':{apiBaseUrl:'/api',authRequest:()=>attempt},
+  },{fetch:async()=>({ok:false})});
+  hooks.render(()=>VerifyEmail({token:'single-use-token',awaitingEmail:false}));
+  hooks.runEffects().forEach(fn=>fn?.());finish({ok:true});await new Promise(resolve=>setImmediate(resolve));
+  const tree=hooks.render(()=>VerifyEmail({token:'single-use-token',awaitingEmail:false}));
+  assert.ok(tree.some(n=>n.props?.children==='Verifying your email…'));
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { BrandMark } from "@/components/brand-mark";
 import { LanguageSelector } from "@/components/language-selector";
@@ -26,6 +26,7 @@ export function VerifyEmail({
   const [state, setState] = useState<VerificationState>(
     token ? "pending" : "awaiting",
   );
+  const verification = useRef<{ token: string; request: Promise<unknown> } | null>(null);
   const [email, setEmail] = useState("");
   const [resending, setResending] = useState(false);
   const [notice, setNotice] = useState("");
@@ -33,7 +34,12 @@ export function VerifyEmail({
   useEffect(() => {
     let active = true;
     if (token) {
-      void authRequest("verify-email", { token })
+      // Reuse one attempt across effect cleanup/setup. The link is one-use;
+      // a duplicate request can return invalid after the first already succeeded.
+      if (!verification.current || verification.current.token !== token) {
+        verification.current = { token, request: authRequest("verify-email", { token }) };
+      }
+      void verification.current.request
         .then(() => {
           if (active) setState("success");
         })
