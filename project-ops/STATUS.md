@@ -2,9 +2,9 @@
 
 > Этот файл генерирует `task-sync`; вручную его не редактируют.
 
-Сформировано: `2026-10-30T11:46:57Z`
-Последнее обновление работы: `2026-10-30T11:46:57Z`
-Снимок состояния: `sha256:358aa849585dc8ebc7406427bbab800d04646ca4347b21773481e5e23d0cee72`
+Сформировано: `2026-10-30T11:48:45Z`
+Последнее обновление работы: `2026-10-30T11:48:45Z`
+Снимок состояния: `sha256:77df1e7d4e6197414a3047cc81b7b4ab65a2b976b8284937d172b190724780bc`
 
 ## Ближайшая цель
 
@@ -14,7 +14,7 @@
 
 ## Ближайшие шаги (не более пяти)
 
-1. `API-011` (в работе) — Close CJM F02 with complete first-party password recovery: generic bounded email-request admission, cryptographic one-use expiring reset links stored only as hashes, same password policy, atomic all-session revocation and concurrency fencing, notification after reset, accessible EN/ES forgot/reset forms, preserved verification/legal/workspace state. Use existing SMTP and fixed public origin; no new dependency, infrastructure, paid quota or API-005 generation changes. Preserve data in both PostgreSQL profiles; test actual restricted-role behavior and migrations.. Сейчас: Implement isolated password recovery with one-use hashed links, bounded generic email admission, atomic credential/session update and EN/ES forms; test real restricted PostgreSQL and both CI profiles; preserve API-005 ownership.
+1. `API-011` (в работе) — Close CJM F02 with complete first-party password recovery: generic bounded email-request admission, cryptographic one-use expiring reset links stored only as hashes, same password policy, atomic all-session revocation and concurrency fencing, notification after reset, accessible EN/ES forgot/reset forms, preserved verification/legal/workspace state. Use existing SMTP and fixed public origin; no new dependency, infrastructure, paid quota or API-005 generation changes. Preserve data in both PostgreSQL profiles; test actual restricted-role behavior and migrations.. Сейчас: Implement F02 using existing SMTP and auth boundaries; additive0027 migration, bounded mail dispatcher, single-use reset and all-session revocation with login race fence; EN/ES recovery routes and security/migration/browser tests. API-005 remains untouched.
 2. `API-005` (в работе) — Investigate the owner-reported completed-empty Analyze over four notes and fix reproduced generation defects with regression evidence. Preserve exact evidence grounding, once-daily workspace allowance, provider request limits, billing and authorization. Use bounded read-only production diagnostics without exposing note contents or credentials; no quota resets or new paid resources. Coordinate any rollout using existing approved resources only after tests.. Сейчас: Diagnose confirmed Ilyas run through fixed read-only Cloud Shell SQL; reproduce and fix explicit-decision omission with strict grounding and daily replay regressions.
 3. `WEB-014` (на проверке) — Close CJM F01/F03/F04/F05: a saved note gives the true project schedule state and next step; remove obsolete manual Analyze copy and inactive alerts/retention controls; retain settings data, scheduled-only policy, tenant isolation, both locales/themes and accessibility. No AI/provider, quota, billing, schema, dependency or production activation changes.. Условие: Implemented in PR77 at04a293a. Focused31/31, full local428/429 (excluded public env fixture), ESLint and synthetic browser checks pass. Exact locked frontend CI is green; backend matrices still running. No owner acceptance or production rollout claimed.
 4. `OPS-007` (на проверке) — Owner-authorized repair of pinned ffprobe acquisition in CI: remove repeated single-origin TLS failure while retaining exact approved binary identity, HTTPS verification, bounded download/extraction, integrity rejection and actual voice-runtime checks. Add meaningful transport/cache/tamper regressions, validate full CI, publish reviewable infrastructure fix and integrate only with green checks; then unblock and merge existing import PR74 unchanged in product behavior. No paid resources, production deployment, secrets, AI-analysis changes or weakened checks.. Условие: Requested source work completed: ffprobe acquisition fix PR75 merged a63c200, import PR74 refreshed with it and merged94a2a9d after complete green CI. Both exact tested heads are ancestors ofmain and main product tree equals integrated checkede9b7240. Mirror/fallback retains original binary pins and verified cache/native smoke. Source remains on Fedor review, no deployment. Clean own checkout; no preview servers and terminal can close.
@@ -22,7 +22,7 @@
 
 ## В работе
 
-- `API-011` (в работе) — Close CJM F02 with complete first-party password recovery: generic bounded email-request admission, cryptographic one-use expiring reset links stored only as hashes, same password policy, atomic all-session revocation and concurrency fencing, notification after reset, accessible EN/ES forgot/reset forms, preserved verification/legal/workspace state. Use existing SMTP and fixed public origin; no new dependency, infrastructure, paid quota or API-005 generation changes. Preserve data in both PostgreSQL profiles; test actual restricted-role behavior and migrations.. Сейчас: Implement isolated password recovery with one-use hashed links, bounded generic email admission, atomic credential/session update and EN/ES forms; test real restricted PostgreSQL and both CI profiles; preserve API-005 ownership.; владелец: Fedor
+- `API-011` (в работе) — Close CJM F02 with complete first-party password recovery: generic bounded email-request admission, cryptographic one-use expiring reset links stored only as hashes, same password policy, atomic all-session revocation and concurrency fencing, notification after reset, accessible EN/ES forgot/reset forms, preserved verification/legal/workspace state. Use existing SMTP and fixed public origin; no new dependency, infrastructure, paid quota or API-005 generation changes. Preserve data in both PostgreSQL profiles; test actual restricted-role behavior and migrations.. Сейчас: Implement F02 using existing SMTP and auth boundaries; additive0027 migration, bounded mail dispatcher, single-use reset and all-session revocation with login race fence; EN/ES recovery routes and security/migration/browser tests. API-005 remains untouched.; владелец: Fedor
 - `API-005` (в работе) — Investigate the owner-reported completed-empty Analyze over four notes and fix reproduced generation defects with regression evidence. Preserve exact evidence grounding, once-daily workspace allowance, provider request limits, billing and authorization. Use bounded read-only production diagnostics without exposing note contents or credentials; no quota resets or new paid resources. Coordinate any rollout using existing approved resources only after tests.. Сейчас: Diagnose confirmed Ilyas run through fixed read-only Cloud Shell SQL; reproduce and fix explicit-decision omission with strict grounding and daily replay regressions.; владелец: Vova / release coordinator
 
 ## На проверке
@@ -53,5 +53,4 @@
 
 ## Предупреждения
 
-- API-011: ещё не записаны опубликованная ветка и область файлов.
 - API-005: статус активной работы не обновлялся более 24 часов.
