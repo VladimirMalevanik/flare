@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiBaseUrl, authRequest, type Session } from "@/lib/auth/session";
+import { importRequest, ImportRequestError } from "@/lib/data/import-request";
 import { teamRequest, type ProjectsResponse, TeamError } from "./api";
 import { switchProject } from "@/lib/team-context";
 import { BrandMark } from "@/components/brand-mark";
@@ -24,15 +25,25 @@ export function JoinPage() {
       }catch { /* A valid fragment still works when browser storage is unavailable. */ }
       if(!/^[A-Za-z0-9_-]{43}$/.test(candidate))throw new Error(copy("Open the invitation link from your email.","Abre el enlace de invitación de tu correo."));
       setToken(candidate);
-      const response=await fetch(`${apiBaseUrl}/auth/me`,{credentials:"include",cache:"no-store",signal:controller.signal});
-      if(response.status===401)return;
-      if(!response.ok)throw new Error(copy("Your account could not be checked. Please retry.","No se pudo verificar tu cuenta. Reinténtalo."));
-      const user:Session=await response.json();setSession(user);
-      if(user.user.emailVerified&&user.user.legalAccepted){const result=await teamRequest<ProjectsResponse>("/projects",undefined,undefined,controller.signal);setVerification(result.capability.requiresVerification);
-        if(!result.capability.requiresVerification)setPreview(await teamRequest("/invitations/preview",{token:candidate},undefined,controller.signal));}
+      const user=await importRequest<Session|null>(async signal=>{
+        const response=await fetch(`${apiBaseUrl}/auth/me`,{credentials:"include",cache:"no-store",signal});
+        if(response.status===401)return null;
+        if(!response.ok)throw new Error(copy("Your account could not be checked. Please retry.","No se pudo verificar tu cuenta. Reinténtalo."));
+        return response.json();
+      },controller.signal,12_000);
+      if(controller.signal.aborted||!user)return;
+      setSession(user);
+      if(user.user.emailVerified&&user.user.legalAccepted){const result=await teamRequest<ProjectsResponse>("/projects",undefined,undefined,controller.signal);
+        if(controller.signal.aborted)return;
+        setVerification(result.capability.requiresVerification);
+        if(!result.capability.requiresVerification){const details=await teamRequest<NonNullable<typeof preview>>("/invitations/preview",{token:candidate},undefined,controller.signal);
+          if(controller.signal.aborted)return;
+          setPreview(details);}}
       else setVerification(!user.user.emailVerified);
     }
-    void load().catch(cause=>{if(!controller.signal.aborted)setError(cause instanceof Error?cause.message:"Invitation unavailable.");}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});
+    void load().catch(cause=>{if(!controller.signal.aborted)setError(cause instanceof ImportRequestError
+      ?copy("Your account check timed out. Check again.","Se agotó el tiempo de comprobación. Comprueba de nuevo.")
+      :cause instanceof Error?cause.message:"Invitation unavailable.");}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return()=>controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
@@ -41,7 +52,13 @@ export function JoinPage() {
     try{const result=await teamRequest<{workspaceId:string}>("/invitations/accept",{token,accept:true});
       try{sessionStorage.removeItem(key);}catch{}
       window.history.replaceState(null,"","/join");switchProject(result.workspaceId,"/team");
-    }catch(cause){setError(cause instanceof Error?cause.message:"Invitation unavailable.");if(cause instanceof TeamError&&cause.status===403)setVerification(true);setBusy(false);}
+    }catch(cause){setError(cause instanceof Error?cause.message:"Invitation unavailable.");
+      if(cause instanceof TeamError&&cause.code==="email_verification_required"){
+        setVerification(true);setSession(current=>current?{...current,user:{...current.user,emailVerified:false}}:current);
+      }else if(cause instanceof TeamError&&cause.code==="legal_acceptance_required"){
+        setSession(current=>current?{...current,user:{...current.user,legalAccepted:false}}:current);
+      }
+      setBusy(false);}
   }
   async function verify() {
     if(busy)return;setBusy(true);setError("");
@@ -54,10 +71,9 @@ export function JoinPage() {
     {loading?<p role="status">{copy("Checking your account…","Verificando tu cuenta…")}</p>:!session?<div className="team-actions"><a className="button" href="/register">{copy("Create account","Crear cuenta")}</a><a className="button primary" href="/login">{copy("Sign in","Iniciar sesión")}</a></div>:<>
       <p className="team-join-account">{copy("Signed in as","Sesión iniciada como")} <strong>{session.user.email}</strong></p>
       {preview&&<div className="team-feedback"><strong>{preview.projectName}</strong><p>{copy("Invited by","Invitación de")} {preview.invitedBy??"Flare"} · {preview.role==="editor"?copy("Editor","Editor"):copy("Viewer","Lector")}</p></div>}
-      {!session.user.legalAccepted?<a className="button primary" href="/legal-acceptance">{copy("Review terms","Revisar condiciones")}</a>:verification?<button className="button primary" disabled={busy} onClick={()=>void verify()}>{copy("Verify this email","Verificar este correo")}</button>:<>
-        <label className="team-sharing"><input type="checkbox" checked={accept} disabled={busy} onChange={e=>setAccept(e.target.checked)}/><span>{copy("I accept the invitation and understand that this project contains materials shared with its members.","Acepto la invitación y entiendo que el proyecto contiene materiales compartidos con sus miembros.")}</span></label>
-        <button className="button primary" disabled={busy||!accept||!token||!preview} onClick={()=>void join()}>{busy?copy("Joining…","Uniéndote…"):copy("Join project","Unirse al proyecto")}</button></>}
-      <button className="button ghost" disabled={busy} onClick={async()=>{setBusy(true);try{await authRequest("logout");window.location.replace("/login");}catch(cause){setError(cause instanceof Error?cause.message:"Could not sign out.");setBusy(false);}}}>{copy("Use a different account","Usar otra cuenta")}</button>
+      {session.user.legalAccepted&&!verification&&<label className="team-sharing"><input type="checkbox" checked={accept} disabled={busy} onChange={e=>setAccept(e.target.checked)}/><span>{copy("I accept the invitation and understand that this project contains materials shared with its members.","Acepto la invitación y entiendo que el proyecto contiene materiales compartidos con sus miembros.")}</span></label>}
+      <div className="team-actions">{!session.user.legalAccepted?<a className="button primary" href="/legal-acceptance">{copy("Review terms","Revisar condiciones")}</a>:verification?<button className="button primary" disabled={busy} onClick={()=>void verify()}>{copy("Verify this email","Verificar este correo")}</button>:<button className="button primary" disabled={busy||!accept||!token||!preview} onClick={()=>void join()}>{busy?copy("Joining…","Uniéndote…"):copy("Join project","Unirse al proyecto")}</button>}
+      <button className="button ghost" disabled={busy} onClick={async()=>{setBusy(true);try{await authRequest("logout");window.location.replace("/login");}catch(cause){setError(cause instanceof Error?cause.message:"Could not sign out.");setBusy(false);}}}>{copy("Use a different account","Usar otra cuenta")}</button></div>
     </>}
     {notice&&<p role="status" className="team-feedback">{notice}</p>}{error&&<p role="alert" className="team-error">{error}</p>}
     {!loading&&<div className="team-actions"><button className="button ghost" disabled={busy} onClick={()=>window.location.reload()}>{copy("Check again","Comprobar de nuevo")}</button>
